@@ -386,6 +386,18 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
             if (raw.disks && raw.disks.length > 0) {
               setDisks(raw.disks);
             }
+            const newPt: HistoryPoint = {
+              time: new Date().toLocaleTimeString('de-DE'),
+              cpu: raw.cpu.load,
+              ram: raw.ram.percent,
+              gpu: raw.gpu.load,
+              gpu_temp: raw.gpu.temp_c || 45,
+              recv: raw.network.recv_mbps,
+              sent: raw.network.sent_mbps,
+              disk_read: raw.total_disk_io ? raw.total_disk_io.read_mbs : 0,
+              disk_write: raw.total_disk_io ? raw.total_disk_io.write_mbs : 0,
+            };
+            setHistoryPoints(hist => [...hist.slice(-59), newPt]);
           }
         } catch {
           // ignore
@@ -613,7 +625,10 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
 
     // Try posting to local FastAPI backend if running
     try {
-      await fetch('http://localhost:8350/api/chat/message', {
+      const apiHost = window.location.port === '8350' || (window.location.host && !window.location.port) 
+        ? '' 
+        : 'http://localhost:8350';
+      await fetch(`${apiHost}/api/chat/message`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newMsg)
@@ -631,12 +646,22 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
   };
 
   // Kill Process Action
-  const handleKill = (pid: number) => {
+  const handleKill = async (pid: number) => {
     setKillPid(pid);
+    try {
+      const apiHost = window.location.port === '8350' || (window.location.host && !window.location.port) 
+        ? '' 
+        : 'http://localhost:8350';
+      await fetch(`${apiHost}/api/kill`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pid })
+      });
+    } catch {}
     setTimeout(() => {
       setProcesses(prev => prev.filter(p => p.pid !== pid));
       setKillPid(null);
-    }, 500);
+    }, 400);
   };
 
   // Styling Classes based on Theme
