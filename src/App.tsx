@@ -107,7 +107,7 @@ export function No0bzLogo({ mode = 'nightmare', size = 'normal' }: { mode?: 'cla
             {isNightmare ? '⚡ NIGHTMARE' : 'COMMAND CENTER'}
           </span>
           <span className="text-[8px] px-1 py-0.2 bg-zinc-800 border border-zinc-700 text-zinc-300 rounded font-mono font-semibold">
-            v3.6.3
+            v3.7.0
           </span>
         </div>
       </div>
@@ -350,7 +350,14 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
     let fallbackInterval: any = null;
 
     try {
-      ws = new WebSocket('ws://localhost:8350/ws/live');
+      const isHttps = window.location.protocol === 'https:';
+      const wsProto = isHttps ? 'wss:' : 'ws:';
+      // If served directly from FastAPI (port 8350 or custom), use current host. Otherwise default to localhost:8350
+      const host = window.location.port === '8350' || (window.location.host && !window.location.port) 
+        ? window.location.host 
+        : 'localhost:8350';
+      const wsUrl = `${wsProto}//${host}/ws/live`;
+      ws = new WebSocket(wsUrl);
       ws.onmessage = (event) => {
         try {
           const raw = JSON.parse(event.data);

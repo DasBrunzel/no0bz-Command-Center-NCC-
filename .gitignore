@@ -8,7 +8,6 @@ __pycache__/
 .Python
 build/
 develop-eggs/
-dist/
 downloads/
 eggs/
 .eggs/
@@ -39,9 +38,8 @@ venv.bak/
 # Uploads directory (user-generated data)
 ncc_uploads/
 
-# Node & Frontend Build
+# Node & Frontend Dependencies
 node_modules/
-dist/
 coverage/
 
 # Logs & Environment
