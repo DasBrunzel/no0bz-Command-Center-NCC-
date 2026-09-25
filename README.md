@@ -121,8 +121,8 @@ Das Skript installiert automatisch alle notwendigen Pakete aus der `requirements
 
 #### 1. Repository klonen oder herunterladen
 ```bash
-git clone https://github.com/DEIN-BENUTZERNAME/DEIN-REPO-NAME.git
-cd DEIN-REPO-NAME
+git clone https://github.com/DEIN-BENUTZERNAME/DEIN-REPO-NAME.git](https://github.com/DasBrunzel/no0bz-Command-Center-NCC-.git
+cd no0bz-Command-Center-NCC-
 ```
 
 #### 2. Virtuelle Umgebung anlegen & aktivieren (optional, aber empfohlen)
