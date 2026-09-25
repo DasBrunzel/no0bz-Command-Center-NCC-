@@ -154,36 +154,6 @@ Um Lüfter-Drehzahlen (RPM) und erweiterte Mainboard-Temperaturen anzuzeigen:
 
 ---
 
-## 🔄 GitHub Repository Synchronisation
-
-### Dein Projekt auf GitHub hochladen:
-
-Wenn du bereits ein Repository auf GitHub erstellt hast (z. B. `https://github.com/DEIN-ACCOUNT/no0bz-command-center.git`), führe einfach folgende Befehle in deinem Terminal / deiner PowerShell aus:
-
-```bash
-# 1. Git initialisieren (falls noch nicht geschehen)
-git init
-
-# 2. Alle Dateien hinzufügen
-git add .
-
-# 3. Ersten Commit erstellen
-git commit -m "feat: Initial release v3.6.3 no0bz Command Center"
-
-# 4. Standard-Branch auf 'main' setzen
-git branch -M main
-
-# 5. Remote-Repository mit deiner GitHub-URL verknüpfen
-git remote add origin https://github.com/DEIN-ACCOUNT/no0bz-command-center.git
-
-# 6. Auf GitHub pushen
-git push -u origin main
-```
-
-### Spätere Updates herunterladen:
-```bash
-git pull origin main
-```
 
 ---
 
