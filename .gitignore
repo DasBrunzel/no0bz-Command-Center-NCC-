@@ -1,0 +1,60 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# DuckDB Time-Series Database & Locks
+*.duckdb
+*.duckdb.wal
+*.duckdb.tmp
+
+# Uploads directory (user-generated data)
+ncc_uploads/
+
+# Node & Frontend Build
+node_modules/
+dist/
+coverage/
+
+# Logs & Environment
+*.log
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Operating System & IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace

@@ -1,0 +1,6 @@
+{
+  "name": "no0bz Command Center (NCC)",
+  "description": "High-performance single-file system monitor with real-time WebSockets, DuckDB time-series logging, hardware metrics, and responsive Bento-Grid UI.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,11 @@
+# no0bz Command Center (NCC) - Core & Optional Requirements
+fastapi>=0.100.0
+uvicorn[standard]>=0.22.0
+psutil>=5.9.0
+python-multipart>=0.0.9
+
+# NVIDIA GPU Monitoring (official modern replacement for pynvml)
+nvidia-ml-py>=12.535.0
+
+# Time-series local database (24h metrics history)
+duckdb>=0.9.0
