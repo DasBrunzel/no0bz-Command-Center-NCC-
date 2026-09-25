@@ -13,7 +13,7 @@
 **High-Performance Real-Time System Monitor & Local P2P Sync Hub**  
 *Built for Power Users, Gamers, Devs & Homelab Admins.*
 
-[![Version](https://img.shields.io/badge/Version-v3.7.0-cyan.svg?style=for-the-badge)](https://github.com)
+[![Version](https://img.shields.io/badge/Version-v3.8.0-cyan.svg?style=for-the-badge)](https://github.com)
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![DuckDB](https://img.shields.io/badge/DuckDB-TimeSeries-FFF000?style=for-the-badge&logo=duckdb&logoColor=black)](https://duckdb.org)
@@ -30,9 +30,50 @@ Das **no0bz Command Center (NCC)** ist ein leichtgewichtiges, ultra-schnelles un
 
 ---
 
+## 🛠️ Wie und womit das no0bz Command Center (NCC) erstellt wurde
+
+Das **no0bz Command Center (NCC)** wurde von Grund auf als kompromisslos schnelles, ressourcenschonendes und visuell ansprechendes System-Monitoring- & Hub-Werkzeug für Enthusiasten entwickelt. Hier ist der vollständige technische Aufbau im Detail:
+
+### 1. ⚙️ Backend & Asynchroner Server-Core
+* **Sprache:** Python 3 (3.10+)
+* **Web-Framework:** [FastAPI](https://fastapi.tiangolo.com/) – bietet blitzschnelle asynchrone Endpunkte, integrierte Typvalidierung und minimale CPU-Latenz.
+* **ASGI-Server:** [Uvicorn](https://www.uvicorn.org/) – ein extrem leichtgewichtiger, produktionsreifer ASGI-Webserver, der auf Port `8350` lauscht.
+* **Multithreading:** Ein entkoppelter Hintergrund-Thread (`DataCollector`) sammelt alle System- und GPU-Metriken kontinuierlich im Hintergrund. Zugriffskonflikte werden durch Python `threading.Lock()` (`data_lock` & `chat_lock`) verhindert.
+
+### 2. ⚡ Echtzeit-Telemetrie via WebSockets
+* **Echtzeit-Stream (`/ws/live`):** Anstelle von ineffizientem HTTP-Polling, das den Browser und Server unnötig belastet, nutzt das NCC einen bidirektionalen WebSocket.
+* Alle Metriken (CPU, RAM, GPU, Disks, Network, Lüfter) werden in kompakten 1-Sekunden-Paketen an alle verbundenen Browser-Clients gepusht.
+
+### 3. 🖥️ Low-Level Hardware-Schnittstellen
+* **System- & OS-Metriken:** [`psutil`](https://github.com/giampaolo/psutil) liest Kernel-Metriken wie CPU-Last pro Kern, Taktfrequenzen, Arbeitsspeicher, Swap, Partitionsbelegung und I/O-Durchsatz (MB/s).
+* **Native NVIDIA GPU-Beschleunigung:** Über die offizielle NVIDIA Management Library ([`nvidia-ml-py`](https://pypi.org/project/nvidia-ml-py/) bzw. C-API `pynvml`) werden GPU-Auslastung, dedizierter VRAM, Hotspot-Temperaturen und Leistungsaufnahme (Watt) direkt vom NVIDIA-Treiber abgefragt.
+* **Motherboard- & Lüfter-Sensoren:** Bei Bedarf integriert sich NCC nahtlos an den lokalen REST-Endpunkt von [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) (`http://127.0.0.1:8085/data.json`), um Lüfterdrehzahlen (RPM) und CPU-Package-Power auszulesen.
+
+### 4. 🗄️ Lokale Zeitreihen-Datenbank (DuckDB)
+* **High-Speed Analytics:** [`DuckDB`](https://duckdb.org/) agiert als eingebettete, spaltenorientierte In-Process SQL-Datenbank (`no0bz_metrics.duckdb`).
+* Sekündliche Snapshots werden verlustfrei persistiert.
+* **Automatisches 24h Rolling Window:** Ältere Einträge werden automatisch bereinigt, um Speicherplatz zu schonen.
+
+### 5. 🎨 Reaktives Cyber-Frontend & Bento-Grid
+* **Technologie:** React 18, TypeScript, Tailwind CSS, Lucide Icons.
+* **Bento-Grid Design:** Modulare Kachel-Architektur mit CSS Variables für dynamische Themes (u. a. *CachyOS Cyan, Nightmare Red, Cyber Neon, Dark Matter OLED, Matrix Hacker*).
+* **Hardware-Beschleunigte Graphen:** 60 FPS HTML5 Canvas-Rendering für ruckelfreie Verlaufsdiagramme ohne schwere externe Chart-Bibliotheken.
+* **SVG Circular Gauges:** Maßgeschneiderte Vektor-Bögen mit Farbgradienten für CPU-, RAM- und GPU-Last.
+
+### 6. 🚀 Fast-Boot Hardware-Cache (`ncc_system_cache.json`)
+* **Intelligentes Erststart-Profiling:** Beim ersten Start des NCC wird eine Analyse aller statischen Hardwarekomponenten (CPU-Architektur, Taktraten, Speichertopologie, GPU-Modell, Festplatten-Layout, Netzwerkkarten) durchgeführt und in der Datei `ncc_system_cache.json` gespeichert.
+* **Blitzstart bei Folge-Starts:** Bei jedem weiteren Start wird dieses Profil in unter **1 Millisekunde** direkt aus dem Cache geladen. Das spart wertvolle Startzeit und vermeidet wiederholte, hardwareintensive Probing-Abfragen. Über den Button in den Einstellungen oder `POST /api/system/profile/refresh` kann der Cache jederzeit manuell aktualisiert werden.
+
+### 7. 📦 Vollständige Single-File Autarkie
+* Das gebaute React-Frontend ist zusätzlich als komprimierter Base64-String direkt im Quellcode von `main.py` integriert. Dadurch kann das Command Center auf jedem Rechner ohne vorherige Installation von Node.js oder npm sofort mit vollem Funktionsumfang ausgeführt werden.
+
+---
+
 ## ✨ Features
 
-- ⚡ **1-Sekunden Live-Telemetrie via WebSockets**: Kein lästiges HTTP-Polling – Metriken werden in Echtzeit gestreamt.
+- ⚡ **Fast-Boot Hardware-Cache (`ncc_system_cache.json`)**: Blitzstart in <1ms ohne erneutes Hardware-Probing.
+- ⚡ **1-Sekunden Live-Telemetrie via WebSockets**: Metriken werden in Echtzeit gestreamt.
+- 📜 **Integrierter Changelog-Viewer**: Direkt über das NCC-Menü und als Markdown auf GitHub verfügbar.
 - 🎨 **Modernes Bento-Grid Dashboard**:
   - 8 Cyber-Themes: *CachyOS Cyan, Cyber Neon, Dark Matter OLED, Clean Light, Matrix Hacker, Dracula, Nordic Frost, Retro Amber*.
   - SVG-Gauges, animierte Balken & responsive Karten.
@@ -47,15 +88,13 @@ Das **no0bz Command Center (NCC)** ist ein leichtgewichtiges, ultra-schnelles un
 - 🌡️ **LibreHardwareMonitor (LHM) Fallback**:
   - Liest automatisch Lüfterdrehzahlen (RPM), CPU Package Power & Mainboard-Sensoren über den lokalen LHM-Webserver (`http://127.0.0.1:8085/data.json`).
 - 🗄️ **DuckDB Time-Series Logging**:
-  - Speichert Telemetriedaten lokal in `no0bz_metrics.duckdb`.
-  - Automatische Bereinigung älterer Daten (24h Rolling Window).
+  - Speichert Telemetriedaten lokal in `no0bz_metrics.duckdb` mit 24h Rolling Window.
   - Interaktive Verlaufs-Charts über die REST-Schnittstelle (`/api/history`).
 - 🛠️ **Integrierter Task- / Prozess-Manager**:
   - Live-Liste aller laufenden Prozesse sortiert nach RAM / CPU.
-  - Instant-Suche nach Prozessname.
-  - Direkte Prozessbeendigung (Kill PID) über gesicherten POST-Endpunkt (`/api/kill`).
+  - Instant-Suche nach Prozessname und gezielte Prozessbeendigung (`/api/kill`).
 - 💬 **Lokaler P2P Hub (Prompt & File Sharing)**:
-  - Text-Prompts, Code-Snippets und Notizen zwischen Geräten im lokalen Netzwerk austauschen.
+  - Text-Prompts, Code-Snippets und Notizen zwischen Geräten im LAN austauschen.
   - Drag & Drop Datei-Upload mit Vorschau und lokalem Speicher in `ncc_uploads/`.
 - 📦 **Zero-Bloat Single-File Architektur**:
   - Läuft out-of-the-box mit einer einzigen Datei (`main.py`) oder dem beiliegenden Starter-Script `start_ncc.bat`.
@@ -71,7 +110,7 @@ Das Skript installiert automatisch alle notwendigen Pakete aus der `requirements
 
 ```text
 ========================================================
-  Starting no0bz Command Center (NCC) v3.7.0...
+  Starting no0bz Command Center (NCC) v3.8.0...
 ========================================================
 [NCC] Dashboard running at: http://127.0.0.1:8350
 ```
@@ -145,6 +184,10 @@ Um Lüfter-Drehzahlen (RPM) und erweiterte Mainboard-Temperaturen anzuzeigen:
 | `WS` | `/ws/live` | WebSocket-Stream mit sekundengenauen Systemmetriken im JSON-Format |
 | `GET` | `/` | Das vollständige, reaktive HTML5/JS Dashboard |
 | `GET` | `/api/metrics` | Snapshot der aktuellen Systemmetriken als REST-Response |
+| `GET` | `/api/system/profile` | Liefert das gecachte Fast-Boot Hardware-Profil (`ncc_system_cache.json`) |
+| `POST` | `/api/system/profile/refresh` | Forciert eine Neu-Erkennung der Hardware und aktualisiert den Cache |
+| `GET` | `/api/changelog` | Liefert das aktuelle Changelog als JSON-Payload |
+| `GET` | `/changelog` | Eigenständige, formatierte HTML-Changelog-Seite |
 | `GET` | `/api/history?minutes=60` | Zeitreihen-Abfrage aus der DuckDB-Datenbank |
 | `POST` | `/api/kill` | Beendet einen Prozess anhand seiner PID (`{"pid": 1234}`) |
 | `GET` | `/api/chat/messages` | Ruft gespeicherte Chat-, Code- und Prompt-Nachrichten ab |

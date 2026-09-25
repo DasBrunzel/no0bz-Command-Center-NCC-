@@ -70,7 +70,15 @@ interface ChatMessage {
 // NO0BZ VECTOR LOGO COMPONENTS
 // ================================================
 
-export function No0bzLogo({ mode = 'nightmare', size = 'normal' }: { mode?: 'classic' | 'nightmare', size?: 'small' | 'normal' | 'large' }) {
+export function No0bzLogo({ 
+  mode = 'nightmare', 
+  size = 'normal',
+  onVersionClick 
+}: { 
+  mode?: 'classic' | 'nightmare', 
+  size?: 'small' | 'normal' | 'large',
+  onVersionClick?: () => void 
+}) {
   const isNightmare = mode === 'nightmare';
   const scale = size === 'small' ? 'h-7' : size === 'large' ? 'h-14' : 'h-10';
 
@@ -106,9 +114,14 @@ export function No0bzLogo({ mode = 'nightmare', size = 'normal' }: { mode?: 'cla
           <span className={`text-[9px] font-mono font-bold tracking-widest uppercase ${isNightmare ? 'text-red-400 drop-shadow-[0_0_6px_rgba(239,68,68,0.8)]' : 'text-cyan-400'}`}>
             {isNightmare ? '⚡ NIGHTMARE' : 'COMMAND CENTER'}
           </span>
-          <span className="text-[8px] px-1 py-0.2 bg-zinc-800 border border-zinc-700 text-zinc-300 rounded font-mono font-semibold">
-            v3.7.0
-          </span>
+          <button
+            type="button"
+            onClick={onVersionClick}
+            title="Klicken, um das NCC Changelog zu öffnen"
+            className="text-[8px] px-1 py-0.2 bg-zinc-800 hover:bg-cyan-900/60 hover:text-cyan-300 border border-zinc-700 hover:border-cyan-500 text-zinc-300 rounded font-mono font-semibold transition-all cursor-pointer"
+          >
+            v3.8.0
+          </button>
         </div>
       </div>
     </div>
@@ -195,9 +208,15 @@ function SvgCircleGauge({
 
 export default function App() {
   // Navigation: The top menu is completely removed. Sidebar is the only nav!
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'chat' | 'vault' | 'processes' | 'history' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'chat' | 'vault' | 'processes' | 'history' | 'settings' | 'changelog'>('dashboard');
   const [themeMode, setThemeMode] = useState<'nightmare' | 'bento' | 'nordic' | 'industrial'>('nightmare');
   const [logoStyle, setLogoStyle] = useState<'nightmare' | 'classic'>('nightmare');
+
+  // Changelog Viewer State
+  const [changelogRaw, setChangelogRaw] = useState(false);
+  const [changelogSearch, setChangelogSearch] = useState('');
+  const [changelogMd, setChangelogMd] = useState('');
+  const [copiedChangelog, setCopiedChangelog] = useState(false);
 
   // Telemetry state
   const [systemTime, setSystemTime] = useState(new Date().toLocaleTimeString('de-DE'));
@@ -342,6 +361,18 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
       setSystemTime(new Date().toLocaleTimeString('de-DE'));
     }, 1000);
     return () => clearInterval(timer);
+  }, []);
+
+  // Fetch Changelog from Backend API if available
+  useEffect(() => {
+    fetch('/api/changelog')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.changelog) {
+          setChangelogMd(data.changelog);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   // Connect to Python Backend WebSocket if available, or simulate realistic live feed
@@ -681,7 +712,7 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
       <header className={`h-16 px-5 flex items-center justify-between border-b ${isNightmare ? 'bg-black/90 border-red-950/40' : 'bg-slate-950/90 border-slate-800'} backdrop-blur-lg sticky top-0 z-40`}>
         {/* Left: Prominent no0bz Branding */}
         <div className="flex items-center gap-4">
-          <No0bzLogo mode={logoStyle} size="normal" />
+          <No0bzLogo mode={logoStyle} size="normal" onVersionClick={() => setActiveTab('changelog')} />
           <div className="h-6 w-px bg-zinc-800 hidden md:block" />
           <div className="hidden lg:flex items-center gap-2 text-xs font-mono text-zinc-400">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping inline-block" />
@@ -708,6 +739,23 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
 
         {/* Right: Theme / Logo Mode & Quick Actions */}
         <div className="flex items-center gap-3">
+          {/* Changelog Quick Button */}
+          <button
+            onClick={() => setActiveTab('changelog')}
+            title="no0bz Command Center Changelog & Versionshistorie"
+            className={`px-2.5 py-1 rounded border text-xs font-mono font-bold flex items-center gap-1.5 transition-all ${
+              activeTab === 'changelog'
+                ? isNightmare
+                  ? 'bg-red-600 border-red-500 text-white shadow-[0_0_12px_rgba(239,68,68,0.5)]'
+                  : 'bg-cyan-500 border-cyan-400 text-slate-950 font-bold shadow-[0_0_12px_rgba(6,182,212,0.4)]'
+                : 'bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-zinc-300 hover:text-white'
+            }`}
+          >
+            <FileText className="w-3.5 h-3.5 text-zinc-400" />
+            <span className="hidden sm:inline">CHANGELOG</span>
+            <span className="text-[9px] px-1 py-0.2 rounded bg-zinc-800 text-zinc-400 font-mono">v3.7.0</span>
+          </button>
+
           {/* Logo Style Toggle */}
           <button
             onClick={() => {
@@ -862,6 +910,28 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                     <Settings className="w-4 h-4" />
                     <span>EINSTELLUNGEN</span>
                   </div>
+                </button>
+
+                {/* 7. CHANGELOG */}
+                <button
+                  onClick={() => setActiveTab('changelog')}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-mono font-semibold transition-all ${
+                    activeTab === 'changelog'
+                      ? isNightmare
+                        ? 'bg-red-600 text-white shadow-[0_0_15px_rgba(239,68,68,0.5)]'
+                        : 'bg-cyan-500 text-slate-950 font-bold shadow-[0_0_15px_rgba(6,182,212,0.4)]'
+                      : 'text-zinc-400 hover:text-white hover:bg-zinc-800/50'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <FileText className="w-4 h-4" />
+                    <span>CHANGELOG</span>
+                  </div>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${
+                    activeTab === 'changelog' ? 'bg-black/30 text-white' : 'bg-cyan-950/60 border border-cyan-800/60 text-cyan-300'
+                  }`}>
+                    v3.7.0
+                  </span>
                 </button>
               </nav>
             </div>
@@ -1938,6 +2008,352 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
             </div>
           )}
 
+          {/* ---------------------------------------------------- */}
+          {/* TAB 7: CHANGELOG (VERSIONSHISTORIE & RELEASE NOTES)  */}
+          {/* ---------------------------------------------------- */}
+          {activeTab === 'changelog' && (
+            <div className="max-w-5xl mx-auto space-y-6">
+              
+              {/* Header Box */}
+              <div className={`p-5 rounded-xl ${cardBg} flex flex-col md:flex-row items-start md:items-center justify-between gap-4`}>
+                <div>
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-lg bg-cyan-950/80 border border-cyan-500/50 text-cyan-400">
+                      <FileText className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h2 className="font-mono font-bold text-lg text-white flex items-center gap-2">
+                        <span>no0bz COMMAND CENTER // CHANGELOG</span>
+                        <span className="text-xs px-2 py-0.5 rounded bg-cyan-500/20 border border-cyan-400/40 text-cyan-300 font-bold">
+                          v3.7.0
+                        </span>
+                      </h2>
+                      <p className="text-xs text-zinc-400 mt-0.5 font-mono">
+                        Vollständige Versionshistorie, Release-Notes und Feature-Übersicht für GitHub &amp; NCC.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Header Action Buttons */}
+                <div className="flex items-center gap-2 flex-wrap font-mono text-xs">
+                  {/* Toggle Raw Markdown vs Cards */}
+                  <button
+                    onClick={() => setChangelogRaw(!changelogRaw)}
+                    className={`px-3 py-1.5 rounded-lg border font-semibold flex items-center gap-1.5 transition-all ${
+                      changelogRaw 
+                        ? 'bg-purple-950/80 border-purple-500 text-purple-300 shadow-[0_0_10px_rgba(168,85,247,0.3)]' 
+                        : 'bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-zinc-300'
+                    }`}
+                  >
+                    <Terminal className="w-3.5 h-3.5" />
+                    <span>{changelogRaw ? 'Karten-Ansicht' : 'GitHub Raw (.md)'}</span>
+                  </button>
+
+                  {/* Copy Markdown */}
+                  <button
+                    onClick={() => {
+                      const textToCopy = changelogMd || `# 📜 no0bz Command Center (NCC) – Changelog\n\nVersion v3.7.0 (2026-09-25)\n- Standalone React Dashboard in main.py\n- Dynamische WebSocket-Verbindung\n- Integrierter Changelog-Viewer im NCC & GitHub\n- nvidia-ml-py Priorisierung`;
+                      navigator.clipboard.writeText(textToCopy);
+                      setCopiedChangelog(true);
+                      setTimeout(() => setCopiedChangelog(false), 2000);
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white font-semibold flex items-center gap-1.5 transition-all"
+                  >
+                    {copiedChangelog ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedChangelog ? 'Kopiert!' : 'Kopieren'}</span>
+                  </button>
+
+                  {/* Open /changelog standalone route */}
+                  <a
+                    href="/changelog"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3 py-1.5 rounded-lg bg-cyan-950/50 hover:bg-cyan-900/60 border border-cyan-700/60 text-cyan-300 font-semibold flex items-center gap-1.5 transition-all"
+                    title="Als eigenständige HTML-Seite öffnen"
+                  >
+                    <Maximize2 className="w-3.5 h-3.5" />
+                    <span>HTML-Ansicht</span>
+                  </a>
+                </div>
+              </div>
+
+              {/* Search & Filter Bar */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div className="relative w-full sm:w-80">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+                  <input
+                    type="text"
+                    placeholder="Changelog durchsuchen (z. B. WebSocket, NVIDIA, Chat)..."
+                    value={changelogSearch}
+                    onChange={(e) => setChangelogSearch(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 bg-black/60 border border-zinc-800 focus:border-cyan-500 rounded-lg text-xs font-mono text-white placeholder-zinc-500 focus:outline-none transition-all"
+                  />
+                  {changelogSearch && (
+                    <button
+                      onClick={() => setChangelogSearch('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto font-mono text-[11px] pb-1 sm:pb-0">
+                  <span className="text-zinc-500 uppercase font-bold text-[10px]">Filter:</span>
+                  {['Alle', 'v3.7.0', 'v3.6.3', 'v3.5.0', 'v3.1.0'].map(ver => (
+                    <button
+                      key={ver}
+                      onClick={() => setChangelogSearch(ver === 'Alle' ? '' : ver)}
+                      className={`px-2.5 py-1 rounded-md border transition-all ${
+                        (ver === 'Alle' && !changelogSearch) || changelogSearch === ver
+                          ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 font-bold'
+                          : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white'
+                      }`}
+                    >
+                      {ver}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* RAW MARKDOWN VIEW */}
+              {changelogRaw ? (
+                <div className={`p-5 rounded-xl ${cardBg} font-mono text-xs`}>
+                  <div className="flex items-center justify-between pb-3 border-b border-zinc-800 text-zinc-400">
+                    <span className="font-bold flex items-center gap-2 text-white">
+                      <File className="w-4 h-4 text-purple-400" />
+                      CHANGELOG.md (GitHub Datei)
+                    </span>
+                    <span className="text-[10px] text-zinc-500">Root Directory</span>
+                  </div>
+                  <pre className="mt-4 p-4 rounded-lg bg-black/80 border border-zinc-800 text-zinc-300 text-[11px] font-mono whitespace-pre-wrap overflow-x-auto leading-relaxed max-h-[65vh] select-text">
+                    {changelogMd || `# 📜 no0bz Command Center (NCC) – Changelog\n\nAlle wichtigen Änderungen, neuen Funktionen und Optimierungen für das **no0bz Command Center (NCC)** werden in dieser Datei chronologisch dokumentiert.\n\nDas Format basiert auf Keep a Changelog und dieses Projekt hält sich an Semantic Versioning.\n\n---\n\n## [v3.7.0] - 2026-09-25\n\n### 🚀 Neu & Hervorgehoben\n- Integrierter Changelog-Viewer im NCC\n- Vollständig autarkes Single-File Dashboard in main.py\n- Vorkompilierter dist/-Ordner im Repository\n- Dynamische WebSocket-Host-Erkennung\n- Neue Backend-Routen: /api/changelog und /changelog\n\n### ⚡ Verbesserungen & Performance\n- NVIDIA GPU-Treiber: nvidia-ml-py Priorisierung\n- Bereinigte README-Dokumentation\n- start_ncc.bat startet Browser automatisch\n\n### 🐛 Fehlerbehebungen\n- Behebung des Platzhalter-Infobox Problems nach GitHub-Klon\n- Versionsanzeige einheitlich synchronisiert\n\n---\n\n## [v3.6.3] - 2026-09-18\n- P2P Chat & Prompt Sync Hub\n- Dateibrowser & Chat Vault\n- Prozess-Manager mit Task-Kill\n- DuckDB 24h Telemetrie-Historie\n- Dual-Style Logo & 8 Themes\n\n---\n\n## [v3.5.0] - 2026-09-02\n- LibreHardwareMonitor (LHM) Fallback\n- Lüfterdrehzahl- & Mainboard-Sensoren\n- SVG Circular Gauges\n- Thread-sichere data_lock Datensammlung\n\n---\n\n## [v3.1.0] - 2026-08-15\n- Echtzeit-WebSockets (/ws/live)\n- Native NVIDIA NVML-Unterstützung\n- psutil Multi-Core & NVMe Monitoring\n\n---\n\n## [v3.0.0] - 2026-07-28\n- Initialer Release no0bz Command Center (NCC)`}
+                  </pre>
+                </div>
+              ) : (
+                /* INTERACTIVE CARDS VIEW */
+                <div className="space-y-5 font-mono">
+                  
+                  {/* RELEASE: v3.7.0 */}
+                  {(!changelogSearch || 'v3.7.0 3.7.0 standalone react bundle websocket host changelog dist nvidia'.toLowerCase().includes(changelogSearch.toLowerCase())) && (
+                    <div className={`p-5 rounded-xl border relative overflow-hidden transition-all ${
+                      isNightmare 
+                        ? 'bg-zinc-950/90 border-cyan-500/50 shadow-[0_0_25px_rgba(6,182,212,0.15)]' 
+                        : 'bg-slate-900/90 border-cyan-500/50 shadow-[0_0_25px_rgba(6,182,212,0.15)]'
+                    }`}>
+                      <div className="absolute top-0 right-0 transform translate-x-3 -translate-y-3 w-32 h-32 bg-cyan-500/10 rounded-full blur-2xl pointer-events-none" />
+
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-zinc-800">
+                        <div className="flex items-center gap-3">
+                          <span className="text-xl font-black text-white">v3.7.0</span>
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500 text-slate-950 shadow-[0_0_10px_rgba(6,182,212,0.6)] animate-pulse">
+                            AKTUELLES RELEASE
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-zinc-400">
+                          <Clock className="w-3.5 h-3.5 text-zinc-500" />
+                          <span>25. September 2026</span>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 space-y-4 text-xs">
+                        {/* Section: Neu */}
+                        <div>
+                          <div className="text-[11px] font-bold uppercase tracking-wider text-cyan-400 mb-2 flex items-center gap-1.5">
+                            <Sparkles className="w-3.5 h-3.5" />
+                            <span>🚀 Neu &amp; Hervorgehoben</span>
+                          </div>
+                          <ul className="space-y-2 text-zinc-300">
+                            <li className="flex items-start gap-2">
+                              <span className="px-1.5 py-0.2 rounded bg-cyan-950 text-cyan-300 border border-cyan-700/60 text-[9px] font-bold mt-0.5">NEU</span>
+                              <div>
+                                <strong className="text-white">Integrierter Changelog-Viewer im NCC:</strong> Vollständige Versionshistorie direkt über das Seitenmenü, den Header-Button oder per Klick auf das Versions-Badge im Command Center einsehbar.
+                              </div>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <span className="px-1.5 py-0.2 rounded bg-cyan-950 text-cyan-300 border border-cyan-700/60 text-[9px] font-bold mt-0.5">SINGLE-FILE</span>
+                              <div>
+                                <strong className="text-white">Vollständig autarkes React-Bundle in `main.py`:</strong> Das exakte, identische React-Frontend ist vorkompiliert und direkt in die Python-Datei integriert. `python main.py` startet sofort mit der vollen Cyber-Oberfläche ohne vorheriges `npm run build`.
+                              </div>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <span className="px-1.5 py-0.2 rounded bg-cyan-950 text-cyan-300 border border-cyan-700/60 text-[9px] font-bold mt-0.5">NETZWERK</span>
+                              <div>
+                                <strong className="text-white">Dynamische WebSocket-Host-Erkennung:</strong> Automatische Verbindung über die aktuelle URL (`window.location.host`), wodurch NCC problemlos über lokale IP-Adressen (z. B. `192.168.x.x:8350`) oder Custom Ports aufgerufen werden kann.
+                              </div>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <span className="px-1.5 py-0.2 rounded bg-cyan-950 text-cyan-300 border border-cyan-700/60 text-[9px] font-bold mt-0.5">API</span>
+                              <div>
+                                <strong className="text-white">Neue Backend-Endpunkte:</strong> <code className="text-cyan-300 bg-black/60 px-1 py-0.5 rounded">/api/changelog</code> (JSON-Daten) und <code className="text-cyan-300 bg-black/60 px-1 py-0.5 rounded">/changelog</code> (Eigenständige HTML-Seite).
+                              </div>
+                            </li>
+                          </ul>
+                        </div>
+
+                        {/* Section: Optimierungen */}
+                        <div>
+                          <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-400 mb-2 flex items-center gap-1.5">
+                            <Zap className="w-3.5 h-3.5" />
+                            <span>⚡ Optimierungen &amp; Bereinigungen</span>
+                          </div>
+                          <ul className="space-y-1.5 text-zinc-300">
+                            <li className="flex items-start gap-2">
+                              <span className="text-emerald-400">✓</span>
+                              <span><strong>NVIDIA Modernisierung:</strong> Bevorzugt primär das offizielle <code className="text-zinc-200">nvidia-ml-py</code> Paket zur Beseitigung veralteter Deprecation-Warnungen.</span>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <span className="text-emerald-400">✓</span>
+                              <span><strong>Vorkompilierter <code className="text-zinc-200">dist/</code>-Ordner:</strong> Liegt jetzt direkt im Repository vor, sodass auch frische Git-Klone sofort die gebaute Web-UI haben.</span>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <span className="text-emerald-400">✓</span>
+                              <span><strong>start_ncc.bat:</strong> Aktualisiert auf v3.7.0 mit automatischem Start des Standardbrowsers auf Port 8350.</span>
+                            </li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* RELEASE: v3.6.3 */}
+                  {(!changelogSearch || 'v3.6.3 3.6.3 chat vault dateibrowser duckdb prozess kill bento themes'.toLowerCase().includes(changelogSearch.toLowerCase())) && (
+                    <div className={`p-5 rounded-xl border ${cardBg} transition-all`}>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-zinc-800">
+                        <div className="flex items-center gap-3">
+                          <span className="text-lg font-black text-white">v3.6.3</span>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-300 border border-zinc-700">
+                            MAJOR UPDATE
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-zinc-500">
+                          <Clock className="w-3.5 h-3.5" />
+                          <span>18. September 2026</span>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 space-y-3 text-xs text-zinc-300">
+                        <div className="flex items-start gap-2">
+                          <span className="text-cyan-400 font-bold">•</span>
+                          <div><strong>P2P Chat &amp; Prompt Sync Hub:</strong> Lokaler Echtzeit-Chat mit Dateiübertragung zum schnellen Teilen von Code, Prompts und System-Status über das Heimnetzwerk.</div>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <span className="text-cyan-400 font-bold">•</span>
+                          <div><strong>Dateibrowser &amp; Chat Vault:</strong> Schneller Upload und Download von Screenshots, Logs und Dokumenten (<code className="text-cyan-300">/api/chat/upload</code>).</div>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <span className="text-cyan-400 font-bold">•</span>
+                          <div><strong>Prozess-Manager:</strong> Live-Tabelle mit CPU-, RAM-Nutzung, Filter-Suchfeld und Beendigungs-Option (<code className="text-cyan-300">/api/kill</code>).</div>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <span className="text-cyan-400 font-bold">•</span>
+                          <div><strong>DuckDB Telemetrie-Historie:</strong> 24h Zeitreihen-Logging in <code className="text-zinc-200">no0bz_metrics.duckdb</code> mit interaktiven HTML5 Canvas-Graphen.</div>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <span className="text-cyan-400 font-bold">•</span>
+                          <div><strong>Theme Engine:</strong> Umschaltbar zwischen Classic Cyan, Nightmare Red, Industrial Amber und Bento-Grid.</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* RELEASE: v3.5.0 */}
+                  {(!changelogSearch || 'v3.5.0 3.5.0 lhm librehardwaremonitor fan rpm lüfter sensors data_lock'.toLowerCase().includes(changelogSearch.toLowerCase())) && (
+                    <div className={`p-5 rounded-xl border ${cardBg} transition-all`}>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-zinc-800">
+                        <div className="flex items-center gap-3">
+                          <span className="text-lg font-black text-white">v3.5.0</span>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-300 border border-zinc-700">
+                            HARDWARE SENSORS
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-zinc-500">
+                          <Clock className="w-3.5 h-3.5" />
+                          <span>02. September 2026</span>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 space-y-3 text-xs text-zinc-300">
+                        <div className="flex items-start gap-2">
+                          <span className="text-purple-400 font-bold">•</span>
+                          <div><strong>LibreHardwareMonitor REST-Integration:</strong> Fallback-Client fragt Port 8085 ab für Mainboard-Temperaturen, CPU Package Power und Lüfterdrehzahlen (RPM).</div>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <span className="text-purple-400 font-bold">•</span>
+                          <div><strong>SVG Circular Gauges:</strong> Vektorbasierte, animierte Kreisdiagramme mit Gradienten-Füllung für Hardware-Lastanzeige.</div>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <span className="text-purple-400 font-bold">•</span>
+                          <div><strong>Thread-Safety:</strong> Absicherung aller Datenstrukturen mittels <code className="text-zinc-200">threading.Lock()</code>.</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* RELEASE: v3.1.0 */}
+                  {(!changelogSearch || 'v3.1.0 3.1.0 websocket nvml gpu nvidia psutil multicore nvme'.toLowerCase().includes(changelogSearch.toLowerCase())) && (
+                    <div className={`p-5 rounded-xl border ${cardBg} transition-all`}>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-zinc-800">
+                        <div className="flex items-center gap-3">
+                          <span className="text-lg font-black text-white">v3.1.0</span>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-300 border border-zinc-700">
+                            REAL-TIME STREAMING
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-zinc-500">
+                          <Clock className="w-3.5 h-3.5" />
+                          <span>15. August 2026</span>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 space-y-3 text-xs text-zinc-300">
+                        <div className="flex items-start gap-2">
+                          <span className="text-amber-400 font-bold">•</span>
+                          <div><strong>1-Sekunden WebSockets:</strong> Umstellung auf Push-Streaming über <code className="text-amber-300">/ws/live</code> ohne wiederholtes Polling.</div>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <span className="text-amber-400 font-bold">•</span>
+                          <div><strong>NVIDIA NVML:</strong> C-API Binding für VRAM-Belegung, GPU-Core Clock, Power Draw in Watt und GPU-Temperatur.</div>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <span className="text-amber-400 font-bold">•</span>
+                          <div><strong>NVMe &amp; Multi-Core:</strong> Detaillierte Core-Balken und I/O Durchsatzanzeige in MB/s für alle Datenträger.</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* RELEASE: v3.0.0 */}
+                  {(!changelogSearch || 'v3.0.0 3.0.0 initial release fastapi uvicorn architecture'.toLowerCase().includes(changelogSearch.toLowerCase())) && (
+                    <div className={`p-5 rounded-xl border ${cardBg} transition-all opacity-80`}>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-zinc-800">
+                        <div className="flex items-center gap-3">
+                          <span className="text-lg font-black text-white">v3.0.0</span>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-400 border border-zinc-700">
+                            INITIAL RELEASE
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-zinc-500">
+                          <Clock className="w-3.5 h-3.5" />
+                          <span>28. Juli 2026</span>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 space-y-2 text-xs text-zinc-400">
+                        <p>
+                          Erstveröffentlichung des <strong>no0bz Command Center (NCC)</strong> als Single-File Systemmonitor auf Port 8350 mit FastAPI, Uvicorn und responsivem UI.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                </div>
+              )}
+
+            </div>
+          )}
+
         </main>
       </div>
 
@@ -1974,7 +2390,13 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
         <div className="flex items-center gap-3">
           <span className="font-bold text-zinc-300">no0bz COMMAND CENTER</span>
           <span>|</span>
-          <span className="text-red-400 font-semibold">v3.6.0</span>
+          <button 
+            onClick={() => setActiveTab('changelog')} 
+            className="text-cyan-400 hover:text-cyan-300 font-semibold cursor-pointer underline"
+            title="Changelog ansehen"
+          >
+            v3.7.0
+          </button>
           <span>|</span>
           <span className="hidden sm:inline">// {themeMode.toUpperCase()} MODE</span>
         </div>
