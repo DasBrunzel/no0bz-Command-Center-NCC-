@@ -13,7 +13,7 @@
 **High-Performance Real-Time System Monitor & Local P2P Sync Hub**  
 *Built for Power Users, Gamers, Devs & Homelab Admins.*
 
-[![Version](https://img.shields.io/badge/Version-v3.6.3-cyan.svg?style=for-the-badge)](https://github.com)
+[![Version](https://img.shields.io/badge/Version-v3.7.0-cyan.svg?style=for-the-badge)](https://github.com)
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![DuckDB](https://img.shields.io/badge/DuckDB-TimeSeries-FFF000?style=for-the-badge&logo=duckdb&logoColor=black)](https://duckdb.org)
@@ -71,7 +71,7 @@ Das Skript installiert automatisch alle notwendigen Pakete aus der `requirements
 
 ```text
 ========================================================
-  Starting no0bz Command Center (NCC) v3.6.3...
+  Starting no0bz Command Center (NCC) v3.7.0...
 ========================================================
 [NCC] Dashboard running at: http://127.0.0.1:8350
 ```
@@ -151,9 +151,6 @@ Um Lüfter-Drehzahlen (RPM) und erweiterte Mainboard-Temperaturen anzuzeigen:
 | `POST` | `/api/chat/send` | Sendet einen Prompt oder eine Notiz |
 | `POST` | `/api/chat/upload` | Multi-Datei-Upload in den Ordner `ncc_uploads/` |
 | `GET` | `/api/chat/files` | Auflistung aller übertragenen Dateien |
-
----
-
 
 ---
 
