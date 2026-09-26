@@ -150,7 +150,7 @@ export function No0bzLogo({
             title="Klicken, um das NCC Changelog zu öffnen"
             className="text-[8px] px-1 py-0.2 bg-zinc-800 hover:bg-cyan-900/60 hover:text-cyan-300 border border-zinc-700 hover:border-cyan-500 text-zinc-300 rounded font-mono font-semibold transition-all cursor-pointer"
           >
-            v3.8.1
+            v3.8.2
           </button>
         </div>
       </div>
@@ -418,6 +418,8 @@ export default function App() {
   });
   const [clientServerUrl, setClientServerUrl] = useState<string>('192.168.1.100:8350');
   const [selectedViewNodeId, setSelectedViewNodeId] = useState<string | null>(null);
+  const [storageLocation, setStorageLocation] = useState<'serverseitig' | 'lokal'>('serverseitig');
+  const [serverVaultFiles, setServerVaultFiles] = useState<ChatAttachment[]>([]);
 
   // User Profile Customizer (Saved to LocalStorage & Syncs to Chat and Server)
   const [userProfile, setUserProfile] = useState<UserProfile>(() => {
@@ -660,13 +662,25 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
     return () => clearInterval(timer);
   }, []);
 
-  // Fetch Changelog from Backend API if available
+  // Fetch Changelog, Mode, Chat Messages & Vault Files from Backend API
   useEffect(() => {
     fetch('/api/changelog')
       .then(res => res.json())
       .then(data => {
         if (data && data.changelog) {
           setChangelogMd(data.changelog);
+        }
+      })
+      .catch(() => {});
+
+    // Fetch Active Multi-PC Mode & Storage Location (Serverseitig vs Lokal)
+    fetch('/api/multipc/mode')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.mode) {
+          setMultiPcMode(data.mode);
+          if (data.client_server_url) setClientServerUrl(data.client_server_url);
+          if (data.storage_type) setStorageLocation(data.storage_type);
         }
       })
       .catch(() => {});
@@ -690,6 +704,26 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
         }
       })
       .catch(() => {});
+
+    // Fetch Persisted Chat Messages from Backend DuckDB
+    fetch('/api/chat/messages')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data) && data.length > 0) {
+          setMessages(data);
+        }
+      })
+      .catch(() => {});
+
+    // Fetch Vault Files from Server or Local Storage
+    fetch('/api/chat/files')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setServerVaultFiles(data);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   // Connect to Python Backend WebSocket if available, or simulate realistic live feed
@@ -710,11 +744,23 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
         try {
           const raw = JSON.parse(event.data);
           if (raw.type === 'chat_message') {
-            setMessages(prev => [...prev, raw.data]);
+            setMessages(prev => {
+              if (prev.some(m => m.id === raw.data.id)) return prev;
+              return [...prev, raw.data];
+            });
+            // Refresh vault files when attachments are received
+            if (raw.data.attachments && raw.data.attachments.length > 0) {
+              fetch('/api/chat/files')
+                .then(r => r.json())
+                .then(data => { if (Array.isArray(data)) setServerVaultFiles(data); })
+                .catch(() => {});
+            }
             return;
           }
-          if (raw.multipc && raw.multipc.nodes) {
-            setConnectedNodes(raw.multipc.nodes);
+          if (raw.multipc) {
+            if (raw.multipc.nodes) setConnectedNodes(raw.multipc.nodes);
+            if (raw.multipc.mode) setMultiPcMode(raw.multipc.mode);
+            if (raw.multipc.storage_location) setStorageLocation(raw.multipc.storage_location);
           }
           if (raw.cpu) {
             setMetrics(prev => ({
@@ -898,23 +944,28 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
     );
   }, [processes, procSearch]);
 
-  // All Attachments gathered from messages for Vault View
+  // All Attachments gathered from server vault & messages for Vault View
   const allVaultFiles = useMemo(() => {
-    const list: (ChatAttachment & { sender: string; msgId: string })[] = [];
+    const map = new Map<string, ChatAttachment & { sender: string; msgId?: string }>();
+    serverVaultFiles.forEach(f => {
+      map.set(f.name, { ...f, sender: (f as any).sender || (multiPcMode === 'host' ? 'Host Server' : 'Lokal') });
+    });
     messages.forEach(m => {
       (m.attachments || []).forEach(att => {
-        list.push({ ...att, sender: m.sender, msgId: m.id });
+        if (!map.has(att.name)) {
+          map.set(att.name, { ...att, sender: m.sender, msgId: m.id });
+        }
       });
     });
-    return list.filter(item => {
+    return Array.from(map.values()).filter(item => {
       const matchSearch = item.name.toLowerCase().includes(vaultSearch.toLowerCase());
       if (!matchSearch) return false;
       if (vaultFilter === 'images') return item.is_image;
-      if (vaultFilter === 'code') return ['PY', 'CU', 'TS', 'JS', 'CPP', 'JSON', 'RS'].includes(item.ext);
-      if (vaultFilter === 'docs') return ['TXT', 'PDF', 'MD', 'DOCX'].includes(item.ext);
+      if (vaultFilter === 'code') return ['PY', 'CU', 'TS', 'JS', 'CPP', 'JSON', 'RS', 'SH', 'BAT'].includes(item.ext);
+      if (vaultFilter === 'docs') return ['TXT', 'PDF', 'MD', 'DOCX', 'LOG'].includes(item.ext);
       return true;
     });
-  }, [messages, vaultSearch, vaultFilter]);
+  }, [messages, serverVaultFiles, vaultSearch, vaultFilter, multiPcMode]);
 
   // Handle Drag & Drop over Chat
   const handleChatDragOver = (e: React.DragEvent) => {
@@ -930,7 +981,7 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
     e.preventDefault();
     setIsDraggingOverChat(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      const droppedFiles = Array.from(e.dataTransfer.files).slice(0, 100); // max 100
+      const droppedFiles = Array.from(e.dataTransfer.files).slice(0, 100);
       setQueuedFiles(prev => [...prev, ...droppedFiles].slice(0, 100));
     }
   };
@@ -942,72 +993,176 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
     }
   };
 
+  // Direct Vault Upload (Multipart Form Data)
+  const handleVaultUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const filesToUpload = Array.from(e.target.files).slice(0, 100);
+    const currentSender = userProfile.displayName 
+      ? `${userProfile.displayName} (${userProfile.pcName || metrics.hostname})`
+      : (userProfile.pcName || metrics.hostname);
+
+    const formData = new FormData();
+    filesToUpload.forEach(f => formData.append('files', f));
+    formData.append('sender', currentSender);
+    formData.append('title', `Vault Upload (${filesToUpload.length} Datei${filesToUpload.length > 1 ? 'en' : ''})`);
+    formData.append('note', `Direkt in das ${multiPcMode === 'host' ? 'serverseitige' : 'lokale'} Vault hochgeladene Dateien.`);
+
+    try {
+      const apiHost = window.location.port === '8350' || (window.location.host && !window.location.port) 
+        ? '' 
+        : 'http://localhost:8350';
+      const res = await fetch(`${apiHost}/api/chat/upload`, {
+        method: 'POST',
+        body: formData
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.message) {
+          setMessages(prev => [...prev, data.message]);
+        }
+        // Refresh vault files
+        const flRes = await fetch(`${apiHost}/api/chat/files`);
+        if (flRes.ok) {
+          const flData = await flRes.json();
+          if (Array.isArray(flData)) setServerVaultFiles(flData);
+        }
+      }
+    } catch (err) {
+      console.error("Vault direct upload error:", err);
+    }
+    e.target.value = '';
+  };
+
+  // Delete Vault File from Disk & DuckDB
+  const handleDeleteVaultFile = async (fileName: string) => {
+    try {
+      const apiHost = window.location.port === '8350' || (window.location.host && !window.location.port) 
+        ? '' 
+        : 'http://localhost:8350';
+      await fetch(`${apiHost}/api/chat/files/${encodeURIComponent(fileName)}`, {
+        method: 'DELETE'
+      });
+    } catch {}
+    setMessages(prev => prev.map(m => ({
+      ...m,
+      attachments: (m.attachments || []).filter(a => a.name !== fileName)
+    })));
+    setServerVaultFiles(prev => prev.filter(f => f.name !== fileName));
+  };
+
   // Send Chat Message / Prompt / Files
   const handleSendMessage = async () => {
     if (!promptText.trim() && queuedFiles.length === 0) return;
-
-    const attachments: ChatAttachment[] = [];
-
-    // Convert local files to attachments with preview URLs
-    for (const f of queuedFiles) {
-      const ext = f.name.split('.').pop()?.toUpperCase() || 'FILE';
-      const isImg = ['PNG', 'JPG', 'JPEG', 'GIF', 'WEBP', 'SVG'].includes(ext);
-      let previewUrl = '';
-      if (isImg) {
-        previewUrl = URL.createObjectURL(f);
-      }
-      attachments.push({
-        name: f.name,
-        size: f.size,
-        ext,
-        is_image: isImg,
-        url: previewUrl || '#',
-        data_url: previewUrl,
-        uploaded_at: new Date().toLocaleTimeString('de-DE')
-      });
-    }
-
-    const words = promptText.trim().split(/\s+/).filter(Boolean).length;
-    const tokens = Math.round(promptText.length / 3.8);
 
     const currentSender = userProfile.displayName 
       ? `${userProfile.displayName} (${userProfile.pcName || metrics.hostname})`
       : (userProfile.pcName || metrics.hostname);
 
-    const newMsg: ChatMessage = {
-      id: `msg_${Date.now()}`,
-      sender: currentSender,
-      timestamp: new Date().toLocaleTimeString('de-DE'),
-      type: queuedFiles.length > 0 && !promptText.trim() ? 'files' : 'prompt',
-      title: promptTitle.trim() || (attachments.length > 0 ? `Shared ${attachments.length} File(s)` : 'P2P Prompt Sync'),
-      content: promptText.trim(),
-      tokens,
-      words,
-      attachments
-    };
+    const apiHost = window.location.port === '8350' || (window.location.host && !window.location.port) 
+      ? '' 
+      : 'http://localhost:8350';
 
-    setMessages(prev => [...prev, newMsg]);
+    // If uploading files, send real multipart/form-data to /api/chat/upload
+    if (queuedFiles.length > 0) {
+      try {
+        const formData = new FormData();
+        queuedFiles.forEach(f => formData.append('files', f));
+        formData.append('sender', currentSender);
+        if (promptTitle.trim()) formData.append('title', promptTitle.trim());
+        if (promptText.trim()) formData.append('note', promptText.trim());
+
+        const res = await fetch(`${apiHost}/api/chat/upload`, {
+          method: 'POST',
+          body: formData
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.message) {
+            setMessages(prev => {
+              if (prev.some(m => m.id === data.message.id)) return prev;
+              return [...prev, data.message];
+            });
+          }
+          // Refresh vault
+          fetch(`${apiHost}/api/chat/files`)
+            .then(r => r.json())
+            .then(fl => { if (Array.isArray(fl)) setServerVaultFiles(fl); })
+            .catch(() => {});
+        } else {
+          // Fallback local display
+          fallbackLocalMessage();
+        }
+      } catch {
+        fallbackLocalMessage();
+      }
+    } else {
+      // Text-only Prompt Transfer
+      const words = promptText.trim().split(/\s+/).filter(Boolean).length;
+      const tokens = Math.round(promptText.length / 3.8);
+
+      const newMsg: ChatMessage = {
+        id: `msg_${Date.now()}`,
+        sender: currentSender,
+        timestamp: new Date().toLocaleTimeString('de-DE'),
+        type: 'prompt',
+        title: promptTitle.trim() || 'P2P Prompt Sync',
+        content: promptText.trim(),
+        tokens,
+        words,
+        attachments: []
+      };
+
+      setMessages(prev => [...prev, newMsg]);
+
+      try {
+        await fetch(`${apiHost}/api/chat/message`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newMsg)
+        });
+      } catch {}
+    }
+
     setPromptText('');
     setPromptTitle('');
     setQueuedFiles([]);
 
-    // Scroll chat to bottom
     setTimeout(() => {
       chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, 100);
 
-    // Try posting to local FastAPI backend if running
-    try {
-      const apiHost = window.location.port === '8350' || (window.location.host && !window.location.port) 
-        ? '' 
-        : 'http://localhost:8350';
-      await fetch(`${apiHost}/api/chat/message`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newMsg)
+    function fallbackLocalMessage() {
+      const attachments: ChatAttachment[] = queuedFiles.map(f => {
+        const ext = f.name.split('.').pop()?.toUpperCase() || 'FILE';
+        const isImg = ['PNG', 'JPG', 'JPEG', 'GIF', 'WEBP', 'SVG'].includes(ext);
+        return {
+          name: f.name,
+          size: f.size,
+          ext,
+          is_image: isImg,
+          url: isImg ? URL.createObjectURL(f) : '#',
+          data_url: isImg ? URL.createObjectURL(f) : undefined,
+          uploaded_at: new Date().toLocaleTimeString('de-DE')
+        };
       });
-    } catch {
-      // Backend not running directly, local state already updated!
+
+      const words = promptText.trim().split(/\s+/).filter(Boolean).length;
+      const tokens = Math.round(promptText.length / 3.8);
+
+      const newMsg: ChatMessage = {
+        id: `msg_${Date.now()}`,
+        sender: currentSender,
+        timestamp: new Date().toLocaleTimeString('de-DE'),
+        type: queuedFiles.length > 0 && !promptText.trim() ? 'files' : 'prompt',
+        title: promptTitle.trim() || `Shared ${attachments.length} File(s)`,
+        content: promptText.trim() || `Uploaded ${attachments.length} file(s) to vault.`,
+        tokens,
+        words,
+        attachments
+      };
+
+      setMessages(prev => [...prev, newMsg]);
     }
   };
 
@@ -1687,57 +1842,89 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                 </div>
               </div>
 
-              {/* CARD 1: DER SERVER (HOST MASTER NODE) */}
-              <div className={`p-5 rounded-xl border ${cardBg} ${multiPcMode === 'host' ? 'border-amber-500/40 shadow-[0_0_20px_rgba(245,158,11,0.15)]' : 'border-zinc-800'}`}>
+              {/* CARD 1: BETRIEBSSTATUS & PRÄSENZ */}
+              <div className={`p-5 rounded-xl border ${cardBg} ${
+                multiPcMode === 'host' 
+                  ? 'border-amber-500/50 shadow-[0_0_20px_rgba(245,158,11,0.18)]' 
+                  : multiPcMode === 'client'
+                  ? 'border-blue-500/50 shadow-[0_0_20px_rgba(59,130,246,0.18)]'
+                  : 'border-cyan-500/50 shadow-[0_0_20px_rgba(6,182,212,0.15)]'
+              }`}>
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 mb-4 border-b border-zinc-800 gap-2">
                   <div className="flex items-center gap-2.5">
-                    <span className="text-xl">👑</span>
+                    <span className="text-2xl">
+                      {multiPcMode === 'host' ? '👑' : multiPcMode === 'client' ? '🔗' : '🖥️'}
+                    </span>
                     <div>
-                      <h3 className="font-mono font-bold text-sm tracking-wide text-white flex items-center gap-2">
-                        <span>DER SERVER (HOST MASTER NODE)</span>
-                        <span className="text-[10px] px-2 py-0.2 rounded bg-emerald-950/80 border border-emerald-600/70 text-emerald-400 font-bold">
-                          ONLINE &amp; LAUSCHT
+                      <h3 className="font-mono font-bold text-sm tracking-wide text-white flex items-center gap-2 flex-wrap">
+                        <span>
+                          {multiPcMode === 'host'
+                            ? 'SERVER-BETRIEB (MASTER HUB AKTIV)'
+                            : multiPcMode === 'client'
+                            ? `CLIENT NODE (VERBUNDEN MIT ${clientServerUrl})`
+                            : 'STANDALONE MODUS (LOKALER MONITOR)'}
+                        </span>
+                        <span className={`text-[10px] px-2 py-0.2 rounded font-bold border ${
+                          multiPcMode === 'host'
+                            ? 'bg-amber-950/80 border-amber-600/70 text-amber-300'
+                            : multiPcMode === 'client'
+                            ? 'bg-blue-950/80 border-blue-600/70 text-blue-300'
+                            : 'bg-cyan-950/80 border-cyan-600/70 text-cyan-300'
+                        }`}>
+                          {multiPcMode === 'host' ? 'AUSSOHLIESSLICH SERVERSEITIGE SPEICHERUNG' : multiPcMode === 'client' ? 'STREAMT AN SERVER' : 'AUSSOHLIESSLICH LOKALE SPEICHERUNG'}
                         </span>
                       </h3>
-                      <p className="text-[11px] font-mono text-zinc-400">
-                        Zentrale Sammelstelle für alle Telemetriedaten im DuckDB 24h Time-Series Archiv
+                      <p className="text-[11px] font-mono text-zinc-300 mt-0.5">
+                        {multiPcMode === 'host'
+                          ? 'Im Server-Betrieb erfolgen die Speicherung der Chat-Dateien sowie die Datenbankhaltung ausschließlich serverseitig.'
+                          : multiPcMode === 'client'
+                          ? `Speicherung der Chat-Dateien sowie die Datenbankhaltung erfolgen ausschließlich serverseitig auf ${clientServerUrl}.`
+                          : 'Im Standalone Modus erfolgen die Speicherung der Chat-Dateien sowie die Datenbankhaltung ausschließlich lokal.'}
                       </p>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 font-mono text-xs">
+                  <div className="flex items-center gap-2 font-mono text-xs flex-wrap">
                     <span className="px-2.5 py-1 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
-                      IP: 127.0.0.1 : 8350
+                      PORT: 8350
                     </span>
                     <span className="px-2.5 py-1 rounded bg-amber-950/70 border border-amber-700/60 text-amber-300 font-bold">
-                      {connectedNodes.length} PCs VERBUNDEN
+                      {connectedNodes.length} RECHNER IM CLUSTER
                     </span>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 font-mono">
                   <div className="bg-black/40 p-3 rounded-lg border border-zinc-800/80">
-                    <span className="text-[10px] text-zinc-400 uppercase">Host Machine</span>
-                    <div className="text-sm font-bold text-white truncate mt-0.5">{metrics.hostname}</div>
-                    <span className="text-[10px] text-emerald-400 font-semibold">Master Node (Lokal)</span>
+                    <span className="text-[10px] text-zinc-400 uppercase">Speicher-Strategie</span>
+                    <div className="text-sm font-bold text-white truncate mt-0.5">
+                      {multiPcMode === 'host' ? 'Vault: Server-Dateien' : multiPcMode === 'client' ? 'Vault: Remote Server' : 'Vault: Lokale Dateien'}
+                    </div>
+                    <span className={`text-[10px] font-semibold ${multiPcMode === 'host' ? 'text-amber-400' : 'text-cyan-400'}`}>
+                      {multiPcMode === 'host' ? 'data/server/vault/ (Serverseitig)' : multiPcMode === 'client' ? 'Übertragung an Host' : 'data/local/vault/ (Lokal)'}
+                    </span>
                   </div>
 
                   <div className="bg-black/40 p-3 rounded-lg border border-zinc-800/80">
-                    <span className="text-[10px] text-zinc-400 uppercase">DuckDB Speicherstand</span>
-                    <div className="text-sm font-bold text-cyan-300 mt-0.5">4,850 Records</div>
-                    <span className="text-[10px] text-zinc-500">24h Auto-Purge aktiv</span>
+                    <span className="text-[10px] text-zinc-400 uppercase">DuckDB Datenbank</span>
+                    <div className="text-sm font-bold text-cyan-300 mt-0.5">
+                      {multiPcMode === 'host' ? 'no0bz_server.duckdb' : multiPcMode === 'client' ? 'Host DuckDB Stream' : 'no0bz_local.duckdb'}
+                    </div>
+                    <span className="text-[10px] text-zinc-500">
+                      {multiPcMode === 'host' ? 'Serverseitig • 24h Purge' : multiPcMode === 'client' ? 'Wird am Host persistiert' : 'Lokal • 24h Purge'}
+                    </span>
                   </div>
 
                   <div className="bg-black/40 p-3 rounded-lg border border-zinc-800/80">
                     <span className="text-[10px] text-zinc-400 uppercase">Host CPU &amp; RAM</span>
                     <div className="text-sm font-bold text-amber-300 mt-0.5">{metrics.cpu_load}% • {metrics.ram_percent}%</div>
-                    <span className="text-[10px] text-zinc-500">Takt: 4.8 GHz</span>
+                    <span className="text-[10px] text-zinc-500">Live-Hardware Telemetrie</span>
                   </div>
 
                   <div className="bg-black/40 p-3 rounded-lg border border-zinc-800/80">
                     <span className="text-[10px] text-zinc-400 uppercase">Netzwerk Durchsatz</span>
                     <div className="text-sm font-bold text-white mt-0.5">↓ {metrics.net_recv_mbps} • ↑ {metrics.net_sent_mbps}</div>
-                    <span className="text-[10px] text-zinc-500">Mbps (1-Sekunden Stream)</span>
+                    <span className="text-[10px] text-zinc-500">Mbps (WebSocket Live Feed)</span>
                   </div>
                 </div>
               </div>
@@ -2285,13 +2472,23 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                   </div>
                 </div>
 
-                {/* Upload Button */}
-                <div className="flex items-center gap-2">
+                {/* Upload Button & Storage Indicator */}
+                <div className="flex items-center gap-3">
+                  <span className={`px-2.5 py-1 rounded text-xs font-mono font-bold border ${
+                    multiPcMode === 'host'
+                      ? 'bg-amber-950/60 border-amber-600 text-amber-300'
+                      : multiPcMode === 'local'
+                      ? 'bg-cyan-950/60 border-cyan-600 text-cyan-300'
+                      : 'bg-blue-950/60 border-blue-600 text-blue-300'
+                  }`}>
+                    {multiPcMode === 'host' ? '👑 Serverseitig gespeichert' : multiPcMode === 'local' ? '🖥️ Lokal gespeichert' : '🔗 Server Storage'}
+                  </span>
+
                   <input
                     type="file"
                     id="vault-upload"
                     multiple
-                    onChange={handleFileSelect}
+                    onChange={handleVaultUpload}
                     className="hidden"
                   />
                   <label
@@ -2314,7 +2511,11 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                 <div className="p-12 text-center rounded-xl border border-zinc-800 bg-black/30 font-mono text-zinc-500 space-y-2">
                   <Folder className="w-10 h-10 mx-auto text-zinc-600" />
                   <p className="text-sm">Keine Dateien im Vault gefunden.</p>
-                  <p className="text-xs">Lade Dateien hoch oder droppe sie im Chat-Tab!</p>
+                  <p className="text-xs">
+                    {multiPcMode === 'host'
+                      ? 'Dateien werden im Server-Betrieb ausschließlich serverseitig in data/server/vault/ gespeichert.'
+                      : 'Dateien werden im Standalone-Modus ausschließlich lokal in data/local/vault/ gespeichert.'}
+                  </p>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
@@ -2349,7 +2550,7 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                         </div>
                         <div className="flex justify-between items-center text-[10px] font-mono text-zinc-500">
                           <span>{(file.size / 1024).toFixed(1)} KB</span>
-                          <span>{file.sender.split(' ')[0]}</span>
+                          <span className="truncate max-w-[80px]">{file.sender.split(' ')[0]}</span>
                         </div>
 
                         {/* Action buttons */}
@@ -2362,14 +2563,9 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                             <Download className="w-3 h-3" /> Download
                           </a>
                           <button
-                            onClick={() => {
-                              setMessages(prev => prev.map(m => ({
-                                ...m,
-                                attachments: (m.attachments || []).filter(a => a.name !== file.name)
-                              })));
-                            }}
-                            className="text-zinc-500 hover:text-red-400 text-xs transition-colors"
-                            title="Löschen"
+                            onClick={() => handleDeleteVaultFile(file.name)}
+                            className="text-zinc-500 hover:text-red-400 text-xs transition-colors p-1"
+                            title="Aus Vault löschen"
                           >
                             <Trash2 className="w-3 h-3" />
                           </button>
@@ -2953,7 +3149,7 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                       <h2 className="font-mono font-bold text-lg text-white flex items-center gap-2">
                         <span>no0bz COMMAND CENTER // CHANGELOG</span>
                         <span className="text-xs px-2 py-0.5 rounded bg-cyan-500/20 border border-cyan-400/40 text-cyan-300 font-bold">
-                          v3.7.0
+                          v3.8.2
                         </span>
                       </h2>
                       <p className="text-xs text-zinc-400 mt-0.5 font-mono">
@@ -3029,7 +3225,7 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
 
                 <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto font-mono text-[11px] pb-1 sm:pb-0">
                   <span className="text-zinc-500 uppercase font-bold text-[10px]">Filter:</span>
-                  {['Alle', 'v3.7.0', 'v3.6.3', 'v3.5.0', 'v3.1.0'].map(ver => (
+                  {['Alle', 'v3.8.2', 'v3.8.1', 'v3.7.0', 'v3.6.3', 'v3.5.0', 'v3.1.0'].map(ver => (
                     <button
                       key={ver}
                       onClick={() => setChangelogSearch(ver === 'Alle' ? '' : ver)}
@@ -3056,19 +3252,78 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                     <span className="text-[10px] text-zinc-500">Root Directory</span>
                   </div>
                   <pre className="mt-4 p-4 rounded-lg bg-black/80 border border-zinc-800 text-zinc-300 text-[11px] font-mono whitespace-pre-wrap overflow-x-auto leading-relaxed max-h-[65vh] select-text">
-                    {changelogMd || `# 📜 no0bz Command Center (NCC) – Changelog\n\nAlle wichtigen Änderungen, neuen Funktionen und Optimierungen für das **no0bz Command Center (NCC)** werden in dieser Datei chronologisch dokumentiert.\n\nDas Format basiert auf Keep a Changelog und dieses Projekt hält sich an Semantic Versioning.\n\n---\n\n## [v3.7.0] - 2026-09-25\n\n### 🚀 Neu & Hervorgehoben\n- Integrierter Changelog-Viewer im NCC\n- Vollständig autarkes Single-File Dashboard in main.py\n- Vorkompilierter dist/-Ordner im Repository\n- Dynamische WebSocket-Host-Erkennung\n- Neue Backend-Routen: /api/changelog und /changelog\n\n### ⚡ Verbesserungen & Performance\n- NVIDIA GPU-Treiber: nvidia-ml-py Priorisierung\n- Bereinigte README-Dokumentation\n- start_ncc.bat startet Browser automatisch\n\n### 🐛 Fehlerbehebungen\n- Behebung des Platzhalter-Infobox Problems nach GitHub-Klon\n- Versionsanzeige einheitlich synchronisiert\n\n---\n\n## [v3.6.3] - 2026-09-18\n- P2P Chat & Prompt Sync Hub\n- Dateibrowser & Chat Vault\n- Prozess-Manager mit Task-Kill\n- DuckDB 24h Telemetrie-Historie\n- Dual-Style Logo & 8 Themes\n\n---\n\n## [v3.5.0] - 2026-09-02\n- LibreHardwareMonitor (LHM) Fallback\n- Lüfterdrehzahl- & Mainboard-Sensoren\n- SVG Circular Gauges\n- Thread-sichere data_lock Datensammlung\n\n---\n\n## [v3.1.0] - 2026-08-15\n- Echtzeit-WebSockets (/ws/live)\n- Native NVIDIA NVML-Unterstützung\n- psutil Multi-Core & NVMe Monitoring\n\n---\n\n## [v3.0.0] - 2026-07-28\n- Initialer Release no0bz Command Center (NCC)`}
+                    {changelogMd || `# 📜 no0bz Command Center (NCC) – Changelog\n\nAlle wichtigen Änderungen, neuen Funktionen und Optimierungen für das **no0bz Command Center (NCC)** werden in dieser Datei chronologisch dokumentiert.\n\nDas Format basiert auf Keep a Changelog und dieses Projekt hält sich an Semantic Versioning.\n\n---\n\n## [v3.8.2] - 2026-09-26\n\n### 🚀 Neu & Hervorgehoben\n- Exklusive serverseitige Speicherung der Chat-Dateien & DuckDB im Server-Betrieb\n- Autarker Standalone-Modus mit lokaler Haltung\n- Voll funktionstüchtig ohne Platzhalter`}
                   </pre>
                 </div>
               ) : (
                 /* INTERACTIVE CARDS VIEW */
                 <div className="space-y-5 font-mono">
                   
+                  {/* RELEASE: v3.8.2 */}
+                  {(!changelogSearch || 'v3.8.2 3.8.2 server standalone duckdb vault chat speicherung host'.toLowerCase().includes(changelogSearch.toLowerCase())) && (
+                    <div className={`p-5 rounded-xl border relative overflow-hidden transition-all ${
+                      isNightmare 
+                        ? 'bg-zinc-950/90 border-amber-500/50 shadow-[0_0_25px_rgba(245,158,11,0.2)]' 
+                        : 'bg-slate-900/90 border-amber-500/50 shadow-[0_0_25px_rgba(245,158,11,0.2)]'
+                    }`}>
+                      <div className="absolute top-0 right-0 transform translate-x-3 -translate-y-3 w-32 h-32 bg-amber-500/10 rounded-full blur-2xl pointer-events-none" />
+
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-zinc-800">
+                        <div className="flex items-center gap-3">
+                          <span className="text-xl font-black text-amber-400">v3.8.2</span>
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500 text-slate-950 shadow-[0_0_10px_rgba(245,158,11,0.6)] animate-pulse">
+                            AKTUELLES RELEASE
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-zinc-400">
+                          <Clock className="w-3.5 h-3.5 text-zinc-500" />
+                          <span>26. September 2026</span>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 space-y-4 text-xs">
+                        <div>
+                          <div className="text-[11px] font-bold uppercase tracking-wider text-amber-400 mb-2 flex items-center gap-1.5">
+                            <Sparkles className="w-3.5 h-3.5" />
+                            <span>🚀 Exklusive serverseitige Speicherung &amp; Standalone-Architektur</span>
+                          </div>
+                          <ul className="space-y-2 text-zinc-300">
+                            <li className="flex items-start gap-2">
+                              <span className="px-1.5 py-0.2 rounded bg-amber-950 text-amber-300 border border-amber-700/60 text-[9px] font-bold mt-0.5">SERVER-BETRIEB</span>
+                              <div>
+                                <strong className="text-white">Ausschließlich serverseitige Datenhaltung:</strong> Im Server-Betrieb (Host) erfolgen die Speicherung der Chat-Dateien (<code className="text-amber-300 bg-black/60 px-1 py-0.5 rounded">data/server/vault/</code>) sowie die DuckDB-Datenbankhaltung (<code className="text-amber-300 bg-black/60 px-1 py-0.5 rounded">no0bz_server.duckdb</code>) ausschließlich serverseitig.
+                              </div>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <span className="px-1.5 py-0.2 rounded bg-cyan-950 text-cyan-300 border border-cyan-700/60 text-[9px] font-bold mt-0.5">STANDALONE</span>
+                              <div>
+                                <strong className="text-white">Autarker Standalone-Modus (Lokal):</strong> Im Standalone-Modus erfolgen Speicherung und Datenbankverwaltung ausschließlich lokal (<code className="text-cyan-300 bg-black/60 px-1 py-0.5 rounded">data/local/vault/</code> &amp; <code className="text-cyan-300 bg-black/60 px-1 py-0.5 rounded">no0bz_local.duckdb</code>).
+                              </div>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <span className="px-1.5 py-0.2 rounded bg-blue-950 text-blue-300 border border-blue-700/60 text-[9px] font-bold mt-0.5">CLIENT-NODE</span>
+                              <div>
+                                <strong className="text-white">Client Node Modus:</strong> Überträgt Telemetrie und Chat-Dateien direkt an den Master-Server ohne lokalen Speicheroverhead.
+                              </div>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <span className="px-1.5 py-0.2 rounded bg-emerald-950 text-emerald-300 border border-emerald-700/60 text-[9px] font-bold mt-0.5">PERSISTENZ</span>
+                              <div>
+                                <strong className="text-white">Dauerhafte Konfiguration (`ncc_config.json`):</strong> Speichert den gewählten Betriebsmodus und die Server-URL dauerhaft im System.
+                              </div>
+                            </li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* RELEASE: v3.7.0 */}
                   {(!changelogSearch || 'v3.7.0 3.7.0 standalone react bundle websocket host changelog dist nvidia'.toLowerCase().includes(changelogSearch.toLowerCase())) && (
                     <div className={`p-5 rounded-xl border relative overflow-hidden transition-all ${
                       isNightmare 
-                        ? 'bg-zinc-950/90 border-cyan-500/50 shadow-[0_0_25px_rgba(6,182,212,0.15)]' 
-                        : 'bg-slate-900/90 border-cyan-500/50 shadow-[0_0_25px_rgba(6,182,212,0.15)]'
+                        ? 'bg-zinc-950/90 border-zinc-800' 
+                        : 'bg-slate-900/90 border-zinc-800'
                     }`}>
                       <div className="absolute top-0 right-0 transform translate-x-3 -translate-y-3 w-32 h-32 bg-cyan-500/10 rounded-full blur-2xl pointer-events-none" />
 
@@ -3340,35 +3595,12 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
 
             {/* 3 Modes Cards */}
             <div className="space-y-3">
-              {/* Option 1: Lokal */}
-              <div 
-                onClick={() => setMultiPcMode('local')}
-                className={`p-4 rounded-xl border cursor-pointer transition-all flex items-start gap-4 ${
-                  multiPcMode === 'local' 
-                    ? 'bg-cyan-950/30 border-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.2)]' 
-                    : 'bg-black/40 border-zinc-800 hover:border-zinc-700'
-                }`}
-              >
-                <div className="text-2xl p-2 rounded-lg bg-zinc-900 border border-zinc-800">
-                  🖥️
-                </div>
-                <div className="flex-1 font-mono">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-sm text-white">Lokal (Standalone Monitor)</span>
-                    {multiPcMode === 'local' && <span className="text-xs text-cyan-400 font-bold">Ausgewählt</span>}
-                  </div>
-                  <p className="text-xs text-zinc-400 mt-1">
-                    Nur diesen PC überwachen (Port 8350, lokale DuckDB). Keine Freigabe oder externe Verbindung zu anderen Rechnern.
-                  </p>
-                </div>
-              </div>
-
-              {/* Option 2: Server hosten */}
+              {/* Option 1: Server hosten */}
               <div 
                 onClick={() => setMultiPcMode('host')}
                 className={`p-4 rounded-xl border cursor-pointer transition-all flex items-start gap-4 ${
                   multiPcMode === 'host' 
-                    ? 'bg-amber-950/30 border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.2)]' 
+                    ? 'bg-amber-950/40 border-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.25)]' 
                     : 'bg-black/40 border-zinc-800 hover:border-zinc-700'
                 }`}
               >
@@ -3377,11 +3609,44 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                 </div>
                 <div className="flex-1 font-mono">
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-sm text-amber-300">Server Hosten (Zentraler NCC Hub)</span>
-                    {multiPcMode === 'host' && <span className="text-xs text-amber-400 font-bold">Ausgewählt</span>}
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-sm text-amber-300">Server-Betrieb (Master Hub)</span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-900/60 text-amber-200 border border-amber-600/60 font-bold">
+                        Ausschließlich Serverseitig
+                      </span>
+                    </div>
+                    {multiPcMode === 'host' && <span className="text-xs text-amber-400 font-bold">Aktiv</span>}
                   </div>
-                  <p className="text-xs text-zinc-400 mt-1">
-                    Diesen PC als zentralen Hub-Server hosten. Speichert alle Telemetriedaten verbundener PCs in DuckDB. Zeigt verbundene PCs im Dashboard und im Multi-PC Hub an.
+                  <p className="text-xs text-zinc-300 mt-1 font-sans">
+                    Im <strong>Server-Betrieb</strong> erfolgen die Speicherung der Chat-Dateien (<code className="text-amber-300 font-mono text-[11px]">data/server/vault/</code>) sowie die Datenbankhaltung (<code className="text-amber-300 font-mono text-[11px]">no0bz_server.duckdb</code>) <strong>ausschließlich serverseitig</strong>. Alle verbundenen Clients übertragen Daten zentral an diesen Host.
+                  </p>
+                </div>
+              </div>
+
+              {/* Option 2: Lokal / Standalone */}
+              <div 
+                onClick={() => setMultiPcMode('local')}
+                className={`p-4 rounded-xl border cursor-pointer transition-all flex items-start gap-4 ${
+                  multiPcMode === 'local' 
+                    ? 'bg-cyan-950/40 border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.25)]' 
+                    : 'bg-black/40 border-zinc-800 hover:border-zinc-700'
+                }`}
+              >
+                <div className="text-2xl p-2 rounded-lg bg-zinc-900 border border-zinc-800">
+                  🖥️
+                </div>
+                <div className="flex-1 font-mono">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-sm text-cyan-300">Standalone Modus (Lokal)</span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-900/60 text-cyan-200 border border-cyan-600/60 font-bold">
+                        Ausschließlich Lokal
+                      </span>
+                    </div>
+                    {multiPcMode === 'local' && <span className="text-xs text-cyan-400 font-bold">Aktiv</span>}
+                  </div>
+                  <p className="text-xs text-zinc-300 mt-1 font-sans">
+                    Im <strong>Standalone Modus</strong> erfolgen die Speicherung der Chat-Dateien (<code className="text-cyan-300 font-mono text-[11px]">data/local/vault/</code>) sowie die Datenbankhaltung (<code className="text-cyan-300 font-mono text-[11px]">no0bz_local.duckdb</code>) <strong>ausschließlich lokal</strong> auf diesem Rechner. Autarker Betrieb ohne externe Verbindungen.
                   </p>
                 </div>
               </div>
@@ -3391,7 +3656,7 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                 onClick={() => setMultiPcMode('client')}
                 className={`p-4 rounded-xl border cursor-pointer transition-all flex items-start gap-4 ${
                   multiPcMode === 'client' 
-                    ? 'bg-blue-950/30 border-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.2)]' 
+                    ? 'bg-blue-950/40 border-blue-400 shadow-[0_0_20px_rgba(59,130,246,0.25)]' 
                     : 'bg-black/40 border-zinc-800 hover:border-zinc-700'
                 }`}
               >
@@ -3400,15 +3665,20 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                 </div>
                 <div className="flex-1 font-mono">
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-sm text-blue-300">Auf Server verbinden (Client Node)</span>
-                    {multiPcMode === 'client' && <span className="text-xs text-blue-400 font-bold">Ausgewählt</span>}
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-sm text-blue-300">Client Node (Remote Verbindung)</span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-900/60 text-blue-200 border border-blue-600/60 font-bold">
+                        Speichert am Server
+                      </span>
+                    </div>
+                    {multiPcMode === 'client' && <span className="text-xs text-blue-400 font-bold">Aktiv</span>}
                   </div>
-                  <p className="text-xs text-zinc-400 mt-1">
-                    Mit einem bestehenden no0bz Server verbinden. Streamt Live-Telemetrie dieses Rechners sekündlich an den Host und synchronisiert Chat.
+                  <p className="text-xs text-zinc-300 mt-1 font-sans">
+                    Verbindet diesen Rechner mit einem aktiven no0bz Server. Sendet Live-Telemetrie an den Host; Chat-Dateien und Datenbank werden direkt serverseitig auf dem Host vorgehalten.
                   </p>
                   {multiPcMode === 'client' && (
                     <div className="mt-3 flex items-center gap-2">
-                      <span className="text-xs text-zinc-300">Server-IP:</span>
+                      <span className="text-xs text-zinc-300">Server-Adresse:</span>
                       <input 
                         type="text" 
                         value={clientServerUrl} 
@@ -3424,7 +3694,7 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
 
             {/* Modal Actions */}
             <div className="flex items-center justify-between pt-2 border-t border-zinc-800 font-mono text-xs">
-              <span className="text-zinc-500">Kann jederzeit im Menü geändert werden.</span>
+              <span className="text-zinc-500">Wird in ncc_config.json dauerhaft gespeichert.</span>
               <button
                 type="button"
                 onClick={() => {
@@ -3434,11 +3704,16 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ mode: multiPcMode, client_server_url: clientServerUrl })
-                  }).catch(() => {});
+                  })
+                    .then(res => res.json())
+                    .then(data => {
+                      if (data.storage_type) setStorageLocation(data.storage_type);
+                    })
+                    .catch(() => {});
                 }}
                 className="px-5 py-2.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold shadow-[0_0_12px_rgba(6,182,212,0.4)] transition-all cursor-pointer"
               >
-                Modus aktivieren &amp; Starten
+                Modus aktivieren &amp; Anwenden
               </button>
             </div>
           </div>
@@ -3459,7 +3734,7 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
             className="text-cyan-400 hover:text-cyan-300 font-semibold cursor-pointer underline"
             title="Changelog ansehen"
           >
-            v3.8.1
+            v3.8.2
           </button>
           <span>|</span>
           <span className="hidden sm:inline">// {themeMode.toUpperCase()} MODE</span>

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-no0bz Command Center (NCC) - Version v3.7.0
-High-Performance Single-File System Monitor & Local P2P Sync Hub
+no0bz Command Center (NCC) - Version v3.8.2
+High-Performance Single-File System Monitor & Multi-PC Hub
 FastAPI, WebSockets, NVML, DuckDB, File Transfer & HTML/JS Frontend
 """
 
@@ -10,6 +10,8 @@ import sys
 import time
 import json
 import shutil
+import socket
+import platform
 import asyncio
 import threading
 import urllib.request
@@ -54,22 +56,74 @@ except ImportError:
 
 from contextlib import asynccontextmanager
 
-VERSION = "v3.8.1"
+VERSION = "v3.8.2"
 PORT = 8350
 LHM_URL = "http://127.0.0.1:8085/data.json"
-DB_FILE = "no0bz_metrics.duckdb"
-CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ncc_system_cache.json")
-UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ncc_uploads")
-os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-# Thread-safe telemetry store
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CONFIG_FILE = os.path.join(BASE_DIR, "ncc_config.json")
+CACHE_FILE = os.path.join(BASE_DIR, "ncc_system_cache.json")
+
+# Separate Storage Directories for Server-Betrieb vs Standalone (Lokal)
+SERVER_DATA_DIR = os.path.join(BASE_DIR, "data", "server")
+LOCAL_DATA_DIR = os.path.join(BASE_DIR, "data", "local")
+SERVER_VAULT_DIR = os.path.join(SERVER_DATA_DIR, "vault")
+LOCAL_VAULT_DIR = os.path.join(LOCAL_DATA_DIR, "vault")
+LEGACY_UPLOAD_DIR = os.path.join(BASE_DIR, "ncc_uploads")
+
+os.makedirs(SERVER_VAULT_DIR, exist_ok=True)
+os.makedirs(LOCAL_VAULT_DIR, exist_ok=True)
+os.makedirs(LEGACY_UPLOAD_DIR, exist_ok=True)
+
+def load_ncc_config() -> Dict[str, Any]:
+    cfg = {
+        "server_mode": "host",
+        "client_server_url": "192.168.1.100:8350",
+        "version": VERSION
+    }
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                saved = json.load(f)
+                cfg.update(saved)
+        except Exception:
+            pass
+    return cfg
+
+def save_ncc_config(cfg: Dict[str, Any]):
+    try:
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, indent=2)
+    except Exception as e:
+        print(f"[CONFIG] Error saving config: {e}")
+
+initial_cfg = load_ncc_config()
+server_mode = initial_cfg.get("server_mode", "host")
+client_server_url = initial_cfg.get("client_server_url", "192.168.1.100:8350")
+
+def get_active_vault_dir() -> str:
+    """Im Server-Betrieb serverseitig in SERVER_VAULT_DIR; im Standalone Modus lokal in LOCAL_VAULT_DIR."""
+    if server_mode == "host":
+        return SERVER_VAULT_DIR
+    elif server_mode == "local":
+        return LOCAL_VAULT_DIR
+    else:
+        return LOCAL_VAULT_DIR
+
+def get_active_db_path() -> str:
+    """Im Server-Betrieb: data/server/no0bz_server.duckdb; im Standalone Modus: data/local/no0bz_local.duckdb."""
+    if server_mode == "host":
+        return os.path.join(SERVER_DATA_DIR, "no0bz_server.duckdb")
+    elif server_mode == "local":
+        return os.path.join(LOCAL_DATA_DIR, "no0bz_local.duckdb")
+    else:
+        return os.path.join(LOCAL_DATA_DIR, "no0bz_local.duckdb")
+
+# Thread-safe locks
 data_lock = threading.Lock()
 chat_lock = threading.Lock()
 nodes_lock = threading.Lock()
-
-# Multi-PC Mode ("local" | "host" | "client")
-server_mode = "host"
-client_server_url = "192.168.1.100:8350"
+db_lock = threading.Lock()
 
 # Connected Multi-PC Nodes store
 connected_nodes: Dict[str, Dict[str, Any]] = {
@@ -265,16 +319,36 @@ chat_messages: List[Dict[str, Any]] = [
 
 # Database manager
 class DatabaseManager:
-    def __init__(self, db_path: str = DB_FILE):
-        self.db_path = db_path
+    def __init__(self, db_path: Optional[str] = None):
+        self.db_path = db_path or get_active_db_path()
         self.conn = None
+        self.connect()
+
+    def connect(self):
         if DUCKDB_AVAILABLE:
             try:
-                self.conn = duckdb.connect(self.db_path, read_only=False)
-                self.init_db()
+                os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+                with db_lock:
+                    self.conn = duckdb.connect(self.db_path, read_only=False)
+                    self.init_db()
+                print(f"[DB] Connected to DuckDB: {self.db_path} (Mode: {server_mode})")
             except Exception as e:
-                print(f"[DB] Init warning: {e}")
+                print(f"[DB] Init warning on {self.db_path}: {e}")
                 self.conn = None
+
+    def switch_mode(self, new_mode: str):
+        target_path = get_active_db_path()
+        if target_path == self.db_path and self.conn:
+            return
+        with db_lock:
+            if self.conn:
+                try:
+                    self.conn.close()
+                except Exception:
+                    pass
+                self.conn = None
+            self.db_path = target_path
+        self.connect()
 
     def init_db(self):
         if not self.conn:
@@ -307,6 +381,35 @@ class DatabaseManager:
                     is_host BOOLEAN
                 );
             """)
+            # Chat messages table
+            self.conn.execute("""
+                CREATE TABLE IF NOT EXISTS chat_messages (
+                    id VARCHAR PRIMARY KEY,
+                    sender VARCHAR,
+                    timestamp VARCHAR,
+                    msg_type VARCHAR,
+                    title VARCHAR,
+                    content VARCHAR,
+                    tokens INTEGER,
+                    words INTEGER,
+                    attachments_json VARCHAR,
+                    created_at TIMESTAMP
+                );
+            """)
+            # Chat files table
+            self.conn.execute("""
+                CREATE TABLE IF NOT EXISTS chat_files (
+                    id VARCHAR PRIMARY KEY,
+                    filename VARCHAR,
+                    filepath VARCHAR,
+                    size_bytes BIGINT,
+                    ext VARCHAR,
+                    is_image BOOLEAN,
+                    sender VARCHAR,
+                    storage_mode VARCHAR,
+                    uploaded_at TIMESTAMP
+                );
+            """)
         except Exception as e:
             print(f"[DB] Table creation error: {e}")
 
@@ -315,35 +418,39 @@ class DatabaseManager:
             return
         try:
             now = datetime.now()
-            self.conn.execute("""
-                INSERT INTO metrics VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                now,
-                snapshot["cpu"]["load"],
-                snapshot["ram"]["percent"],
-                snapshot["gpu"]["load"],
-                snapshot["gpu"]["temp_c"] or 0.0,
-                snapshot["network"]["recv_mbps"],
-                snapshot["network"]["sent_mbps"],
-                snapshot["total_disk_io"]["read_mbs"],
-                snapshot["total_disk_io"]["write_mbs"]
-            ))
-            # Also log as host in node_metrics
-            hostname = snapshot.get("hostname", "no0bz-RIG")
-            self.insert_node_metric(
-                node_id="host_node",
-                pc_name=hostname,
-                display_name="Host Workstation",
-                cpu_load=snapshot["cpu"]["load"],
-                ram_percent=snapshot["ram"]["percent"],
-                net_recv_mbps=snapshot["network"]["recv_mbps"],
-                net_sent_mbps=snapshot["network"]["sent_mbps"],
-                is_host=True
-            )
-            # Purge data older than 24h
-            cutoff = now - timedelta(hours=24)
-            self.conn.execute("DELETE FROM metrics WHERE ts < ?", (cutoff,))
-            self.conn.execute("DELETE FROM node_metrics WHERE ts < ?", (cutoff,))
+            with db_lock:
+                self.conn.execute("""
+                    INSERT INTO metrics VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    now,
+                    snapshot["cpu"]["load"],
+                    snapshot["ram"]["percent"],
+                    snapshot["gpu"]["load"],
+                    snapshot["gpu"]["temp_c"] or 0.0,
+                    snapshot["network"]["recv_mbps"],
+                    snapshot["network"]["sent_mbps"],
+                    snapshot["total_disk_io"]["read_mbs"],
+                    snapshot["total_disk_io"]["write_mbs"]
+                ))
+                # Also log as host in node_metrics
+                hostname = snapshot.get("hostname", "no0bz-RIG")
+                self.conn.execute("""
+                    INSERT INTO node_metrics VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    now,
+                    "host_node",
+                    hostname,
+                    "Host Workstation",
+                    float(snapshot["cpu"]["load"] or 0),
+                    float(snapshot["ram"]["percent"] or 0),
+                    float(snapshot["network"]["recv_mbps"] or 0),
+                    float(snapshot["network"]["sent_mbps"] or 0),
+                    True
+                ))
+                # Purge data older than 24h
+                cutoff = now - timedelta(hours=24)
+                self.conn.execute("DELETE FROM metrics WHERE ts < ?", (cutoff,))
+                self.conn.execute("DELETE FROM node_metrics WHERE ts < ?", (cutoff,))
         except Exception as e:
             print(f"[DB] Insert error: {e}")
 
@@ -354,32 +461,140 @@ class DatabaseManager:
             return
         try:
             now = datetime.now()
-            self.conn.execute("""
-                INSERT INTO node_metrics VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                now,
-                node_id,
-                pc_name,
-                display_name,
-                float(cpu_load or 0),
-                float(ram_percent or 0),
-                float(net_recv_mbps or 0),
-                float(net_sent_mbps or 0),
-                bool(is_host)
-            ))
+            with db_lock:
+                self.conn.execute("""
+                    INSERT INTO node_metrics VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    now,
+                    node_id,
+                    pc_name,
+                    display_name,
+                    float(cpu_load or 0),
+                    float(ram_percent or 0),
+                    float(net_recv_mbps or 0),
+                    float(net_sent_mbps or 0),
+                    bool(is_host)
+                ))
         except Exception as e:
             print(f"[DB] Node insert error: {e}")
+
+    def save_chat_message(self, msg: Dict[str, Any]):
+        if not self.conn:
+            return
+        try:
+            now = datetime.now()
+            att_json = json.dumps(msg.get("attachments", []))
+            with db_lock:
+                self.conn.execute("""
+                    INSERT OR REPLACE INTO chat_messages VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    msg.get("id"),
+                    msg.get("sender", "PC-User"),
+                    msg.get("timestamp", now.strftime("%H:%M:%S")),
+                    msg.get("type", "prompt"),
+                    msg.get("title", ""),
+                    msg.get("content", ""),
+                    int(msg.get("tokens", 0)),
+                    int(msg.get("words", 0)),
+                    att_json,
+                    now
+                ))
+        except Exception as e:
+            print(f"[DB] Save chat error: {e}")
+
+    def load_chat_messages(self, limit: int = 300) -> List[Dict[str, Any]]:
+        default_seed = [
+            {
+                "id": "msg_init_1",
+                "sender": "PC-A (Main Workstation)",
+                "timestamp": datetime.now().strftime("%H:%M:%S"),
+                "type": "prompt",
+                "title": "System Prompt • PyTorch CUDA Optimizer",
+                "content": "You are an expert HPC engineer. Optimize this PyTorch training loop for dual RTX 4090 with NVLink, FP8 mixed-precision via TransformerEngine, and zero-redundancy optimizer (ZeRO-3). Ensure NCCL p2p bandwidth reaches >= 45 GB/s.",
+                "tokens": 48,
+                "words": 31,
+                "attachments": []
+            }
+        ]
+        if not self.conn:
+            return default_seed
+        try:
+            with db_lock:
+                res = self.conn.execute(f"""
+                    SELECT id, sender, timestamp, msg_type, title, content, tokens, words, attachments_json
+                    FROM chat_messages
+                    ORDER BY created_at ASC
+                    LIMIT {limit}
+                """).fetchall()
+            if not res:
+                self.save_chat_message(default_seed[0])
+                return default_seed
+            
+            loaded = []
+            for r in res:
+                att = []
+                try:
+                    att = json.loads(r[8]) if r[8] else []
+                except Exception:
+                    pass
+                loaded.append({
+                    "id": r[0],
+                    "sender": r[1],
+                    "timestamp": r[2],
+                    "type": r[3],
+                    "title": r[4],
+                    "content": r[5],
+                    "tokens": r[6],
+                    "words": r[7],
+                    "attachments": att
+                })
+            return loaded
+        except Exception as e:
+            print(f"[DB] Load chat error: {e}")
+            return default_seed
+
+    def save_chat_file(self, file_info: Dict[str, Any]):
+        if not self.conn:
+            return
+        try:
+            now = datetime.now()
+            with db_lock:
+                self.conn.execute("""
+                    INSERT OR REPLACE INTO chat_files VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    file_info.get("id", f"file_{int(time.time()*1000)}"),
+                    file_info.get("name", "unnamed"),
+                    file_info.get("path", ""),
+                    int(file_info.get("size", 0)),
+                    file_info.get("ext", "FILE"),
+                    bool(file_info.get("is_image", False)),
+                    file_info.get("sender", "PC-User"),
+                    server_mode,
+                    now
+                ))
+        except Exception as e:
+            print(f"[DB] Save chat file error: {e}")
+
+    def delete_chat_file(self, filename: str):
+        if not self.conn:
+            return
+        try:
+            with db_lock:
+                self.conn.execute("DELETE FROM chat_files WHERE filename = ?", (filename,))
+        except Exception as e:
+            print(f"[DB] Delete chat file error: {e}")
 
     def query_history(self, limit: int = 120) -> List[Dict[str, Any]]:
         if not self.conn:
             return []
         try:
-            res = self.conn.execute(f"""
-                SELECT ts, cpu_load, ram_percent, gpu_load, gpu_temp, net_recv_mbps, net_sent_mbps, disk_read_mbs, disk_write_mbs
-                FROM metrics
-                ORDER BY ts DESC
-                LIMIT {limit}
-            """).fetchall()
+            with db_lock:
+                res = self.conn.execute(f"""
+                    SELECT ts, cpu_load, ram_percent, gpu_load, gpu_temp, net_recv_mbps, net_sent_mbps, disk_read_mbs, disk_write_mbs
+                    FROM metrics
+                    ORDER BY ts DESC
+                    LIMIT {limit}
+                """).fetchall()
             history = []
             for r in reversed(res):
                 history.append({
@@ -399,6 +614,7 @@ class DatabaseManager:
             return []
 
 db_mgr = DatabaseManager()
+chat_messages = db_mgr.load_chat_messages()
 
 # Background data collector
 class DataCollector(threading.Thread):
@@ -787,6 +1003,28 @@ def receive_node_telemetry(payload: Dict[str, Any]):
     )
     return {"status": "recorded"}
 
+@app.get("/api/multipc/mode")
+def get_multipc_mode():
+    vault_dir = get_active_vault_dir()
+    db_path = get_active_db_path()
+    storage_type = "serverseitig" if server_mode == "host" else "lokal"
+    desc = (
+        "Server-Betrieb: Speicherung der Chat-Dateien & DuckDB-Datenbankhaltung erfolgt ausschließlich serverseitig."
+        if server_mode == "host" else
+        "Standalone Modus: Speicherung der Chat-Dateien & DuckDB-Datenbankhaltung erfolgt ausschließlich lokal."
+        if server_mode == "local" else
+        "Client Node: Speicherung der Chat-Dateien & DuckDB-Datenbankhaltung erfolgt ausschließlich auf dem Server."
+    )
+    return {
+        "status": "ok",
+        "mode": server_mode,
+        "client_server_url": client_server_url,
+        "storage_type": storage_type,
+        "vault_dir": vault_dir,
+        "db_path": db_path,
+        "description": desc
+    }
+
 @app.post("/api/multipc/mode")
 def set_multipc_mode(payload: Dict[str, Any]):
     global server_mode, client_server_url
@@ -795,7 +1033,25 @@ def set_multipc_mode(payload: Dict[str, Any]):
         server_mode = new_mode
     if "client_server_url" in payload:
         client_server_url = payload["client_server_url"]
-    return {"status": "ok", "mode": server_mode, "client_server_url": client_server_url}
+
+    save_ncc_config({
+        "server_mode": server_mode,
+        "client_server_url": client_server_url,
+        "version": VERSION
+    })
+
+    db_mgr.switch_mode(server_mode)
+    os.makedirs(get_active_vault_dir(), exist_ok=True)
+
+    storage_type = "serverseitig" if server_mode == "host" else "lokal"
+    return {
+        "status": "ok",
+        "mode": server_mode,
+        "client_server_url": client_server_url,
+        "storage_type": storage_type,
+        "vault_dir": get_active_vault_dir(),
+        "db_path": get_active_db_path()
+    }
 
 # Broadcast helper for chat & file events
 async def broadcast_chat_event(event_type: str, data: Any):
@@ -846,7 +1102,8 @@ def get_history(limit: int = 120):
 @app.get("/api/chat/messages")
 def get_chat_messages():
     with chat_lock:
-        return chat_messages
+        msgs = db_mgr.load_chat_messages(limit=300)
+        return msgs
 
 @app.post("/api/chat/message")
 async def post_chat_message(payload: Dict[str, Any]):
@@ -874,31 +1131,39 @@ async def post_chat_message(payload: Dict[str, Any]):
         "attachments": attachments
     }
 
+    # Persist in DuckDB and in-memory list
     with chat_lock:
+        db_mgr.save_chat_message(new_msg)
         chat_messages.append(new_msg)
         if len(chat_messages) > 300:
             chat_messages.pop(0)
 
     await broadcast_chat_event("chat_message", new_msg)
-    return {"status": "ok", "message": new_msg}
+    return {"status": "ok", "message": new_msg, "storage": "serverseitig" if server_mode == "host" else "lokal"}
 
 # ================= FILE BROWSER & UPLOAD ENDPOINTS =================
+# Server-Betrieb: Speicherung serverseitig in SERVER_VAULT_DIR
+# Standalone-Betrieb: Speicherung lokal in LOCAL_VAULT_DIR
 if MULTIPART_AVAILABLE:
     @app.post("/api/chat/upload")
     async def upload_files(
         files: List[UploadFile] = File(...),
         sender: str = Form("PC-User"),
+        title: Optional[str] = Form(None),
         note: Optional[str] = Form(None)
     ):
         if len(files) > 100:
             raise HTTPException(status_code=400, detail="Maximum 100 files allowed per upload batch")
 
+        active_vault = get_active_vault_dir()
+        os.makedirs(active_vault, exist_ok=True)
         saved_attachments = []
-        for f in files:
-            safe_filename = os.path.basename(f.filename or f"file_{int(time.time())}")
-            file_path = os.path.join(UPLOAD_DIR, safe_filename)
 
-            # Write file to disk
+        for f in files:
+            safe_filename = os.path.basename(f.filename or f"file_{int(time.time()*1000)}")
+            file_path = os.path.join(active_vault, safe_filename)
+
+            # Write file to active vault directory
             size_bytes = 0
             with open(file_path, "wb") as buffer:
                 while chunk := await f.read(1024 * 1024):
@@ -908,32 +1173,55 @@ if MULTIPART_AVAILABLE:
             ext = os.path.splitext(safe_filename)[1].lower()
             is_image = ext in [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"]
 
-            saved_attachments.append({
+            att_info = {
                 "name": safe_filename,
                 "size": size_bytes,
                 "ext": ext.replace(".", "").upper() or "FILE",
                 "is_image": is_image,
                 "url": f"/api/chat/download/{safe_filename}",
                 "uploaded_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+            saved_attachments.append(att_info)
+
+            # Save file metadata into DuckDB
+            db_mgr.save_chat_file({
+                "id": f"file_{int(time.time()*1000)}_{len(saved_attachments)}",
+                "name": safe_filename,
+                "path": file_path,
+                "size": size_bytes,
+                "ext": att_info["ext"],
+                "is_image": is_image,
+                "sender": sender
             })
 
         # Create associated chat message
+        msg_title = title or f"Shared {len(saved_attachments)} file(s)"
+        msg_content = note or f"Uploaded {len(saved_attachments)} file(s) to {'server-side' if server_mode == 'host' else 'local'} vault."
         new_msg = {
             "id": f"msg_{int(time.time()*1000)}",
             "sender": sender,
             "timestamp": datetime.now().strftime("%H:%M:%S"),
             "type": "files",
-            "title": f"Sent {len(saved_attachments)} file(s)",
-            "content": note or f"Uploaded {len(saved_attachments)} file(s) to shared vault.",
+            "title": msg_title,
+            "content": msg_content,
             "tokens": 0,
+            "words": len(msg_content.split()),
             "attachments": saved_attachments
         }
 
         with chat_lock:
+            db_mgr.save_chat_message(new_msg)
             chat_messages.append(new_msg)
 
         await broadcast_chat_event("chat_message", new_msg)
-        return {"status": "ok", "uploaded_count": len(saved_attachments), "attachments": saved_attachments}
+        return {
+            "status": "ok",
+            "uploaded_count": len(saved_attachments),
+            "storage": "serverseitig" if server_mode == "host" else "lokal",
+            "vault_dir": active_vault,
+            "attachments": saved_attachments,
+            "message": new_msg
+        }
 else:
     @app.post("/api/chat/upload")
     async def upload_files_fallback():
@@ -944,43 +1232,66 @@ else:
 
 @app.get("/api/chat/files")
 def list_uploaded_files():
+    active_vault = get_active_vault_dir()
+    os.makedirs(active_vault, exist_ok=True)
     file_list = []
-    if os.path.exists(UPLOAD_DIR):
-        for fname in os.listdir(UPLOAD_DIR):
-            fpath = os.path.join(UPLOAD_DIR, fname)
-            if os.path.isfile(fpath):
-                stat = os.stat(fpath)
-                ext = os.path.splitext(fname)[1].lower()
-                is_img = ext in [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"]
-                file_list.append({
-                    "name": fname,
-                    "size": stat.st_size,
-                    "ext": ext.replace(".", "").upper() or "FILE",
-                    "is_image": is_img,
-                    "url": f"/api/chat/download/{fname}",
-                    "uploaded_at": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
-                })
+    seen = set()
+
+    for vdir in [active_vault, SERVER_VAULT_DIR, LOCAL_VAULT_DIR, LEGACY_UPLOAD_DIR]:
+        if os.path.exists(vdir):
+            for fname in os.listdir(vdir):
+                if fname in seen:
+                    continue
+                fpath = os.path.join(vdir, fname)
+                if os.path.isfile(fpath):
+                    seen.add(fname)
+                    stat = os.stat(fpath)
+                    ext = os.path.splitext(fname)[1].lower()
+                    is_img = ext in [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"]
+                    file_list.append({
+                        "name": fname,
+                        "size": stat.st_size,
+                        "ext": ext.replace(".", "").upper() or "FILE",
+                        "is_image": is_img,
+                        "url": f"/api/chat/download/{fname}",
+                        "storage_mode": "serverseitig" if vdir == SERVER_VAULT_DIR else "lokal",
+                        "uploaded_at": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+                    })
+
     file_list.sort(key=lambda x: x["uploaded_at"], reverse=True)
     return file_list
 
 @app.get("/api/chat/download/{filename}")
 def download_file(filename: str):
     safe_name = os.path.basename(filename)
-    fpath = os.path.join(UPLOAD_DIR, safe_name)
-    if not os.path.exists(fpath):
-        raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(fpath, filename=safe_name)
+    active_vault = get_active_vault_dir()
+
+    for vdir in [active_vault, SERVER_VAULT_DIR, LOCAL_VAULT_DIR, LEGACY_UPLOAD_DIR]:
+        fpath = os.path.join(vdir, safe_name)
+        if os.path.exists(fpath) and os.path.isfile(fpath):
+            return FileResponse(fpath, filename=safe_name)
+
+    raise HTTPException(status_code=404, detail="File not found")
 
 @app.delete("/api/chat/files/{filename}")
 def delete_file(filename: str):
     safe_name = os.path.basename(filename)
-    fpath = os.path.join(UPLOAD_DIR, safe_name)
-    if os.path.exists(fpath):
-        try:
-            os.remove(fpath)
-            return {"status": "ok", "message": f"Deleted {safe_name}"}
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+    active_vault = get_active_vault_dir()
+    deleted = False
+
+    for vdir in [active_vault, SERVER_VAULT_DIR, LOCAL_VAULT_DIR, LEGACY_UPLOAD_DIR]:
+        fpath = os.path.join(vdir, safe_name)
+        if os.path.exists(fpath):
+            try:
+                os.remove(fpath)
+                deleted = True
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=str(e))
+
+    db_mgr.delete_chat_file(safe_name)
+
+    if deleted:
+        return {"status": "ok", "message": f"Deleted {safe_name}"}
     raise HTTPException(status_code=404, detail="File not found")
 
 
@@ -990,6 +1301,37 @@ DEFAULT_CHANGELOG_MD = """# 📜 no0bz Command Center (NCC) – Changelog
 Alle wichtigen Änderungen, neuen Funktionen und Optimierungen für das **no0bz Command Center (NCC)** werden in dieser Datei chronologisch dokumentiert.
 
 Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/) und dieses Projekt hält sich an [Semantic Versioning](https://semver.org/lang/de/).
+
+---
+
+## [v3.8.2] - 2026-09-26
+
+### 🚀 Neu & Hervorgehoben
+- **Exklusive serverseitige Speicherung im Server-Betrieb**:
+  - Im **Server-Betrieb (Host)**: Sämtliche Chat-Dateien (`data/server/vault/`) und die DuckDB-Datenbankhaltung (`no0bz_server.duckdb`) erfolgen *ausschließlich serverseitig*. Verbundene Clients übertragen Dateien und Telemetriedaten direkt an den Master-Server, der sie zentral speichert und an alle Clients streamt.
+  - Im **Standalone-Modus (Lokal)**: Vollständig autarker Betrieb, bei dem Chat-Dateien (`data/local/vault/`) und die DuckDB-Datenbank (`no0bz_local.duckdb`) *ausschließlich lokal* auf dem Rechner gehalten werden.
+  - Im **Client Node Modus**: Reine Remote-Verbindung zum Server (z. B. `192.168.1.100:8350`). Keine lokale Datenbanküberlastung; alle Dateien und Nachrichten werden serverseitig vorgehalten.
+- **Konfigurationspersistenz (`ncc_config.json`)**:
+  - Der gewählte Betriebsmodus (Server / Standalone / Client) sowie die Server-URL werden in `ncc_config.json` persistent gespeichert und beim Start automatisch geladen.
+  - Dynamisches Umschalten des Betriebsmodus zur Laufzeit via `POST /api/multipc/mode` mit sofortigem Wechsel der Datenbankverbindung und des aktiven Vault-Speicherorts.
+- **100% Funktionstüchtig ohne Platzhalter**:
+  - Vollständiger Multipart-Form-Data Upload (`POST /api/chat/upload`) mit automatischer Dateiablage und DuckDB-Katalogisierung.
+  - Echter Dateidownload (`GET /api/chat/download/{filename}`) und Löschfunktion (`DELETE /api/chat/files/{filename}`).
+  - Chat-Nachrichten und Attachments werden in DuckDB (`chat_messages`, `chat_files`) persistiert und über WebSockets in Echtzeit an alle verbundenen Browser übertragen.
+
+---
+
+## [v3.8.1] - 2026-09-26
+
+### 🚀 Neu & Hervorgehoben
+- **Echtzeit Network I/O Canvas-Graph**:
+  - 60 FPS HTML5 Canvas-Graph mit leuchtenden Dual-Kurven für Download (RX) und Upload (TX).
+  - Dynamische Skalierung, Spitzenwert-Anzeige (*Peak Mbps*) und 60-Sekunden-Verlauf.
+- **Multi-PC Systemarchitektur**:
+  - Modusauswahl zwischen Lokal, Server Hosten und Client Node.
+  - DuckDB `node_metrics` für persistente Telemetrie aller verbundenen Rechner.
+- **Benutzerprofil & PC-Name**:
+  - Echter PC-Name (Hostname) als Absender mit anpassbarem Benutzer-Alias, Avatar und Rolle in den Einstellungen.
 
 ---
 

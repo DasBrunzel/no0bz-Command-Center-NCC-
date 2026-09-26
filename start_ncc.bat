@@ -1,7 +1,7 @@
 @echo off
-title no0bz Command Center (NCC) v3.8.1
+title no0bz Command Center (NCC) v3.8.2
 echo ========================================================
-echo   Starting no0bz Command Center (NCC) v3.8.1...
+echo   Starting no0bz Command Center (NCC) v3.8.2...
 echo ========================================================
 python -m pip install -r requirements.txt
 echo.
