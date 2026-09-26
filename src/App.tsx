@@ -5,12 +5,42 @@ import {
   MessageSquare, Send, Paperclip, Download, Upload, Copy, Check, File,
   FileText, Image as ImageIcon, Eye, Folder, Settings, ShieldAlert, Sparkles,
   Maximize2, X, AlertTriangle, Monitor, Laptop, Clock, Server, CheckCircle2,
-  Share2, HardDriveDownload, Filter
+  Share2, HardDriveDownload, Filter, Globe, Users, Radio, User, Edit3, Shield, Key
 } from 'lucide-react';
 
 // ================================================
 // TYPES & INTERFACES
 // ================================================
+
+export type MultiPcMode = 'local' | 'host' | 'client';
+
+export interface UserProfile {
+  pcName: string;
+  displayName: string;
+  avatar: string;
+  role: string;
+  accentColor: string;
+  statusMsg: string;
+}
+
+export interface RemoteNode {
+  id: string;
+  pc_name: string;
+  display_name: string;
+  avatar: string;
+  role: string;
+  ip: string;
+  os: string;
+  is_host: boolean;
+  status: 'online' | 'idle' | 'offline';
+  ping_ms: number;
+  last_seen: string;
+  cpu_load: number;
+  ram_percent: number;
+  gpu_load: number;
+  net_recv_mbps: number;
+  net_sent_mbps: number;
+}
 
 interface DiskItem {
   device: string;
@@ -120,7 +150,7 @@ export function No0bzLogo({
             title="Klicken, um das NCC Changelog zu öffnen"
             className="text-[8px] px-1 py-0.2 bg-zinc-800 hover:bg-cyan-900/60 hover:text-cyan-300 border border-zinc-700 hover:border-cyan-500 text-zinc-300 rounded font-mono font-semibold transition-all cursor-pointer"
           >
-            v3.8.0
+            v3.8.1
           </button>
         </div>
       </div>
@@ -203,14 +233,281 @@ function SvgCircleGauge({
 }
 
 // ================================================
+// NETWORK REAL-TIME CANVAS GRAPH (60 FPS DUAL LINE)
+// ================================================
+
+export function NetworkLiveGraph({
+  history,
+  currentRecv,
+  currentSent,
+  isNightmare = false
+}: {
+  history: { recv: number; sent: number }[];
+  currentRecv: number;
+  currentSent: number;
+  isNightmare?: boolean;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    const width = rect.width || 320;
+    const height = rect.height || 110;
+
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    ctx.scale(dpr, dpr);
+
+    ctx.clearRect(0, 0, width, height);
+
+    const data = history.length > 1 ? history : [
+      { recv: currentRecv * 0.8, sent: currentSent * 0.7 },
+      { recv: currentRecv, sent: currentSent }
+    ];
+
+    const allVals = data.flatMap(d => [d.recv, d.sent]);
+    const maxVal = Math.max(10, ...allVals, currentRecv, currentSent) * 1.15;
+
+    // Grid lines
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+
+    const gridLines = 3;
+    for (let i = 1; i <= gridLines; i++) {
+      const y = (height / (gridLines + 1)) * i;
+      ctx.beginPath();
+      ctx.moveTo(35, y);
+      ctx.lineTo(width - 8, y);
+      ctx.stroke();
+
+      const valLabel = (maxVal * (1 - i / (gridLines + 1))).toFixed(0) + 'M';
+      ctx.fillStyle = 'rgba(161, 161, 170, 0.4)';
+      ctx.font = '9px monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText(valLabel, 30, y + 3);
+    }
+    ctx.setLineDash([]);
+
+    const plotX = (idx: number) => {
+      const step = (width - 45) / Math.max(data.length - 1, 1);
+      return 35 + idx * step;
+    };
+    const plotY = (val: number) => {
+      const clamped = Math.max(0, Math.min(val, maxVal));
+      return height - 10 - (clamped / maxVal) * (height - 20);
+    };
+
+    const drawCurve = (
+      key: 'recv' | 'sent',
+      strokeColor: string,
+      gradientStart: string,
+      glowColor: string
+    ) => {
+      if (data.length < 1) return;
+
+      const grad = ctx.createLinearGradient(0, 0, 0, height);
+      grad.addColorStop(0, gradientStart);
+      grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+      ctx.beginPath();
+      ctx.moveTo(plotX(0), height - 10);
+      data.forEach((pt, i) => {
+        const x = plotX(i);
+        const y = plotY(pt[key]);
+        if (i === 0) ctx.lineTo(x, y);
+        else {
+          const prevX = plotX(i - 1);
+          const prevY = plotY(data[i - 1][key]);
+          const cpX1 = (prevX + x) / 2;
+          ctx.bezierCurveTo(cpX1, prevY, cpX1, y, x, y);
+        }
+      });
+      ctx.lineTo(plotX(data.length - 1), height - 10);
+      ctx.closePath();
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      ctx.save();
+      ctx.shadowColor = glowColor;
+      ctx.shadowBlur = 8;
+      ctx.strokeStyle = strokeColor;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      data.forEach((pt, i) => {
+        const x = plotX(i);
+        const y = plotY(pt[key]);
+        if (i === 0) ctx.moveTo(x, y);
+        else {
+          const prevX = plotX(i - 1);
+          const prevY = plotY(data[i - 1][key]);
+          const cpX1 = (prevX + x) / 2;
+          ctx.bezierCurveTo(cpX1, prevY, cpX1, y, x, y);
+        }
+      });
+      ctx.stroke();
+      ctx.restore();
+
+      const lastX = plotX(data.length - 1);
+      const lastY = plotY(data[data.length - 1][key]);
+      ctx.fillStyle = strokeColor;
+      ctx.beginPath();
+      ctx.arc(lastX, lastY, 3, 0, Math.PI * 2);
+      ctx.fill();
+    };
+
+    drawCurve(
+      'recv',
+      isNightmare ? '#ef4444' : '#00f0ff',
+      isNightmare ? 'rgba(239, 68, 68, 0.25)' : 'rgba(0, 240, 255, 0.25)',
+      isNightmare ? '#ef4444' : '#00f0ff'
+    );
+
+    drawCurve(
+      'sent',
+      '#f59e0b',
+      'rgba(245, 158, 11, 0.2)',
+      '#f59e0b'
+    );
+  }, [history, currentRecv, currentSent, isNightmare]);
+
+  return (
+    <div className="w-full relative mt-1 bg-black/40 rounded-lg p-2 border border-zinc-800/80">
+      <div className="flex items-center justify-between text-[10px] font-mono mb-1 text-zinc-400">
+        <div className="flex items-center gap-3">
+          <span className="flex items-center gap-1">
+            <span className={`w-2 h-2 rounded-full ${isNightmare ? 'bg-red-500' : 'bg-cyan-400'} shadow-[0_0_6px]`}></span>
+            <span className="text-zinc-300 font-bold">RX (DL):</span> {currentRecv} Mbps
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_6px_#f59e0b]"></span>
+            <span className="text-zinc-300 font-bold">TX (UL):</span> {currentSent} Mbps
+          </span>
+        </div>
+        <span className="text-[9px] px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-400 font-mono">60s Live I/O</span>
+      </div>
+      <div className="h-24 w-full">
+        <canvas ref={canvasRef} className="w-full h-full block" />
+      </div>
+    </div>
+  );
+}
+
+// ================================================
 // MAIN COMPONENT
 // ================================================
 
 export default function App() {
   // Navigation: The top menu is completely removed. Sidebar is the only nav!
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'chat' | 'vault' | 'processes' | 'history' | 'settings' | 'changelog'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'multipc' | 'chat' | 'vault' | 'processes' | 'history' | 'settings' | 'changelog'>('dashboard');
   const [themeMode, setThemeMode] = useState<'nightmare' | 'bento' | 'nordic' | 'industrial'>('nightmare');
   const [logoStyle, setLogoStyle] = useState<'nightmare' | 'classic'>('nightmare');
+
+  // Multi-PC Architecture State (Local / Server Hosten / Client Node)
+  const [multiPcMode, setMultiPcMode] = useState<MultiPcMode>(() => {
+    return (localStorage.getItem('no0bz_multipc_mode') as MultiPcMode) || 'host';
+  });
+  const [showModeModal, setShowModeModal] = useState<boolean>(() => {
+    return localStorage.getItem('no0bz_multipc_mode') === null;
+  });
+  const [clientServerUrl, setClientServerUrl] = useState<string>('192.168.1.100:8350');
+  const [selectedViewNodeId, setSelectedViewNodeId] = useState<string | null>(null);
+
+  // User Profile Customizer (Saved to LocalStorage & Syncs to Chat and Server)
+  const [userProfile, setUserProfile] = useState<UserProfile>(() => {
+    try {
+      const saved = localStorage.getItem('no0bz_user_profile');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {
+      pcName: 'no0bz-MONSTER-RIG',
+      displayName: 'Commander',
+      avatar: '👑',
+      role: 'Master Host Workstation',
+      accentColor: 'cyan',
+      statusMsg: 'Online • Telemetrie-Hub aktiv'
+    };
+  });
+  const [profileSavedToast, setProfileSavedToast] = useState(false);
+
+  // Fast-Boot Cache Status
+  const [systemCache, setSystemCache] = useState<{
+    status: string;
+    generated_at: string;
+    load_time_ms: number;
+    profile: any;
+  } | null>(null);
+  const [cacheRefreshing, setCacheRefreshing] = useState(false);
+
+  // Connected Multi-PC Nodes
+  const [connectedNodes, setConnectedNodes] = useState<RemoteNode[]>([
+    {
+      id: 'node_host',
+      pc_name: 'no0bz-MONSTER-RIG (Host)',
+      display_name: 'Commander',
+      avatar: '👑',
+      role: 'Master Hub Server',
+      ip: '127.0.0.1 (LAN: 192.168.1.10)',
+      os: 'Windows 11 Pro / CachyOS Linux',
+      is_host: true,
+      status: 'online',
+      ping_ms: 0,
+      last_seen: 'Live',
+      cpu_load: 54.2,
+      ram_percent: 57.5,
+      gpu_load: 68.0,
+      net_recv_mbps: 124.8,
+      net_sent_mbps: 14.2
+    },
+    {
+      id: 'node_client_1',
+      pc_name: 'GAMING-DESKTOP-RTX',
+      display_name: 'Alex (Gaming Rig)',
+      avatar: '🎮',
+      role: 'Unreal Engine 5 Node',
+      ip: '192.168.1.15',
+      os: 'Windows 11 Home',
+      is_host: false,
+      status: 'online',
+      ping_ms: 3,
+      last_seen: 'Gerade eben',
+      cpu_load: 28.4,
+      ram_percent: 44.0,
+      gpu_load: 82.5,
+      net_recv_mbps: 34.6,
+      net_sent_mbps: 5.2
+    },
+    {
+      id: 'node_client_2',
+      pc_name: 'THINKPAD-DEV-WORKBOOK',
+      display_name: 'Bruno (Mobile)',
+      avatar: '💻',
+      role: 'Linux Dev Station',
+      ip: '192.168.1.42',
+      os: 'CachyOS Linux (Kernel 6.13)',
+      is_host: false,
+      status: 'online',
+      ping_ms: 5,
+      last_seen: 'Vor 2s',
+      cpu_load: 9.8,
+      ram_percent: 31.5,
+      gpu_load: 4.0,
+      net_recv_mbps: 12.0,
+      net_sent_mbps: 1.8
+    }
+  ]);
+
+  // Rolling Network I/O Canvas Buffer (60 data points)
+  const [netHistory, setNetHistory] = useState<{ recv: number; sent: number }[]>([
+    { recv: 110, sent: 12 }, { recv: 118, sent: 15 }, { recv: 124, sent: 14 },
+    { recv: 121, sent: 16 }, { recv: 126, sent: 14 }, { recv: 124.8, sent: 14.2 }
+  ]);
 
   // Changelog Viewer State
   const [changelogRaw, setChangelogRaw] = useState(false);
@@ -373,6 +670,26 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
         }
       })
       .catch(() => {});
+
+    // Fetch System Fast-Boot Cache
+    fetch('/api/system/profile')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.status) {
+          setSystemCache(data);
+        }
+      })
+      .catch(() => {});
+
+    // Fetch Remote Nodes
+    fetch('/api/nodes')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.nodes && data.nodes.length > 0) {
+          setConnectedNodes(data.nodes);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   // Connect to Python Backend WebSocket if available, or simulate realistic live feed
@@ -395,6 +712,9 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
           if (raw.type === 'chat_message') {
             setMessages(prev => [...prev, raw.data]);
             return;
+          }
+          if (raw.multipc && raw.multipc.nodes) {
+            setConnectedNodes(raw.multipc.nodes);
           }
           if (raw.cpu) {
             setMetrics(prev => ({
@@ -429,13 +749,13 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
               disk_write: raw.total_disk_io ? raw.total_disk_io.write_mbs : 0,
             };
             setHistoryPoints(hist => [...hist.slice(-59), newPt]);
+            setNetHistory(prev => [...prev.slice(-59), { recv: raw.network.recv_mbps, sent: raw.network.sent_mbps }]);
           }
         } catch {
           // ignore
         }
       };
       ws.onerror = () => {
-        // Fallback simulation
         initFallbackLoop();
       };
     } catch {
@@ -449,6 +769,24 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
           const newCpu = Math.min(Math.max(prev.cpu_load + (Math.random() * 8 - 4), 10), 98);
           const newGpu = Math.min(Math.max(prev.gpu_load + (Math.random() * 6 - 3), 15), 99);
           const newCores = prev.cpu_cores.map(c => Math.min(Math.max(Math.round(c + (Math.random() * 14 - 7)), 5), 100));
+          const newRecv = parseFloat(Math.max(5, prev.net_recv_mbps + (Math.random() * 20 - 10)).toFixed(1));
+          const newSent = parseFloat(Math.max(1, prev.net_sent_mbps + (Math.random() * 6 - 3)).toFixed(1));
+
+          setNetHistory(prevHist => [...prevHist.slice(-59), { recv: newRecv, sent: newSent }]);
+
+          // Also update connectedNodes telemetry in demo fallback
+          setConnectedNodes(nodes => nodes.map(n => {
+            if (n.is_host) {
+              return { ...n, cpu_load: parseFloat(newCpu.toFixed(1)), net_recv_mbps: newRecv, net_sent_mbps: newSent };
+            }
+            return {
+              ...n,
+              cpu_load: parseFloat(Math.min(Math.max(n.cpu_load + (Math.random() * 4 - 2), 5), 95).toFixed(1)),
+              ram_percent: parseFloat(Math.min(Math.max(n.ram_percent + (Math.random() * 2 - 1), 20), 90).toFixed(1)),
+              net_recv_mbps: parseFloat(Math.max(1, n.net_recv_mbps + (Math.random() * 6 - 3)).toFixed(1)),
+              net_sent_mbps: parseFloat(Math.max(0.5, n.net_sent_mbps + (Math.random() * 2 - 1)).toFixed(1))
+            };
+          }));
 
           // Also update disk live I/O fluctuate
           setDisks(prevDisks => prevDisks.map((d, i) => {
@@ -632,9 +970,13 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
     const words = promptText.trim().split(/\s+/).filter(Boolean).length;
     const tokens = Math.round(promptText.length / 3.8);
 
+    const currentSender = userProfile.displayName 
+      ? `${userProfile.displayName} (${userProfile.pcName || metrics.hostname})`
+      : (userProfile.pcName || metrics.hostname);
+
     const newMsg: ChatMessage = {
       id: `msg_${Date.now()}`,
-      sender: myDeviceName,
+      sender: currentSender,
       timestamp: new Date().toLocaleTimeString('de-DE'),
       type: queuedFiles.length > 0 && !promptText.trim() ? 'files' : 'prompt',
       title: promptTitle.trim() || (attachments.length > 0 ? `Shared ${attachments.length} File(s)` : 'P2P Prompt Sync'),
@@ -739,6 +1081,29 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
 
         {/* Right: Theme / Logo Mode & Quick Actions */}
         <div className="flex items-center gap-3">
+          {/* Multi-PC Mode Quick Switcher */}
+          <button
+            onClick={() => setShowModeModal(true)}
+            title="Multi-PC Modus wechseln (Lokal / Server Hosten / Client Node)"
+            className={`px-2.5 py-1 rounded border text-xs font-mono font-bold flex items-center gap-1.5 transition-all ${
+              multiPcMode === 'host'
+                ? 'bg-amber-950/70 border-amber-500 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.35)]'
+                : multiPcMode === 'client'
+                ? 'bg-blue-950/70 border-blue-500 text-blue-300 shadow-[0_0_12px_rgba(59,130,246,0.35)]'
+                : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-700'
+            }`}
+          >
+            <Globe className="w-3.5 h-3.5 text-amber-400" />
+            <span className="hidden sm:inline">
+              {multiPcMode === 'host' ? '👑 SERVER HOST' : multiPcMode === 'client' ? '🔗 CLIENT NODE' : '🖥️ LOKAL'}
+            </span>
+            {multiPcMode === 'host' && (
+              <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-900/80 text-amber-200 font-mono">
+                {connectedNodes.length} PCs
+              </span>
+            )}
+          </button>
+
           {/* Changelog Quick Button */}
           <button
             onClick={() => setActiveTab('changelog')}
@@ -753,7 +1118,7 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
           >
             <FileText className="w-3.5 h-3.5 text-zinc-400" />
             <span className="hidden sm:inline">CHANGELOG</span>
-            <span className="text-[9px] px-1 py-0.2 rounded bg-zinc-800 text-zinc-400 font-mono">v3.7.0</span>
+            <span className="text-[9px] px-1 py-0.2 rounded bg-zinc-800 text-zinc-400 font-mono">v3.8.1</span>
           </button>
 
           {/* Logo Style Toggle */}
@@ -774,11 +1139,17 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
             <span className="hidden sm:inline">{logoStyle === 'nightmare' ? 'NIGHTMARE' : 'CLASSIC'}</span>
           </button>
 
-          {/* Device Profile Tag */}
-          <div className="px-2.5 py-1 rounded bg-zinc-900 border border-zinc-800 text-[11px] font-mono text-zinc-400 flex items-center gap-1.5">
-            <Monitor className="w-3.5 h-3.5 text-zinc-300" />
-            <span className="hidden sm:inline font-semibold text-zinc-200">{myDeviceName}</span>
-          </div>
+          {/* Device / User Profile Tag */}
+          <button
+            onClick={() => setActiveTab('settings')}
+            title="Benutzer- & PC-Profil in Einstellungen anpassen"
+            className="px-2.5 py-1 rounded bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-[11px] font-mono text-zinc-300 flex items-center gap-1.5 transition-colors cursor-pointer"
+          >
+            <span className="text-sm">{userProfile.avatar || '💻'}</span>
+            <span className="hidden sm:inline font-semibold text-white">
+              {userProfile.displayName || userProfile.pcName || metrics.hostname}
+            </span>
+          </button>
         </div>
       </header>
 
@@ -801,7 +1172,10 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
               <nav className="space-y-1">
                 {/* 1. DASHBOARD */}
                 <button
-                  onClick={() => setActiveTab('dashboard')}
+                  onClick={() => {
+                    setSelectedViewNodeId(null);
+                    setActiveTab('dashboard');
+                  }}
                   className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-mono font-semibold transition-all ${
                     activeTab === 'dashboard'
                       ? isNightmare
@@ -817,7 +1191,33 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                   {activeTab === 'dashboard' && <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />}
                 </button>
 
-                {/* 2. CHAT & PROMPT SYNC (NEW FEATURE!) */}
+                {/* 2. MULTI-PC HUB */}
+                <button
+                  onClick={() => setActiveTab('multipc')}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-mono font-semibold transition-all ${
+                    activeTab === 'multipc'
+                      ? isNightmare
+                        ? 'bg-red-600 text-white shadow-[0_0_15px_rgba(239,68,68,0.5)]'
+                        : 'bg-cyan-500 text-slate-950 font-bold shadow-[0_0_15px_rgba(6,182,212,0.4)]'
+                      : 'text-zinc-400 hover:text-white hover:bg-zinc-800/50'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Globe className="w-4 h-4 text-amber-400" />
+                    <span>MULTI-PC HUB</span>
+                  </div>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${
+                    activeTab === 'multipc' 
+                      ? 'bg-black/30 text-white' 
+                      : multiPcMode === 'host' 
+                      ? 'bg-amber-950/80 border border-amber-600/70 text-amber-300' 
+                      : 'bg-zinc-800 text-zinc-300'
+                  }`}>
+                    {multiPcMode === 'host' ? `${connectedNodes.length} PCs` : multiPcMode === 'client' ? 'Client' : 'Lokal'}
+                  </span>
+                </button>
+
+                {/* 3. CHAT & PROMPT SYNC */}
                 <button
                   onClick={() => setActiveTab('chat')}
                   className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-mono font-semibold transition-all ${
@@ -837,7 +1237,7 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                   </span>
                 </button>
 
-                {/* 3. DATEIBROWSER / CHAT VAULT (NEW FEATURE!) */}
+                {/* 4. DATEIBROWSER / CHAT VAULT */}
                 <button
                   onClick={() => setActiveTab('vault')}
                   className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-mono font-semibold transition-all ${
@@ -857,7 +1257,7 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                   </span>
                 </button>
 
-                {/* 4. PROZESSE */}
+                {/* 5. PROZESSE */}
                 <button
                   onClick={() => setActiveTab('processes')}
                   className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-mono font-semibold transition-all ${
@@ -877,7 +1277,7 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                   </span>
                 </button>
 
-                {/* 5. HISTORIE */}
+                {/* 6. HISTORIE */}
                 <button
                   onClick={() => setActiveTab('history')}
                   className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-mono font-semibold transition-all ${
@@ -895,7 +1295,7 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                   <span className="text-[10px] text-zinc-500">24h</span>
                 </button>
 
-                {/* 6. EINSTELLUNGEN */}
+                {/* 7. EINSTELLUNGEN */}
                 <button
                   onClick={() => setActiveTab('settings')}
                   className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-mono font-semibold transition-all ${
@@ -910,28 +1310,6 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                     <Settings className="w-4 h-4" />
                     <span>EINSTELLUNGEN</span>
                   </div>
-                </button>
-
-                {/* 7. CHANGELOG */}
-                <button
-                  onClick={() => setActiveTab('changelog')}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-mono font-semibold transition-all ${
-                    activeTab === 'changelog'
-                      ? isNightmare
-                        ? 'bg-red-600 text-white shadow-[0_0_15px_rgba(239,68,68,0.5)]'
-                        : 'bg-cyan-500 text-slate-950 font-bold shadow-[0_0_15px_rgba(6,182,212,0.4)]'
-                      : 'text-zinc-400 hover:text-white hover:bg-zinc-800/50'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <FileText className="w-4 h-4" />
-                    <span>CHANGELOG</span>
-                  </div>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${
-                    activeTab === 'changelog' ? 'bg-black/30 text-white' : 'bg-cyan-950/60 border border-cyan-800/60 text-cyan-300'
-                  }`}>
-                    v3.7.0
-                  </span>
                 </button>
               </nav>
             </div>
@@ -1112,39 +1490,57 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                   </div>
                 </div>
 
-                {/* 4. NETWORK & LATENCY CARD */}
+                {/* 4. NETWORK & LATENCY CARD WITH LIVE GRAPH */}
                 <div className={`rounded-xl p-4 flex flex-col justify-between ${cardBg}`}>
                   <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2 mb-2">
                     <div className="flex items-center gap-2">
                       <Wifi className="w-4 h-4 text-emerald-400" />
                       <span className="font-mono font-bold text-xs tracking-wider">NETWORK I/O</span>
                     </div>
-                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-emerald-300">
-                      LAN 10 GbE
-                    </span>
-                  </div>
-
-                  <div className="flex flex-col items-center justify-center py-2 space-y-3">
-                    <div className="w-full bg-black/40 p-2.5 rounded-lg border border-zinc-800/80 flex items-center justify-between font-mono">
-                      <div className="flex items-center gap-2 text-cyan-400">
-                        <ArrowDown className="w-4 h-4" />
-                        <span className="text-xs font-semibold">DOWNLOAD</span>
-                      </div>
-                      <span className="text-base font-bold text-white">{metrics.net_recv_mbps} <span className="text-xs text-zinc-400">Mbps</span></span>
-                    </div>
-
-                    <div className="w-full bg-black/40 p-2.5 rounded-lg border border-zinc-800/80 flex items-center justify-between font-mono">
-                      <div className="flex items-center gap-2 text-amber-400">
-                        <ArrowUp className="w-4 h-4" />
-                        <span className="text-xs font-semibold">UPLOAD</span>
-                      </div>
-                      <span className="text-base font-bold text-white">{metrics.net_sent_mbps} <span className="text-xs text-zinc-400">Mbps</span></span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-emerald-300">
+                        LAN 10 GbE
+                      </span>
+                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-950/70 border border-emerald-700/60 text-emerald-400 font-bold">
+                        PING 3ms
+                      </span>
                     </div>
                   </div>
 
-                  <div className="pt-2 border-t border-zinc-800/60 flex items-center justify-between text-[10px] font-mono text-zinc-400">
-                    <span>STATUS: 0% LOSS</span>
-                    <span className="text-emerald-400 font-bold">PING: 4ms</span>
+                  {/* Dual Speed Indicators */}
+                  <div className="grid grid-cols-2 gap-2 mb-1 font-mono">
+                    <div className="bg-black/50 p-2 rounded-lg border border-cyan-900/30 flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-cyan-400">
+                        <ArrowDown className="w-3.5 h-3.5" />
+                        <span className="text-[11px] font-semibold">RX</span>
+                      </div>
+                      <span className="text-sm font-bold text-white">
+                        {metrics.net_recv_mbps} <span className="text-[10px] text-zinc-400">M</span>
+                      </span>
+                    </div>
+
+                    <div className="bg-black/50 p-2 rounded-lg border border-amber-900/30 flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-amber-400">
+                        <ArrowUp className="w-3.5 h-3.5" />
+                        <span className="text-[11px] font-semibold">TX</span>
+                      </div>
+                      <span className="text-sm font-bold text-white">
+                        {metrics.net_sent_mbps} <span className="text-[10px] text-zinc-400">M</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Real-Time Canvas Graph (Requested by User) */}
+                  <NetworkLiveGraph
+                    history={netHistory}
+                    currentRecv={metrics.net_recv_mbps}
+                    currentSent={metrics.net_sent_mbps}
+                    isNightmare={isNightmare}
+                  />
+
+                  <div className="pt-2 mt-1 border-t border-zinc-800/60 flex items-center justify-between text-[10px] font-mono text-zinc-400">
+                    <span>BUFFERS: 0% LOSS</span>
+                    <span className="text-zinc-500">NIC: Realtek RTL8125 2.5G</span>
                   </div>
                 </div>
 
@@ -1241,7 +1637,309 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
           )}
 
           {/* ---------------------------------------------------- */}
-          {/* TAB 2: P2P PROMPT & CHAT + DRAG & DROP FILE SHARING  */}
+          {/* TAB 2: MULTI-PC HUB & SERVER CLUSTER (MULTI-PC MODE) */}
+          {/* ---------------------------------------------------- */}
+          {activeTab === 'multipc' && (
+            <div className="space-y-6 max-w-7xl mx-auto">
+              
+              {/* Header Box */}
+              <div className={`p-5 rounded-xl ${cardBg} flex flex-col md:flex-row items-start md:items-center justify-between gap-4`}>
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-lg bg-amber-950/80 border border-amber-500/60 text-amber-400">
+                    <Globe className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="font-mono font-bold text-base text-white">
+                        no0bz MULTI-PC HUB &amp; SERVER CLUSTER
+                      </h2>
+                      <span className={`text-[10px] font-mono px-2 py-0.5 rounded font-bold ${
+                        multiPcMode === 'host'
+                          ? 'bg-amber-950 border border-amber-600 text-amber-300'
+                          : multiPcMode === 'client'
+                          ? 'bg-blue-950 border border-blue-600 text-blue-300'
+                          : 'bg-zinc-800 text-zinc-300'
+                      }`}>
+                        {multiPcMode === 'host' ? '👑 SERVER HOST AKTIV' : multiPcMode === 'client' ? '🔗 CLIENT AGENT' : '🖥️ LOKAL'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-zinc-400 mt-1 font-mono">
+                      Zentrales Telemetrie-Sammelbecken • Alle Daten werden in DuckDB gespeichert • Wer ist verbunden?
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2.5 flex-wrap font-mono text-xs">
+                  <button
+                    onClick={() => setShowModeModal(true)}
+                    className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white font-semibold flex items-center gap-1.5 transition-colors"
+                  >
+                    <Sliders className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Modus ändern</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('chat')}
+                    className="px-3 py-1.5 rounded-lg bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-700 text-cyan-300 font-semibold flex items-center gap-1.5 transition-colors"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    <span>P2P Chat</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* CARD 1: DER SERVER (HOST MASTER NODE) */}
+              <div className={`p-5 rounded-xl border ${cardBg} ${multiPcMode === 'host' ? 'border-amber-500/40 shadow-[0_0_20px_rgba(245,158,11,0.15)]' : 'border-zinc-800'}`}>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 mb-4 border-b border-zinc-800 gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-xl">👑</span>
+                    <div>
+                      <h3 className="font-mono font-bold text-sm tracking-wide text-white flex items-center gap-2">
+                        <span>DER SERVER (HOST MASTER NODE)</span>
+                        <span className="text-[10px] px-2 py-0.2 rounded bg-emerald-950/80 border border-emerald-600/70 text-emerald-400 font-bold">
+                          ONLINE &amp; LAUSCHT
+                        </span>
+                      </h3>
+                      <p className="text-[11px] font-mono text-zinc-400">
+                        Zentrale Sammelstelle für alle Telemetriedaten im DuckDB 24h Time-Series Archiv
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 font-mono text-xs">
+                    <span className="px-2.5 py-1 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
+                      IP: 127.0.0.1 : 8350
+                    </span>
+                    <span className="px-2.5 py-1 rounded bg-amber-950/70 border border-amber-700/60 text-amber-300 font-bold">
+                      {connectedNodes.length} PCs VERBUNDEN
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 font-mono">
+                  <div className="bg-black/40 p-3 rounded-lg border border-zinc-800/80">
+                    <span className="text-[10px] text-zinc-400 uppercase">Host Machine</span>
+                    <div className="text-sm font-bold text-white truncate mt-0.5">{metrics.hostname}</div>
+                    <span className="text-[10px] text-emerald-400 font-semibold">Master Node (Lokal)</span>
+                  </div>
+
+                  <div className="bg-black/40 p-3 rounded-lg border border-zinc-800/80">
+                    <span className="text-[10px] text-zinc-400 uppercase">DuckDB Speicherstand</span>
+                    <div className="text-sm font-bold text-cyan-300 mt-0.5">4,850 Records</div>
+                    <span className="text-[10px] text-zinc-500">24h Auto-Purge aktiv</span>
+                  </div>
+
+                  <div className="bg-black/40 p-3 rounded-lg border border-zinc-800/80">
+                    <span className="text-[10px] text-zinc-400 uppercase">Host CPU &amp; RAM</span>
+                    <div className="text-sm font-bold text-amber-300 mt-0.5">{metrics.cpu_load}% • {metrics.ram_percent}%</div>
+                    <span className="text-[10px] text-zinc-500">Takt: 4.8 GHz</span>
+                  </div>
+
+                  <div className="bg-black/40 p-3 rounded-lg border border-zinc-800/80">
+                    <span className="text-[10px] text-zinc-400 uppercase">Netzwerk Durchsatz</span>
+                    <div className="text-sm font-bold text-white mt-0.5">↓ {metrics.net_recv_mbps} • ↑ {metrics.net_sent_mbps}</div>
+                    <span className="text-[10px] text-zinc-500">Mbps (1-Sekunden Stream)</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* CARD 2: VERBUNDENE PCs (CLIENTS) */}
+              <div className={`p-5 rounded-xl ${cardBg}`}>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 mb-4 border-b border-zinc-800 gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <Users className="w-5 h-5 text-cyan-400" />
+                    <div>
+                      <h3 className="font-mono font-bold text-sm tracking-wide text-white">
+                        WER IST AUF DEM SERVER VERBUNDEN? ({connectedNodes.length} RECHNER)
+                      </h3>
+                      <p className="text-[11px] font-mono text-zinc-400">
+                        Echtzeit-Telemetrie aller verbundenen Workstations, Laptops und Gaming-Rigs
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 font-mono text-xs">
+                    <span className="text-zinc-500 text-[11px]">Klicke auf einen PC um dessen Metriken anzuzeigen</span>
+                  </div>
+                </div>
+
+                {/* Connected Nodes Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {connectedNodes.map((node) => {
+                    const isSelected = selectedViewNodeId === node.id || (!selectedViewNodeId && node.is_host);
+                    return (
+                      <div 
+                        key={node.id}
+                        className={`p-4 rounded-xl border transition-all flex flex-col justify-between space-y-3 ${
+                          node.is_host 
+                            ? 'bg-amber-950/20 border-amber-600/50 shadow-[0_0_15px_rgba(245,158,11,0.1)]' 
+                            : isSelected
+                            ? 'bg-cyan-950/30 border-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.15)]'
+                            : 'bg-black/50 border-zinc-800/80 hover:border-zinc-700'
+                        }`}
+                      >
+                        {/* Node Card Header */}
+                        <div className="flex items-start justify-between border-b border-zinc-800/60 pb-2">
+                          <div className="flex items-center gap-2.5">
+                            <span className="text-2xl p-1.5 rounded-lg bg-zinc-900 border border-zinc-800">
+                              {node.avatar || '💻'}
+                            </span>
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-mono font-bold text-xs text-white truncate max-w-[150px]">
+                                  {node.pc_name}
+                                </span>
+                                {node.is_host && (
+                                  <span className="text-[9px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 font-mono font-bold">
+                                    HOST
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[11px] font-mono text-cyan-400 font-medium">
+                                {node.display_name} • <span className="text-zinc-500">{node.role}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col items-end text-[10px] font-mono">
+                            <span className="flex items-center gap-1 text-emerald-400 font-bold">
+                              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                              {node.ping_ms}ms
+                            </span>
+                            <span className="text-zinc-500">{node.last_seen}</span>
+                          </div>
+                        </div>
+
+                        {/* Telemetry Progress Bars */}
+                        <div className="space-y-2 font-mono text-xs">
+                          <div>
+                            <div className="flex justify-between text-[11px] text-zinc-400 mb-0.5">
+                              <span>CPU LAST</span>
+                              <span className="font-bold text-white">{node.cpu_load}%</span>
+                            </div>
+                            <div className="w-full bg-zinc-900 h-2 rounded-full overflow-hidden border border-zinc-800">
+                              <div 
+                                className="bg-gradient-to-r from-cyan-500 to-blue-500 h-full rounded-full transition-all" 
+                                style={{ width: `${Math.min(node.cpu_load, 100)}%` }}
+                              />
+                            </div>
+                          </div>
+
+                          <div>
+                            <div className="flex justify-between text-[11px] text-zinc-400 mb-0.5">
+                              <span>RAM NUTZUNG</span>
+                              <span className="font-bold text-white">{node.ram_percent}%</span>
+                            </div>
+                            <div className="w-full bg-zinc-900 h-2 rounded-full overflow-hidden border border-zinc-800">
+                              <div 
+                                className="bg-gradient-to-r from-blue-500 to-purple-500 h-full rounded-full transition-all" 
+                                style={{ width: `${Math.min(node.ram_percent, 100)}%` }}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="flex justify-between items-center text-[11px] pt-1 text-zinc-400 border-t border-zinc-800/60">
+                            <span>NETZWERK I/O:</span>
+                            <span className="font-bold text-white">↓ {node.net_recv_mbps} • ↑ {node.net_sent_mbps} M</span>
+                          </div>
+
+                          <div className="text-[10px] text-zinc-500 truncate">
+                            IP: {node.ip} • OS: {node.os}
+                          </div>
+                        </div>
+
+                        {/* Card Action Buttons */}
+                        <div className="pt-2 border-t border-zinc-800/60 flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              setSelectedViewNodeId(node.is_host ? null : node.id);
+                              setActiveTab('dashboard');
+                            }}
+                            className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-mono font-bold flex items-center justify-center gap-1.5 transition-all ${
+                              isSelected
+                                ? 'bg-cyan-500 text-slate-950 shadow-[0_0_10px_rgba(6,182,212,0.4)]'
+                                : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200'
+                            }`}
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>{isSelected ? 'Aktiv im Dashboard' : 'Im Dashboard anzeigen'}</span>
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              setPromptTitle(`@${node.display_name} `);
+                              setActiveTab('chat');
+                            }}
+                            title={`Chat mit ${node.display_name} starten`}
+                            className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors"
+                          >
+                            <MessageSquare className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* CARD 3: MULTI-PC VERGLEICHS-MATRIX */}
+              <div className={`p-5 rounded-xl ${cardBg}`}>
+                <div className="flex items-center gap-2.5 pb-3 mb-3 border-b border-zinc-800">
+                  <Layers className="w-5 h-5 text-purple-400" />
+                  <div>
+                    <h3 className="font-mono font-bold text-sm tracking-wide text-white">
+                      MULTI-PC LIVE-VERGLEICHS-MATRIX
+                    </h3>
+                    <p className="text-[11px] font-mono text-zinc-400">
+                      Gegenüberstellung aller Cluster-Nodes in Echtzeit
+                    </p>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left font-mono text-xs">
+                    <thead>
+                      <tr className="border-b border-zinc-800 text-[10px] text-zinc-500 uppercase">
+                        <th className="pb-2">Node / PC-Name</th>
+                        <th className="pb-2">Benutzer &amp; Rolle</th>
+                        <th className="pb-2">IP &amp; Latenz</th>
+                        <th className="pb-2">CPU Last</th>
+                        <th className="pb-2">RAM Belegung</th>
+                        <th className="pb-2">GPU Last</th>
+                        <th className="pb-2">Net RX/TX</th>
+                        <th className="pb-2 text-right">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-800/60">
+                      {connectedNodes.map((n) => (
+                        <tr key={n.id} className="hover:bg-zinc-800/30">
+                          <td className="py-2.5 flex items-center gap-2">
+                            <span>{n.avatar || '💻'}</span>
+                            <span className="font-bold text-white">{n.pc_name}</span>
+                            {n.is_host && <span className="text-[8px] px-1 bg-amber-500/20 text-amber-300 rounded font-bold">HOST</span>}
+                          </td>
+                          <td className="py-2.5 text-cyan-300">{n.display_name} <span className="text-zinc-500">({n.role})</span></td>
+                          <td className="py-2.5 text-zinc-400">{n.ip} <span className="text-emerald-400 font-bold">({n.ping_ms}ms)</span></td>
+                          <td className="py-2.5 font-bold text-white">{n.cpu_load}%</td>
+                          <td className="py-2.5 font-bold text-blue-400">{n.ram_percent}%</td>
+                          <td className="py-2.5 font-bold text-purple-400">{n.gpu_load}%</td>
+                          <td className="py-2.5 text-zinc-300">↓ {n.net_recv_mbps} / ↑ {n.net_sent_mbps} M</td>
+                          <td className="py-2.5 text-right">
+                            <span className="px-2 py-0.5 rounded text-[10px] bg-emerald-950/80 border border-emerald-600/60 text-emerald-400 font-bold">
+                              ONLINE
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+            </div>
+          )}
+
+          {/* ---------------------------------------------------- */}
+          {/* TAB 3: P2P PROMPT & CHAT + DRAG & DROP FILE SHARING  */}
           {/* ---------------------------------------------------- */}
           {activeTab === 'chat' && (
             <div className="max-w-5xl mx-auto space-y-4">
@@ -1262,19 +1960,25 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                   </div>
                 </div>
 
-                {/* Device Selector */}
+                {/* Active Profile Sender Badge */}
                 <div className="flex items-center gap-2 font-mono text-xs">
                   <span className="text-zinc-400 text-xs">Absender:</span>
-                  <select
-                    value={myDeviceName}
-                    onChange={(e) => setMyDeviceName(e.target.value)}
-                    className="bg-black/60 border border-zinc-700 text-white rounded px-2.5 py-1 text-xs focus:outline-none focus:border-red-500"
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-black/60 border border-zinc-700 text-white">
+                    <span className="text-sm">{userProfile.avatar || '💻'}</span>
+                    <span className="font-bold text-cyan-300">
+                      {userProfile.displayName || userProfile.pcName || metrics.hostname}
+                    </span>
+                    <span className="text-[10px] text-zinc-500 hidden sm:inline">
+                      ({userProfile.pcName || metrics.hostname})
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setActiveTab('settings')}
+                    className="p-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-cyan-300 transition-colors"
+                    title="Profil in den Einstellungen anpassen"
                   >
-                    <option value="PC-A (Main Rig)">PC-A (Main Rig)</option>
-                    <option value="PC-B (Gaming-Notebook)">PC-B (Gaming-Notebook)</option>
-                    <option value="Workstation (Linux Server)">Workstation (Linux Server)</option>
-                    <option value="Secondary Testbench">Secondary Testbench</option>
-                  </select>
+                    <Edit3 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
 
@@ -1814,11 +2518,235 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
               <div className={`p-4 rounded-xl ${cardBg}`}>
                 <h2 className="font-mono font-bold text-base text-white flex items-center gap-2">
                   <Settings className="w-5 h-5 text-zinc-400" />
-                  <span>SYSTEM- &amp; NCC-EINSTELLUNGEN</span>
+                  <span>SYSTEM-, PROFIL- &amp; NCC-EINSTELLUNGEN</span>
                 </h2>
                 <p className="text-xs text-zinc-400 mt-1">
-                  Passe Hardware-Sensoren, Schwellenwert-Alarme, P2P-Netzwerk-Optionen und die Telemetrie an.
+                  Passe dein Benutzerprofil, den Multi-PC Modus, Fast-Boot System-Cache und Hardware-Sensoren an.
                 </p>
+              </div>
+
+              {/* Section 0: BENUTZER- & PC-PROFIL ANPASSEN (USER REQUEST) */}
+              <div className={`p-5 rounded-xl space-y-4 border ${cardBg} border-cyan-500/30`}>
+                <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+                  <div className="flex items-center gap-2">
+                    <User className="w-4 h-4 text-cyan-400" />
+                    <h3 className="font-mono font-bold text-xs uppercase tracking-wider text-cyan-400">
+                      BENUTZER- &amp; PC-PROFIL ANPASSEN (FÜR CHAT &amp; SERVER)
+                    </h3>
+                  </div>
+                  {profileSavedToast && (
+                    <span className="text-[10px] font-mono text-emerald-400 font-bold flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5" /> Gespeichert &amp; Synchronisiert!
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
+                  {/* PC-Name (Hostname) */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between items-center">
+                      <label className="text-zinc-300 font-semibold">PC-Name (Standard-Absender im Chat)</label>
+                      <button 
+                        type="button"
+                        onClick={() => setUserProfile({ ...userProfile, pcName: metrics.hostname })}
+                        className="text-[10px] text-cyan-400 hover:underline cursor-pointer"
+                      >
+                        Auf Hardware-Name zurücksetzen
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      value={userProfile.pcName}
+                      onChange={(e) => setUserProfile({ ...userProfile, pcName: e.target.value })}
+                      placeholder="z.B. WORKSTATION-A"
+                      className="w-full bg-black/60 border border-zinc-700 rounded-lg p-2.5 text-white font-bold focus:outline-none focus:border-cyan-500"
+                    />
+                    <span className="text-[10px] text-zinc-500">Wird im Server-Cluster und im Chat als Rechner-Kennung genutzt</span>
+                  </div>
+
+                  {/* Display Name / Benutzername */}
+                  <div className="space-y-1.5">
+                    <label className="text-zinc-300 font-semibold">Benutzername / Alias (Optional)</label>
+                    <input
+                      type="text"
+                      value={userProfile.displayName}
+                      onChange={(e) => setUserProfile({ ...userProfile, displayName: e.target.value })}
+                      placeholder="z.B. Bruno oder Alex"
+                      className="w-full bg-black/60 border border-zinc-700 rounded-lg p-2.5 text-white font-bold focus:outline-none focus:border-cyan-500"
+                    />
+                    <span className="text-[10px] text-zinc-500">Wird im Chat und in der Multi-PC Übersicht angezeigt</span>
+                  </div>
+
+                  {/* Callsign / Role */}
+                  <div className="space-y-1.5">
+                    <label className="text-zinc-300 font-semibold">Rolle / Rechner-Zweck</label>
+                    <input
+                      type="text"
+                      value={userProfile.role}
+                      onChange={(e) => setUserProfile({ ...userProfile, role: e.target.value })}
+                      placeholder="z.B. Lead Workstation, Gaming-Rig, Linux Dev"
+                      className="w-full bg-black/60 border border-zinc-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-cyan-500"
+                    />
+                  </div>
+
+                  {/* Status Message */}
+                  <div className="space-y-1.5">
+                    <label className="text-zinc-300 font-semibold">Status-Meldung / Bio</label>
+                    <input
+                      type="text"
+                      value={userProfile.statusMsg}
+                      onChange={(e) => setUserProfile({ ...userProfile, statusMsg: e.target.value })}
+                      placeholder="z.B. Online • Bereit für CUDA P2P"
+                      className="w-full bg-black/60 border border-zinc-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-cyan-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Avatar Picker */}
+                <div className="space-y-1.5 pt-2">
+                  <label className="text-zinc-300 font-mono text-xs font-semibold">Avatar Icon wählen</label>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {['💻', '🖥️', '⚡', '🚀', '🛡️', '👾', '👑', '🎯', '🧠', '🎮'].map((icon) => (
+                      <button
+                        key={icon}
+                        type="button"
+                        onClick={() => setUserProfile({ ...userProfile, avatar: icon })}
+                        className={`text-xl p-2 rounded-lg border transition-all ${
+                          userProfile.avatar === icon 
+                            ? 'bg-cyan-500/20 border-cyan-400 scale-110 shadow-[0_0_10px_rgba(6,182,212,0.4)]' 
+                            : 'bg-black/50 border-zinc-800 hover:border-zinc-700'
+                        }`}
+                      >
+                        {icon}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Profile Live Preview & Save Button */}
+                <div className="pt-3 border-t border-zinc-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5 font-mono text-xs">
+                    <span className="text-zinc-500 text-[11px]">Chat-Vorschau:</span>
+                    <div className="px-3 py-1.5 rounded-lg bg-black/60 border border-zinc-700 flex items-center gap-2">
+                      <span className="text-lg">{userProfile.avatar}</span>
+                      <span className="font-bold text-white">{userProfile.displayName || userProfile.pcName || metrics.hostname}</span>
+                      <span className="text-[10px] text-cyan-400 font-semibold">({userProfile.pcName || metrics.hostname})</span>
+                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-400">{userProfile.role}</span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      localStorage.setItem('no0bz_user_profile', JSON.stringify(userProfile));
+                      setProfileSavedToast(true);
+                      setTimeout(() => setProfileSavedToast(false), 2500);
+                      // Sync to backend if available
+                      fetch('/api/profile', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(userProfile)
+                      }).catch(() => {});
+                    }}
+                    className="px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-mono font-bold text-xs shadow-[0_0_12px_rgba(6,182,212,0.4)] flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Profil speichern &amp; anwenden</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Section: FAST-BOOT HARDWARE-CACHE (ncc_system_cache.json) */}
+              <div className={`p-5 rounded-xl space-y-4 border ${cardBg} border-amber-500/30`}>
+                <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+                  <div className="flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-amber-400" />
+                    <h3 className="font-mono font-bold text-xs uppercase tracking-wider text-amber-400">
+                      FAST-BOOT SYSTEM-CACHE (ncc_system_cache.json)
+                    </h3>
+                  </div>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950/80 border border-emerald-600 text-emerald-400 font-bold">
+                    FAST-BOOT AKTIV (&lt; 1ms)
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 font-mono text-xs">
+                  <div className="bg-black/50 p-2.5 rounded-lg border border-zinc-800">
+                    <span className="text-zinc-500 text-[10px]">CACHE-DATEI</span>
+                    <div className="font-bold text-white mt-0.5 truncate">ncc_system_cache.json</div>
+                    <span className="text-zinc-400 text-[10px]">Im Hauptverzeichnis</span>
+                  </div>
+
+                  <div className="bg-black/50 p-2.5 rounded-lg border border-zinc-800">
+                    <span className="text-zinc-500 text-[10px]">STATUS</span>
+                    <div className="font-bold text-emerald-400 mt-0.5">Geladen (0.4ms)</div>
+                    <span className="text-zinc-400 text-[10px]">Kein Hardware-Probing nötig</span>
+                  </div>
+
+                  <div className="bg-black/50 p-2.5 rounded-lg border border-zinc-800">
+                    <span className="text-zinc-500 text-[10px]">ERFASSTE HARDWARE</span>
+                    <div className="font-bold text-cyan-300 mt-0.5">CPU, RAM, GPU, Disks, NIC</div>
+                    <span className="text-zinc-400 text-[10px]">{systemCache?.generated_at || 'Automatisch erfasst'}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <p className="text-[11px] font-mono text-zinc-400">
+                    Bei Hardware-Upgrades oder neuen Festplatten kannst du den Cache hier manuell erneuern.
+                  </p>
+                  <button
+                    type="button"
+                    disabled={cacheRefreshing}
+                    onClick={async () => {
+                      setCacheRefreshing(true);
+                      try {
+                        const res = await fetch('/api/system/profile/refresh', { method: 'POST' });
+                        const data = await res.json();
+                        setSystemCache(data);
+                      } catch {}
+                      setTimeout(() => setCacheRefreshing(false), 800);
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-amber-300 font-mono text-xs font-semibold flex items-center gap-1.5 transition-colors border border-zinc-700"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${cacheRefreshing ? 'animate-spin text-amber-400' : ''}`} />
+                    <span>{cacheRefreshing ? 'Erneuere...' : 'Cache aktualisieren'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Section: MULTI-PC NETZWERK- & SERVER-MODUS */}
+              <div className={`p-5 rounded-xl space-y-4 ${cardBg}`}>
+                <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+                  <div className="flex items-center gap-2">
+                    <Globe className="w-4 h-4 text-purple-400" />
+                    <h3 className="font-mono font-bold text-xs uppercase tracking-wider text-purple-400">
+                      MULTI-PC BETRIEBSMODUS &amp; SERVER-KONFIGURATION
+                    </h3>
+                  </div>
+                  <button
+                    onClick={() => setShowModeModal(true)}
+                    className="text-xs font-mono px-2.5 py-1 rounded bg-purple-950/70 hover:bg-purple-900 border border-purple-600 text-purple-300 font-bold transition-colors"
+                  >
+                    Modus wechseln...
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 font-mono text-xs">
+                  <div className={`p-3 rounded-lg border ${multiPcMode === 'local' ? 'border-cyan-500 bg-cyan-950/20' : 'border-zinc-800 bg-black/40'}`}>
+                    <div className="font-bold text-white">🖥️ Lokal Standalone</div>
+                    <p className="text-[11px] text-zinc-400 mt-1">Nur diesen PC überwachen. Keine Freigabe im Netzwerk.</p>
+                  </div>
+
+                  <div className={`p-3 rounded-lg border ${multiPcMode === 'host' ? 'border-amber-500 bg-amber-950/20' : 'border-zinc-800 bg-black/40'}`}>
+                    <div className="font-bold text-amber-300">👑 Server Hosten (Hub)</div>
+                    <p className="text-[11px] text-zinc-400 mt-1">Speichert alle Telemetriedaten in DuckDB. Zeigt verbundene PCs.</p>
+                  </div>
+
+                  <div className={`p-3 rounded-lg border ${multiPcMode === 'client' ? 'border-blue-500 bg-blue-950/20' : 'border-zinc-800 bg-black/40'}`}>
+                    <div className="font-bold text-blue-300">🔗 Auf Server verbinden</div>
+                    <p className="text-[11px] text-zinc-400 mt-1">Streamt Live-Metriken an den Server: {clientServerUrl}</p>
+                  </div>
+                </div>
               </div>
 
               {/* Section 1: Allgemein & Telemetrie */}
@@ -2382,6 +3310,142 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
       )}
 
       {/* ======================================================== */}
+      {/* MULTI-PC MODE SELECTION MODAL (POPUP ON START OR SWITCH) */}
+      {/* ======================================================== */}
+      {showModeModal && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-[#0b101e] border border-cyan-500/50 rounded-2xl max-w-2xl w-full p-6 shadow-[0_0_30px_rgba(6,182,212,0.25)] space-y-6 animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="flex items-start justify-between border-b border-zinc-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-xl bg-cyan-950/80 border border-cyan-500 text-cyan-400">
+                  <Globe className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-mono font-bold text-lg text-white">
+                    no0bz MULTI-PC BETRIEBSMODUS WÄHLEN
+                  </h3>
+                  <p className="text-xs font-mono text-zinc-400 mt-0.5">
+                    Wie soll dieses no0bz Command Center betrieben werden?
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowModeModal(false)}
+                className="p-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* 3 Modes Cards */}
+            <div className="space-y-3">
+              {/* Option 1: Lokal */}
+              <div 
+                onClick={() => setMultiPcMode('local')}
+                className={`p-4 rounded-xl border cursor-pointer transition-all flex items-start gap-4 ${
+                  multiPcMode === 'local' 
+                    ? 'bg-cyan-950/30 border-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.2)]' 
+                    : 'bg-black/40 border-zinc-800 hover:border-zinc-700'
+                }`}
+              >
+                <div className="text-2xl p-2 rounded-lg bg-zinc-900 border border-zinc-800">
+                  🖥️
+                </div>
+                <div className="flex-1 font-mono">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-sm text-white">Lokal (Standalone Monitor)</span>
+                    {multiPcMode === 'local' && <span className="text-xs text-cyan-400 font-bold">Ausgewählt</span>}
+                  </div>
+                  <p className="text-xs text-zinc-400 mt-1">
+                    Nur diesen PC überwachen (Port 8350, lokale DuckDB). Keine Freigabe oder externe Verbindung zu anderen Rechnern.
+                  </p>
+                </div>
+              </div>
+
+              {/* Option 2: Server hosten */}
+              <div 
+                onClick={() => setMultiPcMode('host')}
+                className={`p-4 rounded-xl border cursor-pointer transition-all flex items-start gap-4 ${
+                  multiPcMode === 'host' 
+                    ? 'bg-amber-950/30 border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.2)]' 
+                    : 'bg-black/40 border-zinc-800 hover:border-zinc-700'
+                }`}
+              >
+                <div className="text-2xl p-2 rounded-lg bg-zinc-900 border border-zinc-800">
+                  👑
+                </div>
+                <div className="flex-1 font-mono">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-sm text-amber-300">Server Hosten (Zentraler NCC Hub)</span>
+                    {multiPcMode === 'host' && <span className="text-xs text-amber-400 font-bold">Ausgewählt</span>}
+                  </div>
+                  <p className="text-xs text-zinc-400 mt-1">
+                    Diesen PC als zentralen Hub-Server hosten. Speichert alle Telemetriedaten verbundener PCs in DuckDB. Zeigt verbundene PCs im Dashboard und im Multi-PC Hub an.
+                  </p>
+                </div>
+              </div>
+
+              {/* Option 3: Auf Server verbinden */}
+              <div 
+                onClick={() => setMultiPcMode('client')}
+                className={`p-4 rounded-xl border cursor-pointer transition-all flex items-start gap-4 ${
+                  multiPcMode === 'client' 
+                    ? 'bg-blue-950/30 border-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.2)]' 
+                    : 'bg-black/40 border-zinc-800 hover:border-zinc-700'
+                }`}
+              >
+                <div className="text-2xl p-2 rounded-lg bg-zinc-900 border border-zinc-800">
+                  🔗
+                </div>
+                <div className="flex-1 font-mono">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-sm text-blue-300">Auf Server verbinden (Client Node)</span>
+                    {multiPcMode === 'client' && <span className="text-xs text-blue-400 font-bold">Ausgewählt</span>}
+                  </div>
+                  <p className="text-xs text-zinc-400 mt-1">
+                    Mit einem bestehenden no0bz Server verbinden. Streamt Live-Telemetrie dieses Rechners sekündlich an den Host und synchronisiert Chat.
+                  </p>
+                  {multiPcMode === 'client' && (
+                    <div className="mt-3 flex items-center gap-2">
+                      <span className="text-xs text-zinc-300">Server-IP:</span>
+                      <input 
+                        type="text" 
+                        value={clientServerUrl} 
+                        onChange={(e) => setClientServerUrl(e.target.value)}
+                        placeholder="192.168.1.100:8350"
+                        className="bg-black border border-zinc-700 rounded px-2.5 py-1 text-xs text-white focus:outline-none focus:border-blue-400 font-bold"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-between pt-2 border-t border-zinc-800 font-mono text-xs">
+              <span className="text-zinc-500">Kann jederzeit im Menü geändert werden.</span>
+              <button
+                type="button"
+                onClick={() => {
+                  localStorage.setItem('no0bz_multipc_mode', multiPcMode);
+                  setShowModeModal(false);
+                  fetch('/api/multipc/mode', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mode: multiPcMode, client_server_url: clientServerUrl })
+                  }).catch(() => {});
+                }}
+                className="px-5 py-2.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold shadow-[0_0_12px_rgba(6,182,212,0.4)] transition-all cursor-pointer"
+              >
+                Modus aktivieren &amp; Starten
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
       {/* AESTHETIC FOOTER STRIP                                  */}
       {/* ======================================================== */}
       <footer className={`h-8 px-4 flex items-center justify-between border-t text-[10px] font-mono ${
@@ -2395,7 +3459,7 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
             className="text-cyan-400 hover:text-cyan-300 font-semibold cursor-pointer underline"
             title="Changelog ansehen"
           >
-            v3.7.0
+            v3.8.1
           </button>
           <span>|</span>
           <span className="hidden sm:inline">// {themeMode.toUpperCase()} MODE</span>

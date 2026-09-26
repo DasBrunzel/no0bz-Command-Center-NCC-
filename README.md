@@ -13,7 +13,7 @@
 **High-Performance Real-Time System Monitor & Local P2P Sync Hub**  
 *Built for Power Users, Gamers, Devs & Homelab Admins.*
 
-[![Version](https://img.shields.io/badge/Version-v3.8.0-cyan.svg?style=for-the-badge)](https://github.com)
+[![Version](https://img.shields.io/badge/Version-v3.8.1-cyan.svg?style=for-the-badge)](https://github.com)
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![DuckDB](https://img.shields.io/badge/DuckDB-TimeSeries-FFF000?style=for-the-badge&logo=duckdb&logoColor=black)](https://duckdb.org)
@@ -71,9 +71,18 @@ Das **no0bz Command Center (NCC)** wurde von Grund auf als kompromisslos schnell
 
 ## ✨ Features
 
+- 📈 **Echtzeit Network I/O Canvas-Graph**:
+  - Hochpräziser 60 FPS Dual-Line Graph (Download RX Cyan / Upload TX Amber) mit Peak-Erkennung und Auto-Skalierung.
+- 🌐 **Multi-PC Architektur & Server-Cluster (Local / Server hosten / Client verbinden)**:
+  - Flexibler Betriebsmodus: Standalone (Lokal), zentraler NCC Master Server oder Client Node.
+  - Server-Präsenz im Interface inklusive DuckDB-Persistenz aller Remote-Telemetrien.
+  - "Wer ist auf dem Server verbunden?" Live-Übersicht mit Ping, Ressourcen-Load und Dashboard-Umschalter.
+- 👤 **Benutzer- & PC-Profil System**:
+  - Rechnername (Hostname) dient standardmäßig als Chat-Absender.
+  - Umfangreicher Profil-Editor in den Einstellungen (Alias, PC-Name, Cyber-Avatare, Rollen & Bio).
 - ⚡ **Fast-Boot Hardware-Cache (`ncc_system_cache.json`)**: Blitzstart in <1ms ohne erneutes Hardware-Probing.
 - ⚡ **1-Sekunden Live-Telemetrie via WebSockets**: Metriken werden in Echtzeit gestreamt.
-- 📜 **Integrierter Changelog-Viewer**: Direkt über das NCC-Menü und als Markdown auf GitHub verfügbar.
+- 📜 **Integrierter Changelog-Viewer**: Im Header-Button und als Markdown auf GitHub verfügbar.
 - 🎨 **Modernes Bento-Grid Dashboard**:
   - 8 Cyber-Themes: *CachyOS Cyan, Cyber Neon, Dark Matter OLED, Clean Light, Matrix Hacker, Dracula, Nordic Frost, Retro Amber*.
   - SVG-Gauges, animierte Balken & responsive Karten.
@@ -88,7 +97,7 @@ Das **no0bz Command Center (NCC)** wurde von Grund auf als kompromisslos schnell
 - 🌡️ **LibreHardwareMonitor (LHM) Fallback**:
   - Liest automatisch Lüfterdrehzahlen (RPM), CPU Package Power & Mainboard-Sensoren über den lokalen LHM-Webserver (`http://127.0.0.1:8085/data.json`).
 - 🗄️ **DuckDB Time-Series Logging**:
-  - Speichert Telemetriedaten lokal in `no0bz_metrics.duckdb` mit 24h Rolling Window.
+  - Speichert Telemetriedaten lokal in `no0bz_metrics.duckdb` mit 24h Rolling Window (inkl. Multi-PC Node Metriken).
   - Interaktive Verlaufs-Charts über die REST-Schnittstelle (`/api/history`).
 - 🛠️ **Integrierter Task- / Prozess-Manager**:
   - Live-Liste aller laufenden Prozesse sortiert nach RAM / CPU.
@@ -110,7 +119,7 @@ Das Skript installiert automatisch alle notwendigen Pakete aus der `requirements
 
 ```text
 ========================================================
-  Starting no0bz Command Center (NCC) v3.8.0...
+  Starting no0bz Command Center (NCC) v3.8.1...
 ========================================================
 [NCC] Dashboard running at: http://127.0.0.1:8350
 ```
@@ -184,6 +193,11 @@ Um Lüfter-Drehzahlen (RPM) und erweiterte Mainboard-Temperaturen anzuzeigen:
 | `WS` | `/ws/live` | WebSocket-Stream mit sekundengenauen Systemmetriken im JSON-Format |
 | `GET` | `/` | Das vollständige, reaktive HTML5/JS Dashboard |
 | `GET` | `/api/metrics` | Snapshot der aktuellen Systemmetriken als REST-Response |
+| `GET` | `/api/nodes` | Übersicht aller verbundenen PCs und des Host-Servers |
+| `POST` | `/api/nodes/register` | Registriert einen Client-PC am zentralen Server |
+| `POST` | `/api/nodes/telemetry` | Empfängt und speichert Telemetriedaten verbundener PCs in DuckDB |
+| `GET` | `/api/multipc/mode` | Ruft den aktuellen Multi-PC Modus ab (Lokal, Server, Client) |
+| `POST` | `/api/profile` | Synchronisiert das Benutzer- & PC-Profil |
 | `GET` | `/api/system/profile` | Liefert das gecachte Fast-Boot Hardware-Profil (`ncc_system_cache.json`) |
 | `POST` | `/api/system/profile/refresh` | Forciert eine Neu-Erkennung der Hardware und aktualisiert den Cache |
 | `GET` | `/api/changelog` | Liefert das aktuelle Changelog als JSON-Payload |

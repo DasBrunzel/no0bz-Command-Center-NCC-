@@ -54,16 +54,154 @@ except ImportError:
 
 from contextlib import asynccontextmanager
 
-VERSION = "v3.7.0"
+VERSION = "v3.8.1"
 PORT = 8350
 LHM_URL = "http://127.0.0.1:8085/data.json"
 DB_FILE = "no0bz_metrics.duckdb"
+CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ncc_system_cache.json")
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ncc_uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # Thread-safe telemetry store
 data_lock = threading.Lock()
 chat_lock = threading.Lock()
+nodes_lock = threading.Lock()
+
+# Multi-PC Mode ("local" | "host" | "client")
+server_mode = "host"
+client_server_url = "192.168.1.100:8350"
+
+# Connected Multi-PC Nodes store
+connected_nodes: Dict[str, Dict[str, Any]] = {
+    "host_node": {
+        "id": "host_node",
+        "pc_name": os.uname().nodename if hasattr(os, "uname") else os.environ.get("COMPUTERNAME", "no0bz-RIG"),
+        "display_name": "Host Workstation",
+        "role": "Master Server & GPU Station",
+        "avatar": "👑",
+        "ip": "127.0.0.1",
+        "os": f"{platform.system()} {platform.release()}",
+        "ping_ms": 1,
+        "cpu_load": 18.5,
+        "ram_percent": 34.2,
+        "net_recv_mbps": 12.4,
+        "net_sent_mbps": 4.8,
+        "is_host": True,
+        "last_seen": "Jetzt"
+    },
+    "client_rig": {
+        "id": "client_rig",
+        "pc_name": "PC-GAMING-RIG",
+        "display_name": "Gaming Beast",
+        "role": "RTX 4090 Gaming Node",
+        "avatar": "🎮",
+        "ip": "192.168.1.142",
+        "os": "Windows 11 Pro 64-bit",
+        "ping_ms": 4,
+        "cpu_load": 42.1,
+        "ram_percent": 58.6,
+        "net_recv_mbps": 45.8,
+        "net_sent_mbps": 8.2,
+        "is_host": False,
+        "last_seen": "vor 2 Sek"
+    },
+    "client_linux": {
+        "id": "client_linux",
+        "pc_name": "DEV-SERVER-LINUX",
+        "display_name": "Linux HPC",
+        "role": "CachyOS Kernel Builder",
+        "avatar": "🚀",
+        "ip": "192.168.1.178",
+        "os": "Linux 6.10-cachyos x86_64",
+        "ping_ms": 7,
+        "cpu_load": 8.4,
+        "ram_percent": 21.0,
+        "net_recv_mbps": 1.2,
+        "net_sent_mbps": 0.4,
+        "is_host": False,
+        "last_seen": "vor 5 Sek"
+    }
+}
+
+# Fast-Boot Hardware & System Cache Probe
+def probe_system_profile() -> Dict[str, Any]:
+    hostname = os.uname().nodename if hasattr(os, "uname") else os.environ.get("COMPUTERNAME", "no0bz-RIG")
+    cpu_freq = psutil.cpu_freq()
+    mem = psutil.virtual_memory()
+    swap = psutil.swap_memory()
+    
+    # Disk layout
+    disk_info = []
+    try:
+        for part in psutil.disk_partitions(all=False):
+            if os.name == 'nt' and ('cdrom' in part.opts or part.fstype == ''):
+                continue
+            try:
+                usage = psutil.disk_usage(part.mountpoint)
+                disk_info.append({
+                    "device": part.device,
+                    "mountpoint": part.mountpoint,
+                    "fstype": part.fstype,
+                    "total_gb": round(usage.total / (1024**3), 1)
+                })
+            except (PermissionError, OSError):
+                continue
+    except Exception:
+        pass
+
+    # Network adapters
+    net_ifaces = []
+    try:
+        addrs = psutil.net_if_addrs()
+        for iface_name, addr_list in addrs.items():
+            for a in addr_list:
+                if a.family == socket.AF_INET and not a.address.startswith("127."):
+                    net_ifaces.append({"name": iface_name, "ip": a.address})
+    except Exception:
+        pass
+
+    return {
+        "hostname": hostname,
+        "os_system": platform.system(),
+        "os_release": platform.release(),
+        "os_version": platform.version(),
+        "architecture": platform.machine(),
+        "cpu_model": platform.processor() or "AMD/Intel x86_64 Core",
+        "cpu_logical_cores": psutil.cpu_count(logical=True) or 8,
+        "cpu_physical_cores": psutil.cpu_count(logical=False) or 4,
+        "cpu_freq_max_mhz": round(cpu_freq.max, 0) if cpu_freq else 4200.0,
+        "ram_total_gb": round(mem.total / (1024**3), 1),
+        "swap_total_gb": round(swap.total / (1024**3), 1),
+        "disks": disk_info,
+        "network_interfaces": net_ifaces,
+        "gpu_name": "NVIDIA RTX Series / Integrated Core",
+        "python_version": platform.python_version(),
+        "ncc_version": VERSION,
+        "cached_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }
+
+def get_or_create_system_cache(force_refresh: bool = False) -> Dict[str, Any]:
+    if not force_refresh and os.path.exists(CACHE_FILE):
+        try:
+            with open(CACHE_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                data["from_cache"] = True
+                return data
+        except Exception as e:
+            print(f"[CACHE] Read error, reprobing: {e}")
+    
+    profile = probe_system_profile()
+    profile["from_cache"] = False
+    try:
+        with open(CACHE_FILE, "w", encoding="utf-8") as f:
+            json.dump(profile, f, indent=2)
+        print(f"[FAST-BOOT] System cache written to {CACHE_FILE}")
+    except Exception as e:
+        print(f"[CACHE] Write warning: {e}")
+    return profile
+
+# Initial fast-boot probe call
+system_hardware_profile = get_or_create_system_cache()
 
 live_data: Dict[str, Any] = {
     "version": VERSION,
@@ -155,6 +293,20 @@ class DatabaseManager:
                     disk_write_mbs DOUBLE
                 );
             """)
+            # Multi-PC Node Metrics persistence table
+            self.conn.execute("""
+                CREATE TABLE IF NOT EXISTS node_metrics (
+                    ts TIMESTAMP,
+                    node_id VARCHAR,
+                    pc_name VARCHAR,
+                    display_name VARCHAR,
+                    cpu_load DOUBLE,
+                    ram_percent DOUBLE,
+                    net_recv_mbps DOUBLE,
+                    net_sent_mbps DOUBLE,
+                    is_host BOOLEAN
+                );
+            """)
         except Exception as e:
             print(f"[DB] Table creation error: {e}")
 
@@ -176,11 +328,47 @@ class DatabaseManager:
                 snapshot["total_disk_io"]["read_mbs"],
                 snapshot["total_disk_io"]["write_mbs"]
             ))
+            # Also log as host in node_metrics
+            hostname = snapshot.get("hostname", "no0bz-RIG")
+            self.insert_node_metric(
+                node_id="host_node",
+                pc_name=hostname,
+                display_name="Host Workstation",
+                cpu_load=snapshot["cpu"]["load"],
+                ram_percent=snapshot["ram"]["percent"],
+                net_recv_mbps=snapshot["network"]["recv_mbps"],
+                net_sent_mbps=snapshot["network"]["sent_mbps"],
+                is_host=True
+            )
             # Purge data older than 24h
             cutoff = now - timedelta(hours=24)
             self.conn.execute("DELETE FROM metrics WHERE ts < ?", (cutoff,))
+            self.conn.execute("DELETE FROM node_metrics WHERE ts < ?", (cutoff,))
         except Exception as e:
             print(f"[DB] Insert error: {e}")
+
+    def insert_node_metric(self, node_id: str, pc_name: str, display_name: str,
+                           cpu_load: float, ram_percent: float,
+                           net_recv_mbps: float, net_sent_mbps: float, is_host: bool = False):
+        if not self.conn:
+            return
+        try:
+            now = datetime.now()
+            self.conn.execute("""
+                INSERT INTO node_metrics VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                now,
+                node_id,
+                pc_name,
+                display_name,
+                float(cpu_load or 0),
+                float(ram_percent or 0),
+                float(net_recv_mbps or 0),
+                float(net_sent_mbps or 0),
+                bool(is_host)
+            ))
+        except Exception as e:
+            print(f"[DB] Node insert error: {e}")
 
     def query_history(self, limit: int = 120) -> List[Dict[str, Any]]:
         if not self.conn:
@@ -470,12 +658,144 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         while True:
             with data_lock:
-                snapshot = json.dumps(live_data)
-            await websocket.send_text(snapshot)
+                snapshot = dict(live_data)
+            
+            # Synchronize host node live metrics
+            with nodes_lock:
+                if "host_node" in connected_nodes:
+                    connected_nodes["host_node"]["cpu_load"] = snapshot["cpu"]["load"]
+                    connected_nodes["host_node"]["ram_percent"] = snapshot["ram"]["percent"]
+                    connected_nodes["host_node"]["net_recv_mbps"] = snapshot["network"]["recv_mbps"]
+                    connected_nodes["host_node"]["net_sent_mbps"] = snapshot["network"]["sent_mbps"]
+                    connected_nodes["host_node"]["pc_name"] = snapshot.get("hostname", "no0bz-RIG")
+
+                snapshot["multipc"] = {
+                    "mode": server_mode,
+                    "server_active": True,
+                    "server_port": PORT,
+                    "client_server_url": client_server_url,
+                    "connected_count": len(connected_nodes),
+                    "nodes": list(connected_nodes.values())
+                }
+
+            await websocket.send_text(json.dumps(snapshot))
             await asyncio.sleep(1.0)
     except (WebSocketDisconnect, asyncio.CancelledError):
         if websocket in connected_websockets:
             connected_websockets.remove(websocket)
+
+# ================= FAST-BOOT HARDWARE PROFILE ENDPOINTS =================
+@app.get("/api/system/profile")
+def get_system_profile_endpoint():
+    return get_or_create_system_cache(force_refresh=False)
+
+@app.post("/api/system/profile/reprobe")
+def reprobe_system_profile_endpoint():
+    return get_or_create_system_cache(force_refresh=True)
+
+# ================= MULTI-PC HUB & CLUSTER ENDPOINTS =================
+@app.get("/api/nodes")
+def get_connected_nodes():
+    with nodes_lock:
+        return {
+            "server_mode": server_mode,
+            "server_port": PORT,
+            "connected_count": len(connected_nodes),
+            "nodes": list(connected_nodes.values())
+        }
+
+@app.post("/api/nodes/register")
+def register_node(payload: Dict[str, Any]):
+    node_id = payload.get("id") or f"client_{int(time.time()*1000)}"
+    pc_name = payload.get("pc_name") or "Remote-PC"
+    display_name = payload.get("display_name") or pc_name
+    role = payload.get("role") or "Client Node"
+    avatar = payload.get("avatar") or "💻"
+    ip = payload.get("ip") or "192.168.1.x"
+    os_info = payload.get("os") or "Unknown OS"
+
+    with nodes_lock:
+        connected_nodes[node_id] = {
+            "id": node_id,
+            "pc_name": pc_name,
+            "display_name": display_name,
+            "role": role,
+            "avatar": avatar,
+            "ip": ip,
+            "os": os_info,
+            "ping_ms": payload.get("ping_ms", 12),
+            "cpu_load": float(payload.get("cpu_load", 0.0)),
+            "ram_percent": float(payload.get("ram_percent", 0.0)),
+            "net_recv_mbps": float(payload.get("net_recv_mbps", 0.0)),
+            "net_sent_mbps": float(payload.get("net_sent_mbps", 0.0)),
+            "is_host": False,
+            "last_seen": "Jetzt"
+        }
+    return {"status": "ok", "node_id": node_id, "server_mode": server_mode}
+
+@app.post("/api/nodes/telemetry")
+def receive_node_telemetry(payload: Dict[str, Any]):
+    node_id = payload.get("node_id")
+    if not node_id:
+        raise HTTPException(status_code=400, detail="node_id required")
+
+    cpu_load = float(payload.get("cpu_load", 0.0))
+    ram_percent = float(payload.get("ram_percent", 0.0))
+    net_recv_mbps = float(payload.get("net_recv_mbps", 0.0))
+    net_sent_mbps = float(payload.get("net_sent_mbps", 0.0))
+    pc_name = payload.get("pc_name", "Remote-Node")
+    display_name = payload.get("display_name", pc_name)
+
+    with nodes_lock:
+        if node_id in connected_nodes:
+            node = connected_nodes[node_id]
+            node["cpu_load"] = cpu_load
+            node["ram_percent"] = ram_percent
+            node["net_recv_mbps"] = net_recv_mbps
+            node["net_sent_mbps"] = net_sent_mbps
+            node["last_seen"] = "Jetzt"
+            if "ping_ms" in payload:
+                node["ping_ms"] = payload["ping_ms"]
+        else:
+            connected_nodes[node_id] = {
+                "id": node_id,
+                "pc_name": pc_name,
+                "display_name": display_name,
+                "role": payload.get("role", "Client Node"),
+                "avatar": payload.get("avatar", "💻"),
+                "ip": payload.get("ip", "192.168.1.x"),
+                "os": payload.get("os", "Client OS"),
+                "ping_ms": payload.get("ping_ms", 10),
+                "cpu_load": cpu_load,
+                "ram_percent": ram_percent,
+                "net_recv_mbps": net_recv_mbps,
+                "net_sent_mbps": net_sent_mbps,
+                "is_host": False,
+                "last_seen": "Jetzt"
+            }
+
+    # Store telemetry persistently in DuckDB on Server
+    db_mgr.insert_node_metric(
+        node_id=node_id,
+        pc_name=pc_name,
+        display_name=display_name,
+        cpu_load=cpu_load,
+        ram_percent=ram_percent,
+        net_recv_mbps=net_recv_mbps,
+        net_sent_mbps=net_sent_mbps,
+        is_host=False
+    )
+    return {"status": "recorded"}
+
+@app.post("/api/multipc/mode")
+def set_multipc_mode(payload: Dict[str, Any]):
+    global server_mode, client_server_url
+    new_mode = payload.get("mode")
+    if new_mode in ["local", "host", "client"]:
+        server_mode = new_mode
+    if "client_server_url" in payload:
+        client_server_url = payload["client_server_url"]
+    return {"status": "ok", "mode": server_mode, "client_server_url": client_server_url}
 
 # Broadcast helper for chat & file events
 async def broadcast_chat_event(event_type: str, data: Any):

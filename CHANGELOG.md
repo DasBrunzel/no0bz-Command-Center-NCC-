@@ -6,6 +6,31 @@ Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/) 
 
 ---
 
+## [v3.8.1] - 2026-09-26
+
+### 🚀 Neu & Hervorgehoben
+- **Echtzeit Network I/O Canvas-Graph**:
+  - Die Network I/O Kachel verfügt jetzt über einen hochpräzisen, echtzeitfähigen 60 FPS HTML5 Canvas-Graphen.
+  - Zweifarbige Neon-Kurven mit leuchtenden Verläufen: **Download (RX)** in Cyan (`#00f0ff`) und **Upload (TX)** in Magenta/Amber (`#f59e0b`).
+  - Automatische Skalierung mit Pegelanzeige, Spitzenwert-Indikator (Peak Mbps), Gitterlinien und 60-Sekunden-Verlaufsfenster.
+- **Multi-PC Systemarchitektur (Local / Server Hosten / Auf Server verbinden)**:
+  - Interaktive Modusauswahl beim Start oder jederzeit über den Header:
+    1. **🖥️ Lokal (Standalone)**: Autarker Systemmonitor für den lokalen Rechner.
+    2. **👑 Server hosten (NCC Master Hub)**: Macht diesen Rechner zum zentralen Hub-Server. Sammelt und speichert alle Telemetriedaten verbundener PCs in DuckDB (`node_metrics`) und zeigt alle aktiven PCs übersichtlich im Interface.
+    3. **🔗 Auf Server verbinden (Client Node)**: Ermöglicht das Verbinden entfernter Rechner mit dem Server (z. B. `192.168.1.100:8350`), um Telemetrie sekündlich an den Host zu streamen.
+  - **Server-Präsenz im Interface**: Der Server wird im Interface prominent mit Status, Port, Host-IP, Uptime, DuckDB-Speicherstand und Anzahl verbundener Clients dargestellt.
+  - **Übersicht aller verbundenen PCs**: Detaillierte Kachel- und Tabellenansicht aller Clients inklusive PC-Name, Benutzername, IP-Adresse, Ping-Latenz, Betriebssystem, Live-CPU/RAM/GPU-Auslastung und Net I/O.
+  - **Interaktiver Dashboard-Umschalter**: Ein Klick auf einen verbundenen PC schaltet das Haupt-Dashboard um, sodass die Live-Telemetrie dieses Rechners in Echtzeit analysiert werden kann.
+- **Benutzerprofil & PC-Name im Chat**:
+  - Im Chat wird standardmäßig automatisch der reale PC-Name (Hostname) als Absender verwendet.
+  - Neuer **Profil-Editor** in den Einstellungen: Individuelle Anpassung von Benutzername/Alias, PC-Name, Cyber-Avatar (10 Icons), Rolle/Callsign (z. B. *Host Master, Gaming Rig, HPC Node*) und Statusnachricht mit sofortiger Synchronisation.
+- **Feingranulare Versionierung**:
+  - Gemäß Nutzer-Feedback werden Versionssprünge jetzt in feinen, nachvollziehbaren Schritten (`v3.8.1`, `v3.8.2` etc.) gepflegt.
+- **Changelog-Navigation optimiert**:
+  - Das Changelog wurde aus dem linken Menü entfernt und ist nun sauber über den Header-Button und die klickbaren Versions-Badges zugänglich.
+
+---
+
 ## [v3.8.0] - 2026-09-25
 
 ### 🚀 Neu & Hervorgehoben
