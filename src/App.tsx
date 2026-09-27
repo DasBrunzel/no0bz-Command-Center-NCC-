@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { 
   Activity, Cpu, HardDrive, Wifi, Zap, Terminal, 
   Trash2, Search, Sliders, RefreshCw, Layers, ArrowDown, ArrowUp, Disc,
@@ -15,6 +15,7 @@ import {
 export type MultiPcMode = 'local' | 'host' | 'client';
 
 export interface UserProfile {
+  clientId?: string;
   pcName: string;
   displayName: string;
   avatar: string;
@@ -36,10 +37,17 @@ export interface RemoteNode {
   ping_ms: number;
   last_seen: string;
   cpu_load: number;
+  cpu_model?: string;
+  gpu_model?: string;
   ram_percent: number;
+  ram_total_gb?: number;
+  ram_used_gb?: number;
   gpu_load: number;
+  gpu_temp?: number;
   net_recv_mbps: number;
   net_sent_mbps: number;
+  uptime?: string;
+  version?: string;
 }
 
 interface DiskItem {
@@ -54,12 +62,14 @@ interface DiskItem {
   write_mbs: number;
 }
 
-interface ProcessItem {
+export interface ProcessItem {
   pid: number;
   name: string;
   cpu: number;
   ram: number;
+  memory_mb?: number;
   status: string;
+  user?: string;
 }
 
 interface HistoryPoint {
@@ -84,9 +94,12 @@ interface ChatAttachment {
   uploaded_at: string;
 }
 
-interface ChatMessage {
+export interface ChatMessage {
   id: string;
+  client_id?: string;
+  sender_id?: string;
   sender: string;
+  avatar?: string;
   timestamp: string;
   type: 'prompt' | 'files' | 'note';
   title?: string;
@@ -433,9 +446,18 @@ export default function App() {
   const [userProfile, setUserProfile] = useState<UserProfile>(() => {
     try {
       const saved = localStorage.getItem('no0bz_user_profile');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (!parsed.clientId) {
+          parsed.clientId = 'client_' + Math.random().toString(36).substring(2, 10);
+          localStorage.setItem('no0bz_user_profile', JSON.stringify(parsed));
+        }
+        return parsed;
+      }
     } catch {}
+    const newId = 'client_' + Math.random().toString(36).substring(2, 10);
     return {
+      clientId: newId,
       pcName: 'Host Workstation',
       displayName: 'Commander',
       avatar: '👑',
@@ -470,6 +492,8 @@ export default function App() {
       ping_ms: 0,
       last_seen: 'Live',
       cpu_load: 0.0,
+      cpu_model: 'Host CPU',
+      gpu_model: 'Host GPU',
       ram_percent: 0.0,
       gpu_load: 0.0,
       net_recv_mbps: 0.0,
@@ -501,6 +525,7 @@ export default function App() {
 
   const [metrics, setMetrics] = useState({
     cpu_load: 0.0,
+    cpu_model: '',
     cpu_temp: 42.0,
     cpu_power: 45.0,
     cpu_cores: [0, 0, 0, 0],
@@ -514,6 +539,8 @@ export default function App() {
     gpu_vram_total: 8.0,
     gpu_vram_used: 1.2,
     gpu_vram_pct: 15.0,
+    total_disk_read: 0.0,
+    total_disk_write: 0.0,
     net_recv_mbps: 0.0,
     net_sent_mbps: 0.0,
     fans_rpm: 0,
@@ -591,17 +618,14 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
   const fileInputRef = useRef<HTMLInputElement>(null);
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
-  // Processes state
+  // Processes state (Populated from real /api/processes with live sampling & sorting)
   const [processes, setProcesses] = useState<ProcessItem[]>([
-    { pid: 4892, name: 'Cyberpunk2077.exe', cpu: 34.2, ram: 14.5, status: 'running' },
-    { pid: 1840, name: 'python.exe (PyTorch CUDA)', cpu: 28.5, ram: 22.1, status: 'running' },
-    { pid: 3204, name: 'obs64.exe (NVENC AV1)', cpu: 8.4, ram: 4.2, status: 'running' },
-    { pid: 812, name: 'chrome.exe (32 Tabs)', cpu: 6.1, ram: 8.9, status: 'running' },
-    { pid: 1420, name: 'duckdb_worker', cpu: 4.8, ram: 3.1, status: 'running' },
-    { pid: 5601, name: 'discord.exe', cpu: 1.2, ram: 2.4, status: 'running' },
-    { pid: 742, name: 'system_monitor_daemon', cpu: 0.9, ram: 0.8, status: 'running' },
-    { pid: 128, name: 'system_interrupts', cpu: 0.4, ram: 0.1, status: 'running' }
+    { pid: 1420, name: 'system_monitor_daemon', cpu: 1.2, ram: 0.8, memory_mb: 85, status: 'running', user: 'system' }
   ]);
+  const [procLoading, setProcLoading] = useState(false);
+  const [procAutoRefresh, setProcAutoRefresh] = useState(true);
+  const [procSortKey, setProcSortKey] = useState<'cpu' | 'ram' | 'name' | 'pid'>('cpu');
+  const [procSortAsc, setProcSortAsc] = useState(false);
 
   // History state for Canvas
   const [historyPoints, setHistoryPoints] = useState<HistoryPoint[]>([]);
@@ -673,7 +697,8 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
             setMetrics(m => ({
               ...m,
               hostname: p.hostname || m.hostname,
-              gpu_name: p.gpu_name && p.gpu_name !== "NVIDIA RTX Series / Integrated Core" ? p.gpu_name : m.gpu_name,
+              cpu_model: p.cpu_model || m.cpu_model,
+              gpu_name: p.gpu_name ? p.gpu_name : m.gpu_name,
               ram_total: p.ram_total_gb || m.ram_total,
             }));
             if (p.disks && Array.isArray(p.disks) && p.disks.length > 0) {
@@ -690,6 +715,16 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
               })));
             }
           }
+        }
+      })
+      .catch(() => {});
+
+    // Fetch Initial Processes from Backend
+    fetch('/api/processes')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data) && data.length > 0) {
+          setProcesses(data);
         }
       })
       .catch(() => {});
@@ -727,6 +762,34 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
       })
       .catch(() => {});
   }, []);
+
+  // Live Process Manager Polling & Callback
+  const fetchProcesses = useCallback(async () => {
+    setProcLoading(true);
+    try {
+      const apiHost = window.location.port === '8350' || (window.location.host && !window.location.port) 
+        ? '' 
+        : 'http://localhost:8350';
+      const res = await fetch(`${apiHost}/api/processes`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          setProcesses(data);
+        }
+      }
+    } catch {}
+    setProcLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (activeTab !== 'processes') return;
+    fetchProcesses();
+    if (!procAutoRefresh) return;
+    const interval = setInterval(() => {
+      fetchProcesses();
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [activeTab, procAutoRefresh, fetchProcesses]);
 
   // Connect to Python Backend WebSocket if available, or simulate realistic live feed
   useEffect(() => {
@@ -788,13 +851,14 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
             setMetrics(prev => ({
               ...prev,
               cpu_load: typeof raw.cpu.load === 'number' ? raw.cpu.load : prev.cpu_load,
+              cpu_model: raw.cpu?.model || raw.cpu_model || prev.cpu_model,
               cpu_cores: Array.isArray(raw.cpu.cores) && raw.cpu.cores.length ? raw.cpu.cores : prev.cpu_cores,
               cpu_temp: raw.cpu.temp_c ?? prev.cpu_temp,
               cpu_power: raw.cpu.power_w ?? prev.cpu_power,
               ram_total: typeof raw.ram?.total_gb === 'number' && raw.ram.total_gb > 0 ? raw.ram.total_gb : prev.ram_total,
               ram_used: typeof raw.ram?.used_gb === 'number' ? raw.ram.used_gb : prev.ram_used,
               ram_percent: typeof raw.ram?.percent === 'number' ? raw.ram.percent : prev.ram_percent,
-              gpu_name: raw.gpu?.name && raw.gpu.name !== "NVIDIA RTX System Core" ? raw.gpu.name : (prev.gpu_name !== "GPU wird erkannt..." ? prev.gpu_name : (raw.gpu?.name || prev.gpu_name)),
+              gpu_name: raw.gpu?.name ? raw.gpu.name : prev.gpu_name,
               gpu_load: typeof raw.gpu?.load === 'number' ? raw.gpu.load : prev.gpu_load,
               gpu_temp: raw.gpu?.temp_c ?? prev.gpu_temp,
               gpu_power: raw.gpu?.power_w ?? prev.gpu_power,
@@ -803,6 +867,8 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
               gpu_vram_pct: typeof raw.gpu?.vram_percent === 'number' ? raw.gpu.vram_percent : prev.gpu_vram_pct,
               net_recv_mbps: typeof raw.network?.recv_mbps === 'number' ? raw.network.recv_mbps : prev.net_recv_mbps,
               net_sent_mbps: typeof raw.network?.sent_mbps === 'number' ? raw.network.sent_mbps : prev.net_sent_mbps,
+              total_disk_read: raw.total_disk_io ? raw.total_disk_io.read_mbs : prev.total_disk_read,
+              total_disk_write: raw.total_disk_io ? raw.total_disk_io.write_mbs : prev.total_disk_write,
               hostname: raw.hostname || prev.hostname,
               uptime: raw.uptime_seconds ? `${Math.floor(raw.uptime_seconds / 3600)}h ${Math.floor((raw.uptime_seconds % 3600) / 60)}m` : prev.uptime,
             }));
@@ -952,20 +1018,31 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
 
   // Total Disks Speed
   const totalReadSpeed = useMemo(() => {
-    return disks.reduce((acc, d) => acc + (d.read_mbs || 0), 0).toFixed(1);
-  }, [disks]);
+    const sum = disks.reduce((acc, d) => acc + (d.read_mbs || 0), 0);
+    return Math.max(sum, metrics.total_disk_read || 0).toFixed(1);
+  }, [disks, metrics.total_disk_read]);
 
   const totalWriteSpeed = useMemo(() => {
-    return disks.reduce((acc, d) => acc + (d.write_mbs || 0), 0).toFixed(1);
-  }, [disks]);
+    const sum = disks.reduce((acc, d) => acc + (d.write_mbs || 0), 0);
+    return Math.max(sum, metrics.total_disk_write || 0).toFixed(1);
+  }, [disks, metrics.total_disk_write]);
 
-  // Filtered Processes
+  // Filtered & Sorted Processes
   const filteredProcesses = useMemo(() => {
-    return processes.filter(p => 
+    let list = processes.filter(p => 
       p.name.toLowerCase().includes(procSearch.toLowerCase()) || 
       p.pid.toString().includes(procSearch)
     );
-  }, [processes, procSearch]);
+    list.sort((a, b) => {
+      let va = (a as any)[procSortKey] ?? 0;
+      let vb = (b as any)[procSortKey] ?? 0;
+      if (typeof va === 'string') {
+        return procSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+      }
+      return procSortAsc ? (Number(va) - Number(vb)) : (Number(vb) - Number(va));
+    });
+    return list;
+  }, [processes, procSearch, procSortKey, procSortAsc]);
 
   // All Attachments gathered from server vault & messages for Vault View
   const allVaultFiles = useMemo(() => {
@@ -1027,6 +1104,9 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
     const formData = new FormData();
     filesToUpload.forEach(f => formData.append('files', f));
     formData.append('sender', currentSender);
+    formData.append('client_id', userProfile.clientId || '');
+    formData.append('sender_id', userProfile.clientId || '');
+    formData.append('avatar', userProfile.avatar || '💻');
     formData.append('title', `Vault Upload (${filesToUpload.length} Datei${filesToUpload.length > 1 ? 'en' : ''})`);
     formData.append('note', `Direkt in das ${multiPcMode === 'host' ? 'serverseitige' : 'lokale'} Vault hochgeladene Dateien.`);
 
@@ -1082,8 +1162,8 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
       : (userProfile.pcName || metrics.hostname);
 
     const apiHost = window.location.port === '8350' || (window.location.host && !window.location.port) 
-      ? '' 
-      : 'http://localhost:8350';
+        ? '' 
+        : 'http://localhost:8350';
 
     // If uploading files, send real multipart/form-data to /api/chat/upload
     if (queuedFiles.length > 0) {
@@ -1091,6 +1171,9 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
         const formData = new FormData();
         queuedFiles.forEach(f => formData.append('files', f));
         formData.append('sender', currentSender);
+        formData.append('client_id', userProfile.clientId || '');
+        formData.append('sender_id', userProfile.clientId || '');
+        formData.append('avatar', userProfile.avatar || '💻');
         if (promptTitle.trim()) formData.append('title', promptTitle.trim());
         if (promptText.trim()) formData.append('note', promptText.trim());
 
@@ -1126,6 +1209,9 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
 
       const newMsg: ChatMessage = {
         id: `msg_${Date.now()}`,
+        client_id: userProfile.clientId,
+        sender_id: userProfile.clientId,
+        avatar: userProfile.avatar || '💻',
         sender: currentSender,
         timestamp: new Date().toLocaleTimeString('de-DE'),
         type: 'prompt',
@@ -1554,8 +1640,8 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                       <Cpu className={`w-4 h-4 ${isNightmare ? 'text-red-500' : 'text-cyan-400'}`} />
                       <span className="font-mono font-bold text-xs tracking-wider">CPU METRICS</span>
                     </div>
-                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 truncate max-w-[170px]" title={systemCache?.profile?.cpu_model || 'CPU'}>
-                      {systemCache?.profile?.cpu_model ? (systemCache.profile.cpu_model.split('@')[0].trim()) : 'CPU CORE'}
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 truncate max-w-[170px]" title={metrics.cpu_model || systemCache?.profile?.cpu_model || (systemCache as any)?.cpu_model || 'CPU'}>
+                      {(metrics.cpu_model || systemCache?.profile?.cpu_model || (systemCache as any)?.cpu_model || 'CPU CORE').split('@')[0].trim()}
                     </span>
                   </div>
 
@@ -1961,6 +2047,27 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
 
               {/* CARD 2: VERBUNDENE PCs (CLIENTS) */}
               <div className={`p-5 rounded-xl ${cardBg}`}>
+                {/* Client Mode Server Banner */}
+                {multiPcMode === 'client' && (
+                  <div className="mb-4 p-3.5 rounded-lg bg-cyan-950/30 border border-cyan-500/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <Radio className="w-4 h-4 text-cyan-400 animate-pulse" />
+                      <div>
+                        <div className="font-mono font-bold text-xs text-white flex items-center gap-2">
+                          <span>CLIENT-MODUS AKTIV</span>
+                          <span className="px-1.5 py-0.2 rounded bg-cyan-500 text-slate-950 text-[10px] font-bold">VERBUNDEN</span>
+                        </div>
+                        <div className="text-[11px] font-mono text-zinc-400">
+                          Ziel-Server: <span className="text-cyan-300 font-bold">{clientServerUrl || '192.168.1.100:8351'}</span> • Live-Telemetrie wird gestreamt
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-mono text-zinc-500 bg-black/40 px-2 py-1 rounded border border-zinc-800">
+                      Server und alle Cluster-PCs werden unten aufgeführt
+                    </span>
+                  </div>
+                )}
+
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 mb-4 border-b border-zinc-800 gap-2">
                   <div className="flex items-center gap-2.5">
                     <Users className="w-5 h-5 text-cyan-400" />
@@ -2059,8 +2166,48 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                             <span className="font-bold text-white">↓ {node.net_recv_mbps} • ↑ {node.net_sent_mbps} M</span>
                           </div>
 
-                          <div className="text-[10px] text-zinc-500 truncate">
-                            IP: {node.ip} • OS: {node.os}
+                          {/* Extended Node Details (IP, OS, CPU & GPU Models) */}
+                          <div className="pt-2 border-t border-zinc-800/60 space-y-1.5 text-[10px]">
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="text-zinc-500">IP ADRESSE:</span>
+                              <button 
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigator.clipboard.writeText(node.ip);
+                                }}
+                                className="font-bold text-cyan-300 hover:underline flex items-center gap-1 cursor-pointer bg-black/40 px-1.5 py-0.5 rounded border border-zinc-800"
+                                title="IP-Adresse in die Zwischenablage kopieren"
+                              >
+                                <span>{node.ip}</span>
+                                <Copy className="w-2.5 h-2.5 text-zinc-400" />
+                              </button>
+                            </div>
+
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="text-zinc-500">BETRIEBSSYSTEM:</span>
+                              <span className="font-semibold text-zinc-300 truncate max-w-[160px]" title={node.os}>
+                                {node.os}
+                              </span>
+                            </div>
+
+                            {node.cpu_model && (
+                              <div className="flex items-center justify-between gap-1">
+                                <span className="text-zinc-500">CPU:</span>
+                                <span className="text-zinc-300 truncate max-w-[160px]" title={node.cpu_model}>
+                                  {node.cpu_model.split('@')[0].trim()}
+                                </span>
+                              </div>
+                            )}
+
+                            {node.gpu_model && (
+                              <div className="flex items-center justify-between gap-1">
+                                <span className="text-zinc-500">GPU:</span>
+                                <span className="text-purple-300 truncate max-w-[160px]" title={node.gpu_model}>
+                                  {node.gpu_model}
+                                </span>
+                              </div>
+                            )}
                           </div>
                         </div>
 
@@ -2273,10 +2420,29 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                   <div key={msg.id} className="p-3.5 rounded-lg bg-black/50 border border-zinc-800/80 space-y-2 hover:border-zinc-700 transition-colors">
                     {/* Message Header */}
                     <div className="flex items-center justify-between border-b border-zinc-800/60 pb-2">
-                      <div className="flex items-center gap-2 font-mono">
-                        <span className={`text-xs font-bold ${msg.sender.includes('A') ? 'text-red-400' : 'text-cyan-400'}`}>
+                      <div className="flex items-center gap-2 font-mono flex-wrap">
+                        <span className="text-base">{msg.avatar || '💻'}</span>
+                        <span className={`text-xs font-bold ${msg.client_id === userProfile.clientId ? 'text-cyan-400' : 'text-zinc-200'}`}>
                           {msg.sender}
                         </span>
+                        {msg.client_id === userProfile.clientId ? (
+                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-cyan-950/80 border border-cyan-500/40 text-cyan-300 font-bold">
+                            Du
+                          </span>
+                        ) : (msg.sender.toLowerCase().includes('host') || msg.sender.toLowerCase().includes('server')) ? (
+                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-950/80 border border-amber-500/40 text-amber-300 font-bold">
+                            👑 Host
+                          </span>
+                        ) : (
+                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-400">
+                            Client
+                          </span>
+                        )}
+                        {msg.client_id && (
+                          <span className="text-[9px] text-zinc-500 font-mono hidden sm:inline" title={`Client-ID: ${msg.client_id}`}>
+                            [{msg.client_id.slice(-6)}]
+                          </span>
+                        )}
                         <span className="text-[10px] text-zinc-500">
                           {msg.timestamp}
                         </span>
@@ -2666,69 +2832,144 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                   <h2 className="font-mono font-bold text-sm tracking-wide text-white flex items-center gap-2">
                     <Sliders className="w-4 h-4 text-purple-400" />
                     <span>LIVE TASK MANAGER &amp; PROCESS CONTROL</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-purple-950 border border-purple-700 text-purple-300 font-bold font-mono">
+                      {processes.length} Prozesse
+                    </span>
                   </h2>
                   <p className="text-xs text-zinc-400">
-                    Echtzeit-Prozessliste mit Lastüberwachung und sofortiger Prozess-Terminierung
+                    Echtzeit-Prozessliste mit Lastüberwachung, Sortierung und gezielter Prozess-Terminierung
                   </p>
                 </div>
 
-                <div className="relative w-full sm:w-64">
-                  <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-2.5" />
-                  <input
-                    type="text"
-                    placeholder="Prozess oder PID filtern..."
-                    value={procSearch}
-                    onChange={(e) => setProcSearch(e.target.value)}
-                    className="w-full bg-black/60 border border-zinc-800 rounded-lg pl-9 pr-3 py-1.5 text-xs font-mono text-white placeholder-zinc-500 focus:outline-none focus:border-red-500"
-                  />
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  {/* Auto-Refresh Toggle */}
+                  <button
+                    type="button"
+                    onClick={() => setProcAutoRefresh(!procAutoRefresh)}
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-mono font-bold border transition-colors flex items-center gap-1.5 ${
+                      procAutoRefresh 
+                        ? 'bg-emerald-950/60 border-emerald-600 text-emerald-400' 
+                        : 'bg-zinc-800 border-zinc-700 text-zinc-400'
+                    }`}
+                    title="Automatisches Neuladen alle 2.5 Sekunden"
+                  >
+                    <span className={`w-2 h-2 rounded-full ${procAutoRefresh ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-500'}`} />
+                    <span>{procAutoRefresh ? 'Auto (2.5s)' : 'Manuell'}</span>
+                  </button>
+
+                  {/* Manual Refresh Button */}
+                  <button
+                    type="button"
+                    onClick={() => fetchProcesses()}
+                    disabled={procLoading}
+                    className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-mono font-semibold flex items-center gap-1.5 border border-zinc-700 cursor-pointer transition-colors"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${procLoading ? 'animate-spin text-cyan-400' : ''}`} />
+                    <span>{procLoading ? 'Lade...' : 'Aktualisieren'}</span>
+                  </button>
+
+                  <div className="relative w-full sm:w-60">
+                    <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-2.5" />
+                    <input
+                      type="text"
+                      placeholder="Prozess oder PID filtern..."
+                      value={procSearch}
+                      onChange={(e) => setProcSearch(e.target.value)}
+                      className="w-full bg-black/60 border border-zinc-800 rounded-lg pl-9 pr-3 py-1.5 text-xs font-mono text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500"
+                    />
+                  </div>
                 </div>
               </div>
 
               {/* Process Table */}
               <div className={`rounded-xl overflow-hidden border border-zinc-800 ${cardBg}`}>
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto max-h-[620px]">
                   <table className="w-full text-left font-mono text-xs">
-                    <thead className="bg-black/60 text-zinc-400 border-b border-zinc-800 uppercase text-[10px] tracking-wider">
+                    <thead className="bg-black/80 text-zinc-400 border-b border-zinc-800 uppercase text-[10px] tracking-wider sticky top-0 z-10 backdrop-blur-md">
                       <tr>
-                        <th className="p-3">PID</th>
-                        <th className="p-3">PROZESSNAME</th>
-                        <th className="p-3">CPU LAST (%)</th>
-                        <th className="p-3">RAM BELEGUNG (%)</th>
+                        <th 
+                          onClick={() => { setProcSortKey('pid'); setProcSortAsc(!procSortAsc); }}
+                          className="p-3 cursor-pointer hover:text-white select-none"
+                        >
+                          PID {procSortKey === 'pid' ? (procSortAsc ? '▲' : '▼') : ''}
+                        </th>
+                        <th 
+                          onClick={() => { setProcSortKey('name'); setProcSortAsc(!procSortAsc); }}
+                          className="p-3 cursor-pointer hover:text-white select-none"
+                        >
+                          PROZESSNAME {procSortKey === 'name' ? (procSortAsc ? '▲' : '▼') : ''}
+                        </th>
+                        <th 
+                          onClick={() => { setProcSortKey('cpu'); setProcSortAsc(!procSortAsc); }}
+                          className="p-3 cursor-pointer hover:text-white select-none"
+                        >
+                          CPU LAST (%) {procSortKey === 'cpu' ? (procSortAsc ? '▲' : '▼') : ''}
+                        </th>
+                        <th 
+                          onClick={() => { setProcSortKey('ram'); setProcSortAsc(!procSortAsc); }}
+                          className="p-3 cursor-pointer hover:text-white select-none"
+                        >
+                          RAM BELEGUNG {procSortKey === 'ram' ? (procSortAsc ? '▲' : '▼') : ''}
+                        </th>
                         <th className="p-3">STATUS</th>
                         <th className="p-3 text-right">AKTION</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-800/60">
-                      {filteredProcesses.map((p) => (
-                        <tr key={p.pid} className="hover:bg-zinc-800/30 transition-colors">
-                          <td className="p-3 text-zinc-400">{p.pid}</td>
-                          <td className="p-3 font-semibold text-white">{p.name}</td>
-                          <td className="p-3">
-                            <span className={`px-2 py-0.5 rounded font-bold ${
-                              p.cpu > 20 ? 'bg-red-950 text-red-400' : 'bg-zinc-800 text-zinc-300'
-                            }`}>
-                              {p.cpu}%
-                            </span>
-                          </td>
-                          <td className="p-3 text-zinc-300">{p.ram}%</td>
-                          <td className="p-3">
-                            <span className="text-emerald-400 flex items-center gap-1 text-[11px]">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                              {p.status}
-                            </span>
-                          </td>
-                          <td className="p-3 text-right">
-                            <button
-                              onClick={() => handleKill(p.pid)}
-                              disabled={killPid === p.pid}
-                              className="px-2.5 py-1 rounded bg-red-950/60 hover:bg-red-900 border border-red-800/80 text-red-300 font-bold text-[11px] transition-all flex items-center gap-1 ml-auto"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                              <span>{killPid === p.pid ? 'Beende...' : 'KILL'}</span>
-                            </button>
+                      {filteredProcesses.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="p-8 text-center text-zinc-500 font-mono">
+                            Keine Prozesse gefunden. Klicke auf "Aktualisieren".
                           </td>
                         </tr>
-                      ))}
+                      ) : (
+                        filteredProcesses.map((p) => (
+                          <tr key={p.pid} className="hover:bg-zinc-800/40 transition-colors">
+                            <td className="p-3 text-zinc-400 font-bold">{p.pid}</td>
+                            <td className="p-3 font-semibold text-white">
+                              <div className="flex items-center gap-2">
+                                <span>{p.name}</span>
+                                {p.user && <span className="text-[9px] px-1 py-0.2 rounded bg-zinc-800 text-zinc-400">{p.user}</span>}
+                              </div>
+                            </td>
+                            <td className="p-3">
+                              <span className={`px-2 py-0.5 rounded font-bold ${
+                                p.cpu > 20 ? 'bg-red-950 text-red-400' : p.cpu > 5 ? 'bg-amber-950 text-amber-300' : 'bg-zinc-800 text-zinc-300'
+                              }`}>
+                                {p.cpu}%
+                              </span>
+                            </td>
+                            <td className="p-3 text-zinc-300">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-semibold text-blue-300">{p.ram}%</span>
+                                {p.memory_mb !== undefined && p.memory_mb > 0 && (
+                                  <span className="text-[10px] text-zinc-500 font-mono">
+                                    ({p.memory_mb >= 1024 ? `${(p.memory_mb / 1024).toFixed(1)} GB` : `${p.memory_mb} MB`})
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="p-3">
+                              <span className="text-emerald-400 flex items-center gap-1 text-[11px]">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                {p.status}
+                              </span>
+                            </td>
+                            <td className="p-3 text-right">
+                              <button
+                                type="button"
+                                onClick={() => handleKill(p.pid)}
+                                disabled={killPid === p.pid}
+                                className="px-2.5 py-1 rounded bg-red-950/60 hover:bg-red-900 border border-red-800/80 text-red-300 font-bold text-[11px] transition-all flex items-center gap-1 ml-auto cursor-pointer"
+                                title={`Prozess PID ${p.pid} beenden`}
+                              >
+                                <Trash2 className="w-3 h-3" />
+                                <span>{killPid === p.pid ? 'Beende...' : 'KILL'}</span>
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -2807,11 +3048,18 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                       BENUTZER- &amp; PC-PROFIL ANPASSEN (FÜR CHAT &amp; SERVER)
                     </h3>
                   </div>
-                  {profileSavedToast && (
-                    <span className="text-[10px] font-mono text-emerald-400 font-bold flex items-center gap-1">
-                      <Check className="w-3.5 h-3.5" /> Gespeichert &amp; Synchronisiert!
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {userProfile.clientId && (
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-900 border border-zinc-700 text-zinc-400">
+                        Eindeutige Client-ID: <span className="text-cyan-300 font-bold">{userProfile.clientId}</span>
+                      </span>
+                    )}
+                    {profileSavedToast && (
+                      <span className="text-[10px] font-mono text-emerald-400 font-bold flex items-center gap-1">
+                        <Check className="w-3.5 h-3.5" /> Gespeichert &amp; Synchronisiert!
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
@@ -2976,6 +3224,16 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                         const res = await fetch('/api/system/profile/refresh', { method: 'POST' });
                         const data = await res.json();
                         setSystemCache(data);
+                        const p = data.profile || data;
+                        if (p) {
+                          setMetrics(m => ({
+                            ...m,
+                            hostname: p.hostname || m.hostname,
+                            cpu_model: p.cpu_model || m.cpu_model,
+                            gpu_name: p.gpu_name ? p.gpu_name : m.gpu_name,
+                            ram_total: p.ram_total_gb || m.ram_total
+                          }));
+                        }
                       } catch {}
                       setTimeout(() => setCacheRefreshing(false), 800);
                     }}
