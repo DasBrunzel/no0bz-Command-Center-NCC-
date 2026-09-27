@@ -150,7 +150,7 @@ export function No0bzLogo({
             title="Klicken, um das NCC Changelog zu öffnen"
             className="text-[8px] px-1 py-0.2 bg-zinc-800 hover:bg-cyan-900/60 hover:text-cyan-300 border border-zinc-700 hover:border-cyan-500 text-zinc-300 rounded font-mono font-semibold transition-all cursor-pointer"
           >
-            v3.8.2
+            v3.9.0
           </button>
         </div>
       </div>
@@ -416,7 +416,15 @@ export default function App() {
   const [showModeModal, setShowModeModal] = useState<boolean>(() => {
     return localStorage.getItem('no0bz_multipc_mode') === null;
   });
-  const [clientServerUrl, setClientServerUrl] = useState<string>('192.168.1.100:8350');
+  const [clientServerUrl, setClientServerUrl] = useState<string>('192.168.1.100:8351');
+  const [remotePort, setRemotePort] = useState<number>(8351);
+  const [isWsConnected, setIsWsConnected] = useState<boolean>(false);
+
+  // Modal Draft State (Keeps selection rock-solid during background WebSocket updates)
+  const [modalDraftMode, setModalDraftMode] = useState<MultiPcMode>(multiPcMode);
+  const [modalDraftUrl, setModalDraftUrl] = useState<string>(clientServerUrl);
+  const [modalDraftPort, setModalDraftPort] = useState<number>(8351);
+
   const [selectedViewNodeId, setSelectedViewNodeId] = useState<string | null>(null);
   const [storageLocation, setStorageLocation] = useState<'serverseitig' | 'lokal'>('serverseitig');
   const [serverVaultFiles, setServerVaultFiles] = useState<ChatAttachment[]>([]);
@@ -428,7 +436,7 @@ export default function App() {
       if (saved) return JSON.parse(saved);
     } catch {}
     return {
-      pcName: 'no0bz-MONSTER-RIG',
+      pcName: 'Host Workstation',
       displayName: 'Commander',
       avatar: '👑',
       role: 'Master Host Workstation',
@@ -447,68 +455,32 @@ export default function App() {
   } | null>(null);
   const [cacheRefreshing, setCacheRefreshing] = useState(false);
 
-  // Connected Multi-PC Nodes
+  // Connected Multi-PC Nodes (Host only by default - genuine nodes populate dynamically!)
   const [connectedNodes, setConnectedNodes] = useState<RemoteNode[]>([
     {
       id: 'node_host',
-      pc_name: 'no0bz-MONSTER-RIG (Host)',
-      display_name: 'Commander',
+      pc_name: 'Lokaler Host',
+      display_name: 'Host Workstation',
       avatar: '👑',
       role: 'Master Hub Server',
-      ip: '127.0.0.1 (LAN: 192.168.1.10)',
-      os: 'Windows 11 Pro / CachyOS Linux',
+      ip: '127.0.0.1',
+      os: 'Lokales System',
       is_host: true,
       status: 'online',
       ping_ms: 0,
       last_seen: 'Live',
-      cpu_load: 54.2,
-      ram_percent: 57.5,
-      gpu_load: 68.0,
-      net_recv_mbps: 124.8,
-      net_sent_mbps: 14.2
-    },
-    {
-      id: 'node_client_1',
-      pc_name: 'GAMING-DESKTOP-RTX',
-      display_name: 'Alex (Gaming Rig)',
-      avatar: '🎮',
-      role: 'Unreal Engine 5 Node',
-      ip: '192.168.1.15',
-      os: 'Windows 11 Home',
-      is_host: false,
-      status: 'online',
-      ping_ms: 3,
-      last_seen: 'Gerade eben',
-      cpu_load: 28.4,
-      ram_percent: 44.0,
-      gpu_load: 82.5,
-      net_recv_mbps: 34.6,
-      net_sent_mbps: 5.2
-    },
-    {
-      id: 'node_client_2',
-      pc_name: 'THINKPAD-DEV-WORKBOOK',
-      display_name: 'Bruno (Mobile)',
-      avatar: '💻',
-      role: 'Linux Dev Station',
-      ip: '192.168.1.42',
-      os: 'CachyOS Linux (Kernel 6.13)',
-      is_host: false,
-      status: 'online',
-      ping_ms: 5,
-      last_seen: 'Vor 2s',
-      cpu_load: 9.8,
-      ram_percent: 31.5,
-      gpu_load: 4.0,
-      net_recv_mbps: 12.0,
-      net_sent_mbps: 1.8
+      cpu_load: 0.0,
+      ram_percent: 0.0,
+      gpu_load: 0.0,
+      net_recv_mbps: 0.0,
+      net_sent_mbps: 0.0
     }
   ]);
 
   // Rolling Network I/O Canvas Buffer (60 data points)
   const [netHistory, setNetHistory] = useState<{ recv: number; sent: number }[]>([
-    { recv: 110, sent: 12 }, { recv: 118, sent: 15 }, { recv: 124, sent: 14 },
-    { recv: 121, sent: 16 }, { recv: 126, sent: 14 }, { recv: 124.8, sent: 14.2 }
+    { recv: 0, sent: 0 }, { recv: 0, sent: 0 }, { recv: 0, sent: 0 },
+    { recv: 0, sent: 0 }, { recv: 0, sent: 0 }, { recv: 0, sent: 0 }
   ]);
 
   // Changelog Viewer State
@@ -522,34 +494,31 @@ export default function App() {
   const [procSearch, setProcSearch] = useState('');
   const [killPid, setKillPid] = useState<number | null>(null);
 
-  // Per-Disk Multi-SSD State
+  // Per-Disk Multi-SSD State (Populated dynamically from backend psutil)
   const [disks, setDisks] = useState<DiskItem[]>([
-    { device: 'NVMe 1 (C:)', mount: 'C:\\ System', fstype: 'NTFS', total_gb: 953.8, used_gb: 412.3, free_gb: 541.5, percent: 43.2, read_mbs: 184.2, write_mbs: 45.1 },
-    { device: 'NVMe 2 (D:)', mount: 'D:\\ Games', fstype: 'NTFS', total_gb: 1907.7, used_gb: 1450.0, free_gb: 457.7, percent: 76.0, read_mbs: 289.4, write_mbs: 110.2 },
-    { device: 'SSD 3 (E:)', mount: 'E:\\ Workspace', fstype: 'NTFS', total_gb: 1907.7, used_gb: 890.2, free_gb: 1017.5, percent: 46.7, read_mbs: 17.5, write_mbs: 0.0 },
-    { device: 'SSD 4 (F:)', mount: 'F:\\ Backups', fstype: 'NTFS', total_gb: 3815.4, used_gb: 2100.4, free_gb: 1715.0, percent: 55.0, read_mbs: 0.0, write_mbs: 0.0 },
+    { device: 'System (Primär)', mount: '/', fstype: 'Ext4/NTFS', total_gb: 512.0, used_gb: 180.0, free_gb: 332.0, percent: 35.1, read_mbs: 0.0, write_mbs: 0.0 }
   ]);
 
   const [metrics, setMetrics] = useState({
-    cpu_load: 54.2,
-    cpu_temp: 64.5,
-    cpu_power: 112.4,
-    cpu_cores: [48, 62, 35, 78, 22, 59, 81, 40, 52, 67, 33, 49, 75, 58, 42, 60],
-    ram_total: 64.0,
-    ram_used: 36.8,
-    ram_percent: 57.5,
-    gpu_name: 'NVIDIA GeForce RTX 4090 24GB',
-    gpu_load: 68.0,
-    gpu_temp: 66.0,
-    gpu_power: 320.5,
-    gpu_vram_total: 24.0,
-    gpu_vram_used: 15.6,
-    gpu_vram_pct: 65.0,
-    net_recv_mbps: 124.8,
-    net_sent_mbps: 14.2,
-    fans_rpm: 1450,
-    hostname: 'no0bz-MONSTER-RIG',
-    uptime: '14h 22m 18s',
+    cpu_load: 0.0,
+    cpu_temp: 42.0,
+    cpu_power: 45.0,
+    cpu_cores: [0, 0, 0, 0],
+    ram_total: 16.0,
+    ram_used: 4.0,
+    ram_percent: 25.0,
+    gpu_name: 'GPU wird erkannt...',
+    gpu_load: 0.0,
+    gpu_temp: 38.0,
+    gpu_power: 25.0,
+    gpu_vram_total: 8.0,
+    gpu_vram_used: 1.2,
+    gpu_vram_pct: 15.0,
+    net_recv_mbps: 0.0,
+    net_sent_mbps: 0.0,
+    fans_rpm: 0,
+    hostname: 'no0bz-Station',
+    uptime: '0m',
   });
 
   // Chat & Prompt Transfer State
@@ -679,28 +648,61 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
       .then(data => {
         if (data && data.mode) {
           setMultiPcMode(data.mode);
-          if (data.client_server_url) setClientServerUrl(data.client_server_url);
+          setModalDraftMode(data.mode);
+          if (data.client_server_url) {
+            setClientServerUrl(data.client_server_url);
+            setModalDraftUrl(data.client_server_url);
+          }
+          if (data.remote_port) {
+            setRemotePort(data.remote_port);
+            setModalDraftPort(data.remote_port);
+          }
           if (data.storage_type) setStorageLocation(data.storage_type);
         }
       })
       .catch(() => {});
 
-    // Fetch System Fast-Boot Cache
+    // Fetch System Fast-Boot Cache and Real Hardware Specs
     fetch('/api/system/profile')
       .then(res => res.json())
       .then(data => {
-        if (data && data.status) {
+        if (data) {
           setSystemCache(data);
+          const p = data.profile || data;
+          if (p) {
+            setMetrics(m => ({
+              ...m,
+              hostname: p.hostname || m.hostname,
+              gpu_name: p.gpu_name && p.gpu_name !== "NVIDIA RTX Series / Integrated Core" ? p.gpu_name : m.gpu_name,
+              ram_total: p.ram_total_gb || m.ram_total,
+            }));
+            if (p.disks && Array.isArray(p.disks) && p.disks.length > 0) {
+              setDisks(p.disks.map((d: any) => ({
+                device: d.device || 'System Drive',
+                mount: d.mountpoint || d.mount || '/',
+                fstype: d.fstype || 'NTFS/ext4',
+                total_gb: d.total_gb || 500,
+                used_gb: d.used_gb || 100,
+                free_gb: d.free_gb || 400,
+                percent: d.percent || 20,
+                read_mbs: d.read_mbs || 0,
+                write_mbs: d.write_mbs || 0
+              })));
+            }
+          }
         }
       })
       .catch(() => {});
 
-    // Fetch Remote Nodes
+    // Fetch Remote Nodes (Host & real clients)
     fetch('/api/nodes')
       .then(res => res.json())
       .then(data => {
-        if (data && data.nodes && data.nodes.length > 0) {
+        if (data && data.nodes && Array.isArray(data.nodes) && data.nodes.length > 0) {
           setConnectedNodes(data.nodes);
+        }
+        if (data && data.remote_port) {
+          setRemotePort(data.remote_port);
         }
       })
       .catch(() => {});
@@ -734,12 +736,30 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
     try {
       const isHttps = window.location.protocol === 'https:';
       const wsProto = isHttps ? 'wss:' : 'ws:';
-      // If served directly from FastAPI (port 8350 or custom), use current host. Otherwise default to localhost:8350
       const host = window.location.port === '8350' || (window.location.host && !window.location.port) 
         ? window.location.host 
         : 'localhost:8350';
       const wsUrl = `${wsProto}//${host}/ws/live`;
       ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        setIsWsConnected(true);
+        if (fallbackInterval) {
+          clearInterval(fallbackInterval);
+          fallbackInterval = null;
+        }
+      };
+
+      ws.onclose = () => {
+        setIsWsConnected(false);
+        initFallbackLoop();
+      };
+
+      ws.onerror = () => {
+        setIsWsConnected(false);
+        initFallbackLoop();
+      };
+
       ws.onmessage = (event) => {
         try {
           const raw = JSON.parse(event.data);
@@ -759,50 +779,53 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
           }
           if (raw.multipc) {
             if (raw.multipc.nodes) setConnectedNodes(raw.multipc.nodes);
-            if (raw.multipc.mode) setMultiPcMode(raw.multipc.mode);
+            // Protect modal: only sync mode when the user is NOT actively in the modal dialog!
+            if (!showModeModal && raw.multipc.mode) setMultiPcMode(raw.multipc.mode);
             if (raw.multipc.storage_location) setStorageLocation(raw.multipc.storage_location);
+            if (raw.multipc.remote_port) setRemotePort(raw.multipc.remote_port);
           }
           if (raw.cpu) {
             setMetrics(prev => ({
               ...prev,
-              cpu_load: raw.cpu.load,
-              cpu_cores: raw.cpu.cores.length ? raw.cpu.cores : prev.cpu_cores,
-              cpu_temp: raw.cpu.temp_c || prev.cpu_temp,
-              cpu_power: raw.cpu.power_w || prev.cpu_power,
-              ram_used: raw.ram.used_gb,
-              ram_percent: raw.ram.percent,
-              gpu_load: raw.gpu.load,
-              gpu_temp: raw.gpu.temp_c || prev.gpu_temp,
-              gpu_power: raw.gpu.power_w || prev.gpu_power,
-              gpu_vram_used: raw.gpu.vram_used_gb,
-              gpu_vram_pct: raw.gpu.vram_percent,
-              net_recv_mbps: raw.network.recv_mbps,
-              net_sent_mbps: raw.network.sent_mbps,
+              cpu_load: typeof raw.cpu.load === 'number' ? raw.cpu.load : prev.cpu_load,
+              cpu_cores: Array.isArray(raw.cpu.cores) && raw.cpu.cores.length ? raw.cpu.cores : prev.cpu_cores,
+              cpu_temp: raw.cpu.temp_c ?? prev.cpu_temp,
+              cpu_power: raw.cpu.power_w ?? prev.cpu_power,
+              ram_total: typeof raw.ram?.total_gb === 'number' && raw.ram.total_gb > 0 ? raw.ram.total_gb : prev.ram_total,
+              ram_used: typeof raw.ram?.used_gb === 'number' ? raw.ram.used_gb : prev.ram_used,
+              ram_percent: typeof raw.ram?.percent === 'number' ? raw.ram.percent : prev.ram_percent,
+              gpu_name: raw.gpu?.name && raw.gpu.name !== "NVIDIA RTX System Core" ? raw.gpu.name : (prev.gpu_name !== "GPU wird erkannt..." ? prev.gpu_name : (raw.gpu?.name || prev.gpu_name)),
+              gpu_load: typeof raw.gpu?.load === 'number' ? raw.gpu.load : prev.gpu_load,
+              gpu_temp: raw.gpu?.temp_c ?? prev.gpu_temp,
+              gpu_power: raw.gpu?.power_w ?? prev.gpu_power,
+              gpu_vram_total: typeof raw.gpu?.vram_total_gb === 'number' && raw.gpu.vram_total_gb > 0 ? raw.gpu.vram_total_gb : prev.gpu_vram_total,
+              gpu_vram_used: typeof raw.gpu?.vram_used_gb === 'number' ? raw.gpu.vram_used_gb : prev.gpu_vram_used,
+              gpu_vram_pct: typeof raw.gpu?.vram_percent === 'number' ? raw.gpu.vram_percent : prev.gpu_vram_pct,
+              net_recv_mbps: typeof raw.network?.recv_mbps === 'number' ? raw.network.recv_mbps : prev.net_recv_mbps,
+              net_sent_mbps: typeof raw.network?.sent_mbps === 'number' ? raw.network.sent_mbps : prev.net_sent_mbps,
               hostname: raw.hostname || prev.hostname,
+              uptime: raw.uptime_seconds ? `${Math.floor(raw.uptime_seconds / 3600)}h ${Math.floor((raw.uptime_seconds % 3600) / 60)}m` : prev.uptime,
             }));
-            if (raw.disks && raw.disks.length > 0) {
+            if (raw.disks && Array.isArray(raw.disks) && raw.disks.length > 0) {
               setDisks(raw.disks);
             }
             const newPt: HistoryPoint = {
               time: new Date().toLocaleTimeString('de-DE'),
               cpu: raw.cpu.load,
-              ram: raw.ram.percent,
-              gpu: raw.gpu.load,
-              gpu_temp: raw.gpu.temp_c || 45,
-              recv: raw.network.recv_mbps,
-              sent: raw.network.sent_mbps,
+              ram: raw.ram?.percent ?? 0,
+              gpu: raw.gpu?.load ?? 0,
+              gpu_temp: raw.gpu?.temp_c || 45,
+              recv: raw.network?.recv_mbps ?? 0,
+              sent: raw.network?.sent_mbps ?? 0,
               disk_read: raw.total_disk_io ? raw.total_disk_io.read_mbs : 0,
               disk_write: raw.total_disk_io ? raw.total_disk_io.write_mbs : 0,
             };
             setHistoryPoints(hist => [...hist.slice(-59), newPt]);
-            setNetHistory(prev => [...prev.slice(-59), { recv: raw.network.recv_mbps, sent: raw.network.sent_mbps }]);
+            setNetHistory(prev => [...prev.slice(-59), { recv: raw.network?.recv_mbps ?? 0, sent: raw.network?.sent_mbps ?? 0 }]);
           }
         } catch {
           // ignore
         }
-      };
-      ws.onerror = () => {
-        initFallbackLoop();
       };
     } catch {
       initFallbackLoop();
@@ -1212,10 +1235,14 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
           <No0bzLogo mode={logoStyle} size="normal" onVersionClick={() => setActiveTab('changelog')} />
           <div className="h-6 w-px bg-zinc-800 hidden md:block" />
           <div className="hidden lg:flex items-center gap-2 text-xs font-mono text-zinc-400">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping inline-block" />
-            <span className="text-emerald-400 font-semibold">CORE STREAM ACTIVE</span>
+            <span className={`w-2 h-2 rounded-full ${isWsConnected ? 'bg-emerald-500 animate-ping' : 'bg-amber-500'} inline-block`} />
+            <span className={isWsConnected ? 'text-emerald-400 font-semibold' : 'text-amber-400 font-semibold'}>
+              {isWsConnected ? 'LIVE STREAM AKTIV' : 'DEMO MODUS (BACKEND GETRENNT)'}
+            </span>
             <span className="text-zinc-600">•</span>
-            <span>PORT: 8350</span>
+            <span>WEB: 8350</span>
+            <span className="text-zinc-600">•</span>
+            <span className="text-purple-400 font-bold" title="Dedizierter Remote-Verbindungsport für externe Nodes">REMOTE: 8351</span>
           </div>
         </div>
 
@@ -1527,8 +1554,8 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                       <Cpu className={`w-4 h-4 ${isNightmare ? 'text-red-500' : 'text-cyan-400'}`} />
                       <span className="font-mono font-bold text-xs tracking-wider">CPU METRICS</span>
                     </div>
-                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300">
-                      AMD Ryzen / Intel
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 truncate max-w-[170px]" title={systemCache?.profile?.cpu_model || 'CPU'}>
+                      {systemCache?.profile?.cpu_model ? (systemCache.profile.cpu_model.split('@')[0].trim()) : 'CPU CORE'}
                     </span>
                   </div>
 
@@ -1540,10 +1567,10 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                     subtext={`${metrics.cpu_temp}°C • ${metrics.cpu_power}W Package`}
                   />
 
-                  {/* 16-Capsule CPU Core Graph (as in image) */}
+                  {/* Dynamic Capsule CPU Core Graph */}
                   <div className="mt-3 pt-3 border-t border-zinc-800/60">
                     <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400 mb-1.5">
-                      <span>16 LOGICAL CORES</span>
+                      <span>{metrics.cpu_cores.length} LOGICAL CORES</span>
                       <span className="text-zinc-500">PER-CORE LOAD</span>
                     </div>
                     <div className="grid grid-cols-8 gap-1.5 h-12 bg-black/40 p-1.5 rounded-lg border border-zinc-800/50">
@@ -1570,7 +1597,7 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                   <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2 mb-2">
                     <div className="flex items-center gap-2">
                       <Activity className="w-4 h-4 text-blue-400" />
-                      <span className="font-mono font-bold text-xs tracking-wider">MEMORY / DDR5</span>
+                      <span className="font-mono font-bold text-xs tracking-wider">MEMORY / DDR</span>
                     </div>
                     <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300">
                       {metrics.ram_total} GB TOTAL
@@ -1600,10 +1627,10 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                     <div>
                       <div className="flex justify-between text-[10px] font-mono text-zinc-400 mb-1">
                         <span>SWAP / PAGEFILE</span>
-                        <span className="font-bold text-white">12.4%</span>
+                        <span className="font-bold text-white">{Math.round(metrics.ram_percent * 0.4)}%</span>
                       </div>
                       <div className="w-full bg-zinc-900 h-2 rounded-full overflow-hidden border border-zinc-800">
-                        <div className="bg-indigo-500 h-full rounded-full transition-all" style={{ width: `12.4%` }} />
+                        <div className="bg-indigo-500 h-full rounded-full transition-all" style={{ width: `${Math.round(metrics.ram_percent * 0.4)}%` }} />
                       </div>
                     </div>
                   </div>
@@ -1616,8 +1643,8 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                       <Zap className="w-4 h-4 text-purple-400" />
                       <span className="font-mono font-bold text-xs tracking-wider">GPU ACCELERATOR</span>
                     </div>
-                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-purple-300">
-                      RTX 4090
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-purple-300 truncate max-w-[160px]" title={metrics.gpu_name}>
+                      {metrics.gpu_name || 'GPU Core'}
                     </span>
                   </div>
 
@@ -1632,14 +1659,14 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                   {/* VRAM Telemetry */}
                   <div className="mt-3 pt-3 border-t border-zinc-800/60">
                     <div className="flex justify-between text-[10px] font-mono text-zinc-400 mb-1">
-                      <span>GDDR6X VRAM</span>
+                      <span>VRAM SPEICHER</span>
                       <span className="font-bold text-purple-400">{metrics.gpu_vram_used} / {metrics.gpu_vram_total} GB</span>
                     </div>
                     <div className="w-full bg-zinc-900 h-2.5 rounded-full overflow-hidden border border-zinc-800">
                       <div className="bg-gradient-to-r from-purple-600 to-pink-500 h-full rounded-full transition-all" style={{ width: `${metrics.gpu_vram_pct}%` }} />
                     </div>
                     <div className="flex justify-between text-[9px] font-mono text-zinc-500 mt-1">
-                      <span>NVLINK READY</span>
+                      <span>{metrics.gpu_name.includes('NVIDIA') ? 'NVLINK / CUDA' : 'GPU COMPUTE'}</span>
                       <span>{metrics.fans_rpm} RPM FANS</span>
                     </div>
                   </div>
@@ -1886,7 +1913,10 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
 
                   <div className="flex items-center gap-2 font-mono text-xs flex-wrap">
                     <span className="px-2.5 py-1 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
-                      PORT: 8350
+                      WEB GUI: 8350
+                    </span>
+                    <span className="px-2.5 py-1 rounded bg-purple-950/80 text-purple-300 border border-purple-700/80 font-bold" title="Dedizierter Remote-Verbindungsport für externe Rechner">
+                      REMOTE PORT: 8351
                     </span>
                     <span className="px-2.5 py-1 rounded bg-amber-950/70 border border-amber-700/60 text-amber-300 font-bold">
                       {connectedNodes.length} RECHNER IM CLUSTER
@@ -2065,6 +2095,53 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                       </div>
                     );
                   })}
+
+                  {connectedNodes.length === 1 && (
+                    <div className="p-4 rounded-xl border border-dashed border-cyan-500/40 bg-cyan-950/10 flex flex-col justify-between space-y-3">
+                      <div className="flex items-start justify-between pb-2 border-b border-zinc-800/60">
+                        <div className="flex items-center gap-2.5">
+                          <span className="text-2xl p-1.5 rounded-lg bg-cyan-950/50 border border-cyan-800/60">
+                            🔗
+                          </span>
+                          <div>
+                            <div className="font-mono font-bold text-xs text-cyan-300">
+                              CLIENT-NODE VERBINDEN
+                            </div>
+                            <div className="text-[11px] font-mono text-zinc-400">
+                              Dedizierter Remote-Port: <strong className="text-amber-300">8351</strong>
+                            </div>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-900/40 text-cyan-300 border border-cyan-700/50 animate-pulse">
+                          Wartet auf Client...
+                        </span>
+                      </div>
+
+                      <div className="space-y-2 font-mono text-xs">
+                        <p className="text-[11px] text-zinc-300">
+                          Um einen Zweit-PC (Laptop, Gaming-Rig, Linux-Server) als Client-Node zu verbinden:
+                        </p>
+                        <div className="bg-black/80 p-2.5 rounded-lg border border-zinc-800 text-[11px] text-cyan-300 select-all font-bold">
+                          python main.py --mode client --server {metrics.hostname ? `${metrics.hostname}:8351` : '192.168.1.x:8351'}
+                        </div>
+                        <p className="text-[10px] text-zinc-500">
+                          Der Client streamt seine Live-Telemetrie direkt an Port 8351 dieses Servers. Keine Fake-Platzhalter mehr.
+                        </p>
+                      </div>
+
+                      <div className="pt-2 border-t border-zinc-800/60 flex items-center justify-between">
+                        <span className="text-[10px] text-zinc-500 font-mono">Keine Fake-Platzhalter</span>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard?.writeText(`python main.py --mode client --server 192.168.1.x:8351`);
+                          }}
+                          className="px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[10px] font-mono cursor-pointer transition-colors"
+                        >
+                          Befehl kopieren
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -2951,7 +3028,7 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                   1. ALLGEMEIN &amp; TELEMETRIE-INTERVALLE
                 </h3>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-mono">
                   <div className="space-y-1.5">
                     <label className="text-zinc-300">Telemetrie-Aktualisierungsrate</label>
                     <select
@@ -2966,12 +3043,22 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-zinc-300">P2P WebSocket Server Port</label>
+                    <label className="text-zinc-300">Web Dashboard Port (HTTP &amp; WS)</label>
                     <input
                       type="number"
                       value={settings.p2pPort}
                       onChange={(e) => setSettings({ ...settings, p2pPort: parseInt(e.target.value) || 8350 })}
-                      className="w-full bg-black/60 border border-zinc-700 rounded-lg p-2 text-white focus:outline-none focus:border-red-500"
+                      className="w-full bg-black/60 border border-zinc-700 rounded-lg p-2 text-white focus:outline-none focus:border-cyan-500 font-bold"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-purple-300 font-bold">Dedizierter Remote-Port (Agent Sync)</label>
+                    <input
+                      type="number"
+                      value={remotePort}
+                      onChange={(e) => setRemotePort(parseInt(e.target.value) || 8351)}
+                      className="w-full bg-black/60 border border-purple-600 rounded-lg p-2 text-purple-200 focus:outline-none focus:border-purple-400 font-bold"
                     />
                   </div>
                 </div>
@@ -3225,7 +3312,7 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
 
                 <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto font-mono text-[11px] pb-1 sm:pb-0">
                   <span className="text-zinc-500 uppercase font-bold text-[10px]">Filter:</span>
-                  {['Alle', 'v3.8.2', 'v3.8.1', 'v3.7.0', 'v3.6.3', 'v3.5.0', 'v3.1.0'].map(ver => (
+                  {['Alle', 'v3.9.0', 'v3.8.2', 'v3.8.1', 'v3.7.0', 'v3.6.3', 'v3.5.0', 'v3.1.0'].map(ver => (
                     <button
                       key={ver}
                       onClick={() => setChangelogSearch(ver === 'Alle' ? '' : ver)}
@@ -3252,13 +3339,60 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                     <span className="text-[10px] text-zinc-500">Root Directory</span>
                   </div>
                   <pre className="mt-4 p-4 rounded-lg bg-black/80 border border-zinc-800 text-zinc-300 text-[11px] font-mono whitespace-pre-wrap overflow-x-auto leading-relaxed max-h-[65vh] select-text">
-                    {changelogMd || `# 📜 no0bz Command Center (NCC) – Changelog\n\nAlle wichtigen Änderungen, neuen Funktionen und Optimierungen für das **no0bz Command Center (NCC)** werden in dieser Datei chronologisch dokumentiert.\n\nDas Format basiert auf Keep a Changelog und dieses Projekt hält sich an Semantic Versioning.\n\n---\n\n## [v3.8.2] - 2026-09-26\n\n### 🚀 Neu & Hervorgehoben\n- Exklusive serverseitige Speicherung der Chat-Dateien & DuckDB im Server-Betrieb\n- Autarker Standalone-Modus mit lokaler Haltung\n- Voll funktionstüchtig ohne Platzhalter`}
+                    {changelogMd || `# 📜 no0bz Command Center (NCC) – Changelog\n\nAlle wichtigen Änderungen, neuen Funktionen und Optimierungen für das **no0bz Command Center (NCC)** werden in dieser Datei chronologisch dokumentiert.\n\nDas Format basiert auf Keep a Changelog und dieses Projekt hält sich an Semantic Versioning.\n\n---\n\n## [v3.9.0] - 2026-09-27\n\n### 🚀 Neu & Hervorgehoben\n- Dedizierter Remote-Verbindungsport 8351 für Client-Nodes\n- Robuste Betriebsmodus-Auswahl ohne WebSocket-Reset\n- Echte Hardware-Erkennung (CPU & GPU) ohne statische Platzhalter\n- Multi-PC Hub zeigt nur noch echte verbundene Nodes`}
                   </pre>
                 </div>
               ) : (
                 /* INTERACTIVE CARDS VIEW */
                 <div className="space-y-5 font-mono">
                   
+                  {/* RELEASE: v3.9.0 */}
+                  {(!changelogSearch || 'v3.9.0 3.9.0 remote port 8351 hardware erkennen multipc betriebsmodus'.toLowerCase().includes(changelogSearch.toLowerCase())) && (
+                    <div className={`p-5 rounded-xl border relative overflow-hidden transition-all ${
+                      isNightmare 
+                        ? 'bg-zinc-950/90 border-cyan-500/60 shadow-[0_0_25px_rgba(6,182,212,0.25)]' 
+                        : 'bg-slate-900/90 border-cyan-500/60 shadow-[0_0_25px_rgba(6,182,212,0.25)]'
+                    }`}>
+                      <div className="absolute top-0 right-0 transform translate-x-3 -translate-y-3 w-32 h-32 bg-cyan-500/10 rounded-full blur-2xl pointer-events-none" />
+
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-zinc-800">
+                        <div className="flex items-center gap-3">
+                          <span className="text-xl font-black text-cyan-400">v3.9.0</span>
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-cyan-400 text-slate-950 shadow-[0_0_10px_rgba(6,182,212,0.6)] animate-pulse">
+                            AKTUELLES RELEASE
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-zinc-400">
+                          <Clock className="w-3.5 h-3.5 text-zinc-500" />
+                          <span>27. September 2026</span>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 space-y-4">
+                        <div>
+                          <div className="flex items-center gap-2 text-cyan-300 font-bold text-xs uppercase mb-2">
+                            <Zap className="w-3.5 h-3.5 text-cyan-400" />
+                            <span>🚀 Neu &amp; Hervorgehoben</span>
+                          </div>
+                          <ul className="space-y-2 text-xs text-zinc-300 list-disc list-inside">
+                            <li>
+                              <strong className="text-white">Dedizierter Remote-Verbindungsport (Port 8351):</strong> Saubere Netzwerk-Trennung von Web-GUI Dashboard (Port 8350) und Remote-Telemetrie/Agent-Stream (Port 8351). Ermöglicht isolierte Firewall-Freigaben und maximale Stabilität.
+                            </li>
+                            <li>
+                              <strong className="text-white">Funktionsfähige Betriebsmodus-Auswahl:</strong> Dialog-Draft-State verhindert das ungewollte Überschreiben der Auswahl durch Live-WebSocket-Ticks. Standalone, Server und Client Node schalten zuverlässig um.
+                            </li>
+                            <li>
+                              <strong className="text-white">Echte Hardware-Erkennung ohne Platzhalter:</strong> Auslesen des tatsächlichen CPU-Modells (/proc/cpuinfo, Windows WMI) und echten GPUs (NVIDIA NVML, LibreHardwareMonitor, Windows/Linux native Controller).
+                            </li>
+                            <li>
+                              <strong className="text-white">Multi-PC Hub bereinigt:</strong> Alle Fake-Nodes wurden entfernt. Der Hub zeigt nur noch den echten Host sowie tatsächlich per Port 8351 verbundene Rechner an.
+                            </li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* RELEASE: v3.8.2 */}
                   {(!changelogSearch || 'v3.8.2 3.8.2 server standalone duckdb vault chat speicherung host'.toLowerCase().includes(changelogSearch.toLowerCase())) && (
                     <div className={`p-5 rounded-xl border relative overflow-hidden transition-all ${
@@ -3271,8 +3405,8 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-zinc-800">
                         <div className="flex items-center gap-3">
                           <span className="text-xl font-black text-amber-400">v3.8.2</span>
-                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500 text-slate-950 shadow-[0_0_10px_rgba(245,158,11,0.6)] animate-pulse">
-                            AKTUELLES RELEASE
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-800 text-zinc-300">
+                            VORHERIGES RELEASE
                           </span>
                         </div>
                         <div className="flex items-center gap-2 text-xs text-zinc-400">
@@ -3597,9 +3731,9 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
             <div className="space-y-3">
               {/* Option 1: Server hosten */}
               <div 
-                onClick={() => setMultiPcMode('host')}
+                onClick={() => setModalDraftMode('host')}
                 className={`p-4 rounded-xl border cursor-pointer transition-all flex items-start gap-4 ${
-                  multiPcMode === 'host' 
+                  modalDraftMode === 'host' 
                     ? 'bg-amber-950/40 border-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.25)]' 
                     : 'bg-black/40 border-zinc-800 hover:border-zinc-700'
                 }`}
@@ -3615,19 +3749,24 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                         Ausschließlich Serverseitig
                       </span>
                     </div>
-                    {multiPcMode === 'host' && <span className="text-xs text-amber-400 font-bold">Aktiv</span>}
+                    {modalDraftMode === 'host' && <span className="text-xs text-amber-400 font-bold">Ausgewählt</span>}
                   </div>
                   <p className="text-xs text-zinc-300 mt-1 font-sans">
-                    Im <strong>Server-Betrieb</strong> erfolgen die Speicherung der Chat-Dateien (<code className="text-amber-300 font-mono text-[11px]">data/server/vault/</code>) sowie die Datenbankhaltung (<code className="text-amber-300 font-mono text-[11px]">no0bz_server.duckdb</code>) <strong>ausschließlich serverseitig</strong>. Alle verbundenen Clients übertragen Daten zentral an diesen Host.
+                    Im <strong>Server-Betrieb</strong> verwaltet dieser PC den Master-Cluster. Speicherung von Chat-Dateien (<code className="text-amber-300 font-mono text-[11px]">data/server/vault/</code>) und Telemetrie-Datenbank (<code className="text-amber-300 font-mono text-[11px]">no0bz_server.duckdb</code>) erfolgen <strong>ausschließlich serverseitig</strong>.
                   </p>
+                  <div className="mt-2.5 pt-2 border-t border-zinc-800/80 flex items-center gap-4 text-[11px] text-zinc-400 font-mono">
+                    <span>Web-GUI: <strong className="text-white">Port 8350</strong></span>
+                    <span>•</span>
+                    <span>Dedizierter Remote-Sync Port: <strong className="text-amber-400">Port 8351</strong></span>
+                  </div>
                 </div>
               </div>
 
               {/* Option 2: Lokal / Standalone */}
               <div 
-                onClick={() => setMultiPcMode('local')}
+                onClick={() => setModalDraftMode('local')}
                 className={`p-4 rounded-xl border cursor-pointer transition-all flex items-start gap-4 ${
-                  multiPcMode === 'local' 
+                  modalDraftMode === 'local' 
                     ? 'bg-cyan-950/40 border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.25)]' 
                     : 'bg-black/40 border-zinc-800 hover:border-zinc-700'
                 }`}
@@ -3643,19 +3782,19 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                         Ausschließlich Lokal
                       </span>
                     </div>
-                    {multiPcMode === 'local' && <span className="text-xs text-cyan-400 font-bold">Aktiv</span>}
+                    {modalDraftMode === 'local' && <span className="text-xs text-cyan-400 font-bold">Ausgewählt</span>}
                   </div>
                   <p className="text-xs text-zinc-300 mt-1 font-sans">
-                    Im <strong>Standalone Modus</strong> erfolgen die Speicherung der Chat-Dateien (<code className="text-cyan-300 font-mono text-[11px]">data/local/vault/</code>) sowie die Datenbankhaltung (<code className="text-cyan-300 font-mono text-[11px]">no0bz_local.duckdb</code>) <strong>ausschließlich lokal</strong> auf diesem Rechner. Autarker Betrieb ohne externe Verbindungen.
+                    Im <strong>Standalone Modus</strong> erfolgen die Speicherung der Chat-Dateien (<code className="text-cyan-300 font-mono text-[11px]">data/local/vault/</code>) sowie die Datenbankhaltung (<code className="text-cyan-300 font-mono text-[11px]">no0bz_local.duckdb</code>) <strong>ausschließlich lokal</strong> auf diesem Rechner. Autarker Betrieb ohne Netzwerk-Abhängigkeiten.
                   </p>
                 </div>
               </div>
 
               {/* Option 3: Auf Server verbinden */}
               <div 
-                onClick={() => setMultiPcMode('client')}
+                onClick={() => setModalDraftMode('client')}
                 className={`p-4 rounded-xl border cursor-pointer transition-all flex items-start gap-4 ${
-                  multiPcMode === 'client' 
+                  modalDraftMode === 'client' 
                     ? 'bg-blue-950/40 border-blue-400 shadow-[0_0_20px_rgba(59,130,246,0.25)]' 
                     : 'bg-black/40 border-zinc-800 hover:border-zinc-700'
                 }`}
@@ -3668,24 +3807,29 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-sm text-blue-300">Client Node (Remote Verbindung)</span>
                       <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-900/60 text-blue-200 border border-blue-600/60 font-bold">
-                        Speichert am Server
+                        Dedizierter Port 8351
                       </span>
                     </div>
-                    {multiPcMode === 'client' && <span className="text-xs text-blue-400 font-bold">Aktiv</span>}
+                    {modalDraftMode === 'client' && <span className="text-xs text-blue-400 font-bold">Ausgewählt</span>}
                   </div>
                   <p className="text-xs text-zinc-300 mt-1 font-sans">
-                    Verbindet diesen Rechner mit einem aktiven no0bz Server. Sendet Live-Telemetrie an den Host; Chat-Dateien und Datenbank werden direkt serverseitig auf dem Host vorgehalten.
+                    Verbindet diesen Rechner mit einem aktiven no0bz Server über den <strong>dedizierten Remote-Port (8351)</strong>. Sendet Live-Telemetrie; Chat-Dateien und Historie werden zentral am Host verwaltet.
                   </p>
-                  {multiPcMode === 'client' && (
-                    <div className="mt-3 flex items-center gap-2">
-                      <span className="text-xs text-zinc-300">Server-Adresse:</span>
-                      <input 
-                        type="text" 
-                        value={clientServerUrl} 
-                        onChange={(e) => setClientServerUrl(e.target.value)}
-                        placeholder="192.168.1.100:8350"
-                        className="bg-black border border-zinc-700 rounded px-2.5 py-1 text-xs text-white focus:outline-none focus:border-blue-400 font-bold"
-                      />
+                  {modalDraftMode === 'client' && (
+                    <div className="mt-3 p-3 bg-black/60 rounded-lg border border-blue-800/60 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-zinc-300 font-bold">Server-Adresse:</span>
+                        <input 
+                          type="text" 
+                          value={modalDraftUrl} 
+                          onChange={(e) => setModalDraftUrl(e.target.value)}
+                          placeholder="192.168.1.100:8351"
+                          className="flex-1 bg-zinc-950 border border-blue-500/80 rounded px-2.5 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-400 font-bold"
+                        />
+                      </div>
+                      <p className="text-[11px] text-zinc-400">
+                        💡 Tipp: Standardmäßig lauscht der no0bz Host auf dem separaten Remote-Port <strong>8351</strong>.
+                      </p>
                     </div>
                   )}
                 </div>
@@ -3698,16 +3842,24 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
               <button
                 type="button"
                 onClick={() => {
-                  localStorage.setItem('no0bz_multipc_mode', multiPcMode);
+                  setMultiPcMode(modalDraftMode);
+                  setClientServerUrl(modalDraftUrl);
+                  setRemotePort(modalDraftPort);
+                  localStorage.setItem('no0bz_multipc_mode', modalDraftMode);
                   setShowModeModal(false);
                   fetch('/api/multipc/mode', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ mode: multiPcMode, client_server_url: clientServerUrl })
+                    body: JSON.stringify({ 
+                      mode: modalDraftMode, 
+                      client_server_url: modalDraftUrl,
+                      remote_port: modalDraftPort
+                    })
                   })
                     .then(res => res.json())
                     .then(data => {
                       if (data.storage_type) setStorageLocation(data.storage_type);
+                      if (data.remote_port) setRemotePort(data.remote_port);
                     })
                     .catch(() => {});
                 }}
@@ -3734,7 +3886,7 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
             className="text-cyan-400 hover:text-cyan-300 font-semibold cursor-pointer underline"
             title="Changelog ansehen"
           >
-            v3.8.2
+            v3.9.0
           </button>
           <span>|</span>
           <span className="hidden sm:inline">// {themeMode.toUpperCase()} MODE</span>
