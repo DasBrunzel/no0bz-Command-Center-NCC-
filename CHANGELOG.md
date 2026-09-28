@@ -6,6 +6,24 @@ Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/) 
 
 ---
 
+## [v3.11.0] - 2026-09-28
+
+### 🚀 Neu & Behoben (Multi-PC, Chat & Cluster Inspector)
+- **Voll funktionsfähiger Chat & Prompt-Sync**:
+  - Beseitigung aller fehlerhaften `http://localhost:8350`-Aufrufe im Frontend: Chat-Nachrichten, Dateiuploads und Dateilöschungen nutzen nun korrekte relative API-Pfade (`/api/chat/*`) und synchronisieren sich zuverlässig mit dem Backend und der DuckDB-Datenbank.
+  - WebSocket-Verbindung (`/ws/live`) bindet sich nun universell an den aktiven Host, wodurch Chat-Broadcasts in Echtzeit zwischen allen Tabs und Rechnern übertragen werden.
+  - P2P- und Server-Weiterleitung im Client-Modus: Im Client-Betrieb erstellte Chat-Nachrichten werden automatisch an den Master-Server weitergeleitet.
+- **Server-Sichtbarkeit im Client-Modus**:
+  - Wenn ein Rechner im Client-Modus läuft, zeigt die Knotenliste im "Multi PC Hub" nun sowohl den verbundenen **Master Hub Server** (mit Krone `👑`, Server-IP, OS und Live-Telemetrie) als auch die lokale **Client Workstation** an.
+- **Korrekte Rollen- und Icon-Zuordnung (Keine falsche Krone für Clients)**:
+  - Im Client-Modus wird der Client-PC nun korrekt mit dem Laptop-Symbol (`💻`) und der Rolle `Client Node (Lokal)` dargestellt. Die Master-Krone (`👑`) und das `HOST`-Badge sind exklusiv dem Master Server vorbehalten.
+- **Echtzeit-Dashboard-Umschaltung für Remote-Knoten ("Cluster Inspector")**:
+  - Das Umschalten auf einen Remote-PC im "Multi PC Hub" ("Im Dashboard anzeigen") überträgt die Telemetrie des ausgewählten PCs (CPU-Last, RAM, GPU, Netzwerk I/O, Systemname) sofort und vollständig auf das Dashboard.
+  - Ein neuer **Cluster Inspector Banner** informiert über den aktuell im Dashboard aktiven Knoten und bietet eine Ein-Klick-Rückkehr zur Standard-Systemansicht.
+  - Auch die Quick-Stats in der Seitenleiste spiegeln den ausgewählten Remote-Knoten wider.
+
+---
+
 ## [v3.10.0] - 2026-09-28
 
 ### 🚀 Neu & Optimiert

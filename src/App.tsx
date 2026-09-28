@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { 
   Activity, Cpu, HardDrive, Wifi, Zap, Terminal, 
-  Trash2, Search, Sliders, RefreshCw, Layers, ArrowDown, ArrowUp, Disc,
+  Trash2, Search, Sliders, RefreshCw, Layers, ArrowDown, ArrowUp, ArrowLeft, Disc,
   MessageSquare, Send, Paperclip, Download, Upload, Copy, Check, File,
   FileText, Image as ImageIcon, Eye, Folder, Settings, ShieldAlert, Sparkles,
   Maximize2, X, AlertTriangle, Monitor, Laptop, Clock, Server, CheckCircle2,
@@ -163,7 +163,7 @@ export function No0bzLogo({
             title="Klicken, um das NCC Changelog zu öffnen"
             className="text-[8px] px-1 py-0.2 bg-zinc-800 hover:bg-cyan-900/60 hover:text-cyan-300 border border-zinc-700 hover:border-cyan-500 text-zinc-300 rounded font-mono font-semibold transition-all cursor-pointer"
           >
-            v3.9.0
+            v3.11.0
           </button>
         </div>
       </div>
@@ -767,9 +767,7 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
   const fetchProcesses = useCallback(async () => {
     setProcLoading(true);
     try {
-      const apiHost = window.location.port === '8350' || (window.location.host && !window.location.port) 
-        ? '' 
-        : 'http://localhost:8350';
+      const apiHost = '';
       const res = await fetch(`${apiHost}/api/processes`);
       if (res.ok) {
         const data = await res.json();
@@ -799,9 +797,7 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
     try {
       const isHttps = window.location.protocol === 'https:';
       const wsProto = isHttps ? 'wss:' : 'ws:';
-      const host = window.location.port === '8350' || (window.location.host && !window.location.port) 
-        ? window.location.host 
-        : 'localhost:8350';
+      const host = window.location.host;
       const wsUrl = `${wsProto}//${host}/ws/live`;
       ws = new WebSocket(wsUrl);
 
@@ -1067,6 +1063,70 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
     });
   }, [messages, serverVaultFiles, vaultSearch, vaultFilter, multiPcMode]);
 
+  // Active remote node for Dashboard Inspection
+  const activeViewNode = useMemo(() => {
+    if (!selectedViewNodeId) return null;
+    return connectedNodes.find(n => n.id === selectedViewNodeId) || null;
+  }, [selectedViewNodeId, connectedNodes]);
+
+  // Dynamic metrics: switches between local/host metrics and selected remote node metrics
+  const displayedMetrics = useMemo(() => {
+    if (!activeViewNode) {
+      return metrics;
+    }
+    const ramTotal = (activeViewNode as any).ram_total_gb || 32.0;
+    const ramPercent = activeViewNode.ram_percent || 0.0;
+    const ramUsed = (activeViewNode as any).ram_used_gb || parseFloat(((ramPercent / 100) * ramTotal).toFixed(1));
+    const baseCpu = activeViewNode.cpu_load || 0.0;
+    const cores = metrics.cpu_cores.map((_, i) => {
+      const jitter = ((i * 7 + 11) % 15) - 7;
+      return Math.min(100, Math.max(5, Math.round(baseCpu + jitter)));
+    });
+
+    return {
+      ...metrics,
+      hostname: activeViewNode.pc_name,
+      cpu_load: activeViewNode.cpu_load,
+      cpu_model: activeViewNode.cpu_model || `${activeViewNode.pc_name} CPU`,
+      cpu_cores: cores,
+      cpu_temp: (activeViewNode as any).cpu_temp || Math.round(38 + (baseCpu * 0.35)),
+      cpu_power: (activeViewNode as any).cpu_power || Math.round(25 + (baseCpu * 0.8)),
+      ram_total: ramTotal,
+      ram_used: ramUsed,
+      ram_percent: ramPercent,
+      gpu_name: activeViewNode.gpu_model || 'Remote GPU',
+      gpu_load: activeViewNode.gpu_load || Math.max(5, Math.round(baseCpu * 0.7)),
+      gpu_temp: (activeViewNode as any).gpu_temp || 42,
+      gpu_power: (activeViewNode as any).gpu_power || 65,
+      gpu_vram_total: 16.0,
+      gpu_vram_used: parseFloat(((activeViewNode.gpu_load || 20) * 0.12).toFixed(1)),
+      gpu_vram_pct: activeViewNode.gpu_load || 20,
+      net_recv_mbps: activeViewNode.net_recv_mbps,
+      net_sent_mbps: activeViewNode.net_sent_mbps,
+      uptime: activeViewNode.last_seen ? `Status: ${activeViewNode.last_seen}` : metrics.uptime
+    };
+  }, [activeViewNode, metrics]);
+
+  // Ensure profile avatar is not Crown 👑 in client mode
+  useEffect(() => {
+    if (multiPcMode === 'client') {
+      setUserProfile(prev => {
+        if (prev.avatar === '👑' || prev.role.toLowerCase().includes('master') || prev.role.toLowerCase().includes('host')) {
+          const updated = {
+            ...prev,
+            avatar: '💻',
+            role: 'Client Workstation'
+          };
+          try {
+            localStorage.setItem('no0bz_user_profile', JSON.stringify(updated));
+          } catch {}
+          return updated;
+        }
+        return prev;
+      });
+    }
+  }, [multiPcMode]);
+
   // Handle Drag & Drop over Chat
   const handleChatDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -1111,9 +1171,7 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
     formData.append('note', `Direkt in das ${multiPcMode === 'host' ? 'serverseitige' : 'lokale'} Vault hochgeladene Dateien.`);
 
     try {
-      const apiHost = window.location.port === '8350' || (window.location.host && !window.location.port) 
-        ? '' 
-        : 'http://localhost:8350';
+      const apiHost = '';
       const res = await fetch(`${apiHost}/api/chat/upload`, {
         method: 'POST',
         body: formData
@@ -1139,9 +1197,7 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
   // Delete Vault File from Disk & DuckDB
   const handleDeleteVaultFile = async (fileName: string) => {
     try {
-      const apiHost = window.location.port === '8350' || (window.location.host && !window.location.port) 
-        ? '' 
-        : 'http://localhost:8350';
+      const apiHost = '';
       await fetch(`${apiHost}/api/chat/files/${encodeURIComponent(fileName)}`, {
         method: 'DELETE'
       });
@@ -1161,9 +1217,7 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
       ? `${userProfile.displayName} (${userProfile.pcName || metrics.hostname})`
       : (userProfile.pcName || metrics.hostname);
 
-    const apiHost = window.location.port === '8350' || (window.location.host && !window.location.port) 
-        ? '' 
-        : 'http://localhost:8350';
+    const apiHost = '';
 
     // If uploading files, send real multipart/form-data to /api/chat/upload
     if (queuedFiles.length > 0) {
@@ -1286,9 +1340,7 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
   const handleKill = async (pid: number) => {
     setKillPid(pid);
     try {
-      const apiHost = window.location.port === '8350' || (window.location.host && !window.location.port) 
-        ? '' 
-        : 'http://localhost:8350';
+      const apiHost = '';
       await fetch(`${apiHost}/api/kill`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1386,7 +1438,7 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
           >
             <FileText className="w-3.5 h-3.5 text-zinc-400" />
             <span className="hidden sm:inline">CHANGELOG</span>
-            <span className="text-[9px] px-1 py-0.2 rounded bg-zinc-800 text-zinc-400 font-mono">v3.8.1</span>
+            <span className="text-[9px] px-1 py-0.2 rounded bg-zinc-800 text-zinc-400 font-mono">v3.11.0</span>
           </button>
 
           {/* Logo Style Toggle */}
@@ -1441,7 +1493,6 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                 {/* 1. DASHBOARD */}
                 <button
                   onClick={() => {
-                    setSelectedViewNodeId(null);
                     setActiveTab('dashboard');
                   }}
                   className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-mono font-semibold transition-all ${
@@ -1455,6 +1506,11 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                   <div className="flex items-center gap-2.5">
                     <Activity className="w-4 h-4" />
                     <span>DASHBOARD</span>
+                    {activeViewNode && (
+                      <span className="text-[9px] px-1 py-0.2 rounded bg-black/50 border border-zinc-700 text-cyan-300 font-mono truncate max-w-[80px]">
+                        {activeViewNode.pc_name}
+                      </span>
+                    )}
                   </div>
                   {activeTab === 'dashboard' && <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />}
                 </button>
@@ -1585,20 +1641,20 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
             {/* Quick Live Quick-Stats Box */}
             <div className={`p-3 rounded-lg border text-xs font-mono space-y-2 ${isNightmare ? 'bg-red-950/20 border-red-900/30 text-red-200' : 'bg-slate-900/50 border-slate-800 text-zinc-300'}`}>
               <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider flex items-center justify-between">
-                <span>Quick Stats</span>
-                <span className="text-emerald-400 text-[9px]">ONLINE</span>
+                <span>Quick Stats {activeViewNode ? `(${activeViewNode.pc_name})` : ''}</span>
+                <span className="text-emerald-400 text-[9px]">{activeViewNode ? 'REMOTE' : 'ONLINE'}</span>
               </div>
               <div className="flex justify-between items-center text-[11px]">
                 <span className="text-zinc-400">CPU Last:</span>
-                <span className="font-bold text-white">{metrics.cpu_load}%</span>
+                <span className="font-bold text-white">{displayedMetrics.cpu_load}%</span>
               </div>
               <div className="flex justify-between items-center text-[11px]">
                 <span className="text-zinc-400">GPU Last:</span>
-                <span className="font-bold text-white">{metrics.gpu_load}%</span>
+                <span className="font-bold text-white">{displayedMetrics.gpu_load}%</span>
               </div>
               <div className="flex justify-between items-center text-[11px]">
                 <span className="text-zinc-400">RAM Belegt:</span>
-                <span className="font-bold text-white">{metrics.ram_used} GB</span>
+                <span className="font-bold text-white">{displayedMetrics.ram_used} GB</span>
               </div>
               <div className="flex justify-between items-center text-[11px]">
                 <span className="text-zinc-400">Disks Read:</span>
@@ -1630,6 +1686,40 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
           {activeTab === 'dashboard' && (
             <div className="space-y-6 max-w-7xl mx-auto">
               
+              {/* Cluster Inspector Banner when a remote node or server is selected */}
+              {activeViewNode && (
+                <div className="p-3.5 rounded-xl bg-cyan-950/40 border border-cyan-500/80 shadow-[0_0_20px_rgba(6,182,212,0.25)] flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl p-2 rounded-lg bg-black/60 border border-cyan-500/50">
+                      {activeViewNode.avatar || '💻'}
+                    </span>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-mono font-bold text-cyan-300">
+                          CLUSTER INSPECTOR: AKTIVE REMOTENODE-ANSICHT
+                        </span>
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold font-mono ${
+                          activeViewNode.is_host ? 'bg-amber-500/20 text-amber-300' : 'bg-blue-500/20 text-blue-300'
+                        }`}>
+                          {activeViewNode.is_host ? '👑 MASTER SERVER' : '🔗 CLIENT NODE'}
+                        </span>
+                      </div>
+                      <div className="text-sm font-bold text-white flex items-center gap-2 font-mono">
+                        <span>{activeViewNode.pc_name}</span>
+                        <span className="text-zinc-400 font-normal text-xs">({activeViewNode.display_name} • IP: {activeViewNode.ip} • Ping: {activeViewNode.ping_ms}ms)</span>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setSelectedViewNodeId(null)}
+                    className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-200 font-mono font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <span>Zurück zur Standard-Systemansicht</span>
+                  </button>
+                </div>
+              )}
+
               {/* Row 1: The 4 Primary Hardware Telemetry Cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                 
@@ -1640,27 +1730,27 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                       <Cpu className={`w-4 h-4 ${isNightmare ? 'text-red-500' : 'text-cyan-400'}`} />
                       <span className="font-mono font-bold text-xs tracking-wider">CPU METRICS</span>
                     </div>
-                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 truncate max-w-[170px]" title={metrics.cpu_model || systemCache?.profile?.cpu_model || (systemCache as any)?.cpu_model || 'CPU'}>
-                      {(metrics.cpu_model || systemCache?.profile?.cpu_model || (systemCache as any)?.cpu_model || 'CPU CORE').split('@')[0].trim()}
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 truncate max-w-[170px]" title={displayedMetrics.cpu_model || systemCache?.profile?.cpu_model || (systemCache as any)?.cpu_model || 'CPU'}>
+                      {(displayedMetrics.cpu_model || systemCache?.profile?.cpu_model || (systemCache as any)?.cpu_model || 'CPU CORE').split('@')[0].trim()}
                     </span>
                   </div>
 
                   <SvgCircleGauge
-                    value={metrics.cpu_load}
+                    value={displayedMetrics.cpu_load}
                     title="CPU LOAD"
                     unit="%"
                     color={accentColor}
-                    subtext={`${metrics.cpu_temp}°C • ${metrics.cpu_power}W Package`}
+                    subtext={`${displayedMetrics.cpu_temp}°C • ${displayedMetrics.cpu_power}W Package`}
                   />
 
                   {/* Dynamic Capsule CPU Core Graph */}
                   <div className="mt-3 pt-3 border-t border-zinc-800/60">
                     <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400 mb-1.5">
-                      <span>{metrics.cpu_cores.length} LOGICAL CORES</span>
+                      <span>{displayedMetrics.cpu_cores.length} LOGICAL CORES</span>
                       <span className="text-zinc-500">PER-CORE LOAD</span>
                     </div>
                     <div className="grid grid-cols-8 gap-1.5 h-12 bg-black/40 p-1.5 rounded-lg border border-zinc-800/50">
-                      {metrics.cpu_cores.map((coreVal, idx) => (
+                      {displayedMetrics.cpu_cores.map((coreVal, idx) => (
                         <div key={idx} className="relative flex flex-col justify-end items-center h-full bg-zinc-900/60 rounded overflow-hidden" title={`Core ${idx}: ${coreVal}%`}>
                           <div 
                             className={`w-full rounded-t transition-all duration-300 ${
@@ -1686,16 +1776,16 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                       <span className="font-mono font-bold text-xs tracking-wider">MEMORY / DDR</span>
                     </div>
                     <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300">
-                      {metrics.ram_total} GB TOTAL
+                      {displayedMetrics.ram_total} GB TOTAL
                     </span>
                   </div>
 
                   <SvgCircleGauge
-                    value={metrics.ram_percent}
+                    value={displayedMetrics.ram_percent}
                     title="RAM USAGE"
                     unit="%"
                     color="#3b82f6"
-                    subtext={`${metrics.ram_used} GB / ${metrics.ram_total} GB`}
+                    subtext={`${displayedMetrics.ram_used} GB / ${displayedMetrics.ram_total} GB`}
                   />
 
                   {/* RAM & Swap Progress Bar */}
@@ -1703,20 +1793,20 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                     <div>
                       <div className="flex justify-between text-[10px] font-mono text-zinc-400 mb-1">
                         <span>PHYSICAL RAM</span>
-                        <span className="font-bold text-white">{metrics.ram_percent}%</span>
+                        <span className="font-bold text-white">{displayedMetrics.ram_percent}%</span>
                       </div>
                       <div className="w-full bg-zinc-900 h-2 rounded-full overflow-hidden border border-zinc-800">
-                        <div className="bg-blue-500 h-full rounded-full transition-all" style={{ width: `${metrics.ram_percent}%` }} />
+                        <div className="bg-blue-500 h-full rounded-full transition-all" style={{ width: `${displayedMetrics.ram_percent}%` }} />
                       </div>
                     </div>
 
                     <div>
                       <div className="flex justify-between text-[10px] font-mono text-zinc-400 mb-1">
                         <span>SWAP / PAGEFILE</span>
-                        <span className="font-bold text-white">{Math.round(metrics.ram_percent * 0.4)}%</span>
+                        <span className="font-bold text-white">{Math.round(displayedMetrics.ram_percent * 0.4)}%</span>
                       </div>
                       <div className="w-full bg-zinc-900 h-2 rounded-full overflow-hidden border border-zinc-800">
-                        <div className="bg-indigo-500 h-full rounded-full transition-all" style={{ width: `${Math.round(metrics.ram_percent * 0.4)}%` }} />
+                        <div className="bg-indigo-500 h-full rounded-full transition-all" style={{ width: `${Math.round(displayedMetrics.ram_percent * 0.4)}%` }} />
                       </div>
                     </div>
                   </div>
@@ -1729,31 +1819,31 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                       <Zap className="w-4 h-4 text-purple-400" />
                       <span className="font-mono font-bold text-xs tracking-wider">GPU ACCELERATOR</span>
                     </div>
-                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-purple-300 truncate max-w-[160px]" title={metrics.gpu_name}>
-                      {metrics.gpu_name || 'GPU Core'}
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-purple-300 truncate max-w-[160px]" title={displayedMetrics.gpu_name}>
+                      {displayedMetrics.gpu_name || 'GPU Core'}
                     </span>
                   </div>
 
                   <SvgCircleGauge
-                    value={metrics.gpu_load}
+                    value={displayedMetrics.gpu_load}
                     title="GPU LOAD"
                     unit="%"
                     color="#a855f7"
-                    subtext={`${metrics.gpu_temp}°C • ${metrics.gpu_power}W TGP`}
+                    subtext={`${displayedMetrics.gpu_temp}°C • ${displayedMetrics.gpu_power}W TGP`}
                   />
 
                   {/* VRAM Telemetry */}
                   <div className="mt-3 pt-3 border-t border-zinc-800/60">
                     <div className="flex justify-between text-[10px] font-mono text-zinc-400 mb-1">
                       <span>VRAM SPEICHER</span>
-                      <span className="font-bold text-purple-400">{metrics.gpu_vram_used} / {metrics.gpu_vram_total} GB</span>
+                      <span className="font-bold text-purple-400">{displayedMetrics.gpu_vram_used} / {displayedMetrics.gpu_vram_total} GB</span>
                     </div>
                     <div className="w-full bg-zinc-900 h-2.5 rounded-full overflow-hidden border border-zinc-800">
-                      <div className="bg-gradient-to-r from-purple-600 to-pink-500 h-full rounded-full transition-all" style={{ width: `${metrics.gpu_vram_pct}%` }} />
+                      <div className="bg-gradient-to-r from-purple-600 to-pink-500 h-full rounded-full transition-all" style={{ width: `${displayedMetrics.gpu_vram_pct}%` }} />
                     </div>
                     <div className="flex justify-between text-[9px] font-mono text-zinc-500 mt-1">
-                      <span>{metrics.gpu_name.includes('NVIDIA') ? 'NVLINK / CUDA' : 'GPU COMPUTE'}</span>
-                      <span>{metrics.fans_rpm} RPM FANS</span>
+                      <span>{displayedMetrics.gpu_name.includes('NVIDIA') ? 'NVLINK / CUDA' : 'GPU COMPUTE'}</span>
+                      <span>{displayedMetrics.fans_rpm} RPM FANS</span>
                     </div>
                   </div>
                 </div>
@@ -1770,7 +1860,7 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                         LAN 10 GbE
                       </span>
                       <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-950/70 border border-emerald-700/60 text-emerald-400 font-bold">
-                        PING 3ms
+                        PING {activeViewNode ? activeViewNode.ping_ms : 3}ms
                       </span>
                     </div>
                   </div>
@@ -1783,7 +1873,7 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                         <span className="text-[11px] font-semibold">RX</span>
                       </div>
                       <span className="text-sm font-bold text-white">
-                        {metrics.net_recv_mbps} <span className="text-[10px] text-zinc-400">M</span>
+                        {displayedMetrics.net_recv_mbps} <span className="text-[10px] text-zinc-400">M</span>
                       </span>
                     </div>
 
@@ -1793,7 +1883,7 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                         <span className="text-[11px] font-semibold">TX</span>
                       </div>
                       <span className="text-sm font-bold text-white">
-                        {metrics.net_sent_mbps} <span className="text-[10px] text-zinc-400">M</span>
+                        {displayedMetrics.net_sent_mbps} <span className="text-[10px] text-zinc-400">M</span>
                       </span>
                     </div>
                   </div>
@@ -1801,8 +1891,8 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                   {/* Real-Time Canvas Graph (Requested by User) */}
                   <NetworkLiveGraph
                     history={netHistory}
-                    currentRecv={metrics.net_recv_mbps}
-                    currentSent={metrics.net_sent_mbps}
+                    currentRecv={displayedMetrics.net_recv_mbps}
+                    currentSent={displayedMetrics.net_sent_mbps}
                     isNightmare={isNightmare}
                   />
 
@@ -2089,15 +2179,15 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                 {/* Connected Nodes Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {connectedNodes.map((node) => {
-                    const isSelected = selectedViewNodeId === node.id || (!selectedViewNodeId && node.is_host);
+                    const isSelected = selectedViewNodeId === node.id;
                     return (
                       <div 
                         key={node.id}
                         className={`p-4 rounded-xl border transition-all flex flex-col justify-between space-y-3 ${
-                          node.is_host 
+                          isSelected
+                            ? 'bg-cyan-950/40 border-cyan-500 shadow-[0_0_20px_rgba(6,182,212,0.3)] ring-1 ring-cyan-400'
+                            : node.is_host 
                             ? 'bg-amber-950/20 border-amber-600/50 shadow-[0_0_15px_rgba(245,158,11,0.1)]' 
-                            : isSelected
-                            ? 'bg-cyan-950/30 border-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.15)]'
                             : 'bg-black/50 border-zinc-800/80 hover:border-zinc-700'
                         }`}
                       >
@@ -2105,16 +2195,20 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                         <div className="flex items-start justify-between border-b border-zinc-800/60 pb-2">
                           <div className="flex items-center gap-2.5">
                             <span className="text-2xl p-1.5 rounded-lg bg-zinc-900 border border-zinc-800">
-                              {node.avatar || '💻'}
+                              {node.avatar || (node.is_host ? '👑' : '💻')}
                             </span>
                             <div>
                               <div className="flex items-center gap-1.5">
                                 <span className="font-mono font-bold text-xs text-white truncate max-w-[150px]">
                                   {node.pc_name}
                                 </span>
-                                {node.is_host && (
+                                {node.is_host ? (
                                   <span className="text-[9px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 font-mono font-bold">
                                     HOST
+                                  </span>
+                                ) : (
+                                  <span className="text-[9px] px-1 py-0.2 rounded bg-blue-500/20 text-blue-300 font-mono font-bold">
+                                    CLIENT
                                   </span>
                                 )}
                               </div>
@@ -2215,8 +2309,12 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                         <div className="pt-2 border-t border-zinc-800/60 flex items-center gap-2">
                           <button
                             onClick={() => {
-                              setSelectedViewNodeId(node.is_host ? null : node.id);
-                              setActiveTab('dashboard');
+                              if (selectedViewNodeId === node.id) {
+                                setSelectedViewNodeId(null);
+                              } else {
+                                setSelectedViewNodeId(node.id);
+                                setActiveTab('dashboard');
+                              }
                             }}
                             className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-mono font-bold flex items-center justify-center gap-1.5 transition-all ${
                               isSelected
@@ -2225,7 +2323,7 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                             }`}
                           >
                             <Eye className="w-3.5 h-3.5" />
-                            <span>{isSelected ? 'Aktiv im Dashboard' : 'Im Dashboard anzeigen'}</span>
+                            <span>{isSelected ? 'Aktiv im Dashboard (Deaktivieren)' : 'Im Dashboard anzeigen'}</span>
                           </button>
 
                           <button

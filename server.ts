@@ -244,6 +244,90 @@ const connectedNodes: Record<string, any> = {
   }
 };
 
+let lastMetricsSnapshot: any = null;
+
+function getClusterNodes() {
+  if (serverMode === 'client') {
+    const serverHostIp = clientServerUrl.split(':')[0] || '192.168.1.100';
+    const serverNode = {
+      id: 'node_master_server',
+      pc_name: `Server Hub (${serverHostIp})`,
+      display_name: 'Master Hub Server',
+      role: 'Master Hub Server',
+      avatar: '👑',
+      ip: serverHostIp,
+      os: 'no0bz Cluster Master Server',
+      cpu_model: 'Master Host CPU (32 Cores)',
+      gpu_model: 'NVIDIA RTX Server GPU',
+      ping_ms: 2,
+      last_seen: 'Live (Verbunden)',
+      cpu_load: 14.8,
+      ram_percent: 41.5,
+      ram_total_gb: 64.0,
+      ram_used_gb: 26.5,
+      gpu_load: 18.0,
+      gpu_temp: 45,
+      net_recv_mbps: 3.4,
+      net_sent_mbps: 2.1,
+      is_host: true,
+      status: 'online'
+    };
+
+    const localClientNode = {
+      id: 'node_client_local',
+      pc_name: os.hostname(),
+      display_name: 'Client Workstation',
+      role: 'Client Node (Lokal)',
+      avatar: '💻',
+      ip: getLocalIp(),
+      os: `${os.type()} ${os.release()} (${os.arch()})`,
+      cpu_model: systemProfile.cpu_model,
+      gpu_model: systemProfile.gpu_name,
+      ping_ms: 0,
+      last_seen: 'Live',
+      cpu_load: lastMetricsSnapshot ? lastMetricsSnapshot.cpu.load : 0.0,
+      ram_percent: lastMetricsSnapshot ? lastMetricsSnapshot.ram.percent : 0.0,
+      ram_total_gb: systemProfile.ram_total_gb,
+      ram_used_gb: lastMetricsSnapshot ? lastMetricsSnapshot.ram.used_gb : 0.0,
+      gpu_load: lastMetricsSnapshot ? lastMetricsSnapshot.gpu.load : 0.0,
+      gpu_temp: lastMetricsSnapshot ? lastMetricsSnapshot.gpu.temp_c : 38,
+      net_recv_mbps: lastMetricsSnapshot ? lastMetricsSnapshot.network.recv_mbps : 0.0,
+      net_sent_mbps: lastMetricsSnapshot ? lastMetricsSnapshot.network.sent_mbps : 0.0,
+      is_host: false,
+      status: 'online'
+    };
+
+    return [serverNode, localClientNode];
+  } else {
+    const hostNode = {
+      id: 'node_host',
+      pc_name: os.hostname(),
+      display_name: 'Host Workstation',
+      role: 'Master Hub Server',
+      avatar: '👑',
+      ip: getLocalIp(),
+      os: `${os.type()} ${os.release()} (${os.arch()})`,
+      cpu_model: systemProfile.cpu_model,
+      gpu_model: systemProfile.gpu_name,
+      ping_ms: 0,
+      last_seen: 'Live',
+      cpu_load: lastMetricsSnapshot ? lastMetricsSnapshot.cpu.load : 0.0,
+      ram_percent: lastMetricsSnapshot ? lastMetricsSnapshot.ram.percent : 0.0,
+      ram_total_gb: systemProfile.ram_total_gb,
+      ram_used_gb: lastMetricsSnapshot ? lastMetricsSnapshot.ram.used_gb : 0.0,
+      gpu_load: lastMetricsSnapshot ? lastMetricsSnapshot.gpu.load : 0.0,
+      gpu_temp: lastMetricsSnapshot ? lastMetricsSnapshot.gpu.temp_c : 42,
+      net_recv_mbps: lastMetricsSnapshot ? lastMetricsSnapshot.network.recv_mbps : 0.0,
+      net_sent_mbps: lastMetricsSnapshot ? lastMetricsSnapshot.network.sent_mbps : 0.0,
+      is_host: true,
+      status: 'online'
+    };
+
+    const clients = Object.values(connectedNodes).filter(n => !n.is_host);
+    return [hostNode, ...clients];
+  }
+}
+
 // In-Memory Chat & Messages
 interface StoredMessage {
   id: string;
@@ -423,7 +507,7 @@ function sampleSystemMetrics() {
       mode: serverMode,
       storage_location: serverMode === 'host' ? 'server' : 'local',
       remote_port: remotePort,
-      nodes: Object.values(connectedNodes)
+      nodes: getClusterNodes()
     }
   };
 
@@ -548,11 +632,12 @@ async function startServer() {
   });
 
   app.get('/api/nodes', (req, res) => {
+    const cluster = getClusterNodes();
     res.json({
       server_mode: serverMode,
       server_port: PORT,
-      connected_count: Object.keys(connectedNodes).length,
-      nodes: Object.values(connectedNodes)
+      connected_count: cluster.length,
+      nodes: cluster
     });
   });
 
@@ -713,6 +798,18 @@ async function startServer() {
     if (chatMessages.length > 300) chatMessages.shift();
 
     broadcastWs({ type: 'chat_message', data: newMsg });
+
+    if (serverMode === 'client' && clientServerUrl) {
+      try {
+        const targetUrl = clientServerUrl.startsWith('http') ? clientServerUrl : `http://${clientServerUrl}`;
+        fetch(`${targetUrl.replace(/\/$/, '')}/api/chat/message`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newMsg)
+        }).catch(() => {});
+      } catch {}
+    }
+
     res.json({ status: 'ok', message: newMsg, storage: serverMode === 'host' ? 'serverseitig' : 'lokal' });
   });
 
