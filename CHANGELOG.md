@@ -6,6 +6,18 @@ Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/) 
 
 ---
 
+## [v3.10.0] - 2026-09-28
+
+### 🚀 Neu & Optimiert
+- **Full-Stack Universal Server Architecture (`server.ts` & `main.py`)**:
+  - Nahtloser Dev- und Production-Serverbetrieb auf Port 3000 mit integrierten Express-APIs, nativem WebSocket-Streaming (`/ws/live`) und dynamisch gemounteten Vite-Middlewares.
+  - Vollständige Behebung von Proxy-Verbindungsabbrüchen (`ECONNREFUSED 127.0.0.1:8350`): Sämtliche REST- und WebSocket-Endpoints (`/api/system/profile`, `/api/nodes`, `/api/processes`, `/api/kill`, `/api/chat/*`, `/ws/live`) reagieren sofort und fehlerfrei.
+  - Reale Hardware-Erkennung für AMD Zen / Intel Core x86_64, dedizierte GPUs (NVIDIA/AMD) und Linux Container/Cloud Environments.
+  - Erweiterter Prozess-Manager mit Spaltensortierung (PID, Name, CPU, RAM) und sofortiger Prozess-Terminierung.
+  - Parallele Unterstützung für eigenständigen Python-3-Betrieb via `main.py` auf Port 8350 mit synchronisiertem Pre-compiled React Dashboard Bundle.
+
+---
+
 ## [v3.8.2] - 2026-09-26
 
 ### 🚀 Neu & Hervorgehoben
