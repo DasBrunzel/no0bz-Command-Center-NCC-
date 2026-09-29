@@ -1,0 +1,44 @@
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Copy, Cpu, Download, FileUp, FolderOpen, Globe2, History, MessageSquare, MonitorCog, Search, Send, Server, Trash2 } from "lucide-react";
+
+type Data = Record<string, any>;
+const n=(v:unknown)=>typeof v==="number"&&Number.isFinite(v)?v:0;
+const size=(v:number)=>v>1e9?`${(v/1e9).toFixed(1)} GB`:v>1e6?`${(v/1e6).toFixed(1)} MB`:v>1e3?`${(v/1e3).toFixed(1)} KB`:`${v} B`;
+const auth=(token:string,json=true)=>({...json?{"Content-Type":"application/json"}:{},...token?{"X-NCC-Token":token}:{}});
+async function api(url:string,init?:RequestInit){const r=await fetch(url,init);if(!r.ok){let message=`HTTP ${r.status}`;try{message=(await r.json()).detail||message}catch{}throw new Error(message)}return r.json()}
+function Panel({title,icon,tag,children,className=""}:{title:string;icon:React.ReactNode;tag?:string;children:React.ReactNode;className?:string}){return <section className={`panel ${className}`}><header><h2>{icon}{title}</h2>{tag&&<b>{tag}</b>}</header>{children}</section>}
+
+export function NodesPage({nodes,mode}:{nodes:Data[];mode:string}){
+  const [selected,setSelected]=useState("");
+  const node=nodes.find(x=>x.node_id===selected)||nodes[0];
+  return <div className="workspace-grid"><Panel title="Verbundene Nodes" icon={<Globe2 size={15}/>} tag={`${nodes.filter(x=>x.online).length} ONLINE`} className="workspace"><div className="mode-banner"><span>Betriebsmodus</span><b>{mode.toUpperCase()}</b><small>Remote-Port 8351 • Telemetrie token-geschützt</small></div><div className="node-list">{nodes.map(x=><button key={x.node_id} onClick={()=>setSelected(x.node_id)} className={node?.node_id===x.node_id?"selected":""}><Server size={16}/><span><b>{x.profile?.alias||x.name||x.node_id}</b><small>{x.node_id}</small></span><i className={x.online?"online":"offline"}>{x.online?"ONLINE":"OFFLINE"}</i></button>)}{!nodes.length&&<p className="empty">Noch keine Nodes registriert.</p>}</div></Panel><Panel title="Node Inspector" icon={<MonitorCog size={15}/>} tag={node?.online?"LIVE":"STANDBY"} className="workspace"><div className="inspector">{node?<><h3>{node.profile?.pc_name||node.name}</h3><dl><dt>Node ID</dt><dd>{node.node_id}</dd><dt>Rolle</dt><dd>{node.profile?.role||"operator"}</dd><dt>Status</dt><dd className={node.online?"online":"offline"}>{node.online?"Verbunden":"Offline"}</dd><dt>Zuletzt gesehen</dt><dd>{node.last_seen||"lokal"}</dd></dl><p>{node.profile?.bio||"Keine Profilbeschreibung hinterlegt."}</p></>:<p className="empty">Node auswählen</p>}</div></Panel></div>
+}
+
+export function ChatPage({token,notify}:{token:string;notify:(v:string)=>void}){
+  const [messages,setMessages]=useState<Data[]>([]),[text,setText]=useState(""),[kind,setKind]=useState("text"),[busy,setBusy]=useState(false);
+  const load=()=>api("/api/chat/messages").then(setMessages).catch(e=>notify(e.message));
+  useEffect(()=>{load()},[]);
+  const send=async()=>{if(!text.trim())return;setBusy(true);try{await api("/api/chat/send",{method:"POST",headers:auth(token),body:JSON.stringify({sender:"Commander",text:text.trim(),kind})});setText("");load()}catch(e){notify((e as Error).message)}finally{setBusy(false)}};
+  return <Panel title="Chat & Prompt Hub" icon={<MessageSquare size={15}/>} tag={`${messages.length} MESSAGES`} className="workspace chat-page"><div className="messages">{messages.map(x=><article key={x.id}><header><b>{x.sender}</b><span>{new Date(x.timestamp).toLocaleString("de-DE")}</span><i>{x.kind}</i></header><pre>{x.text}</pre><button title="Kopieren" onClick={()=>navigator.clipboard.writeText(x.text)}><Copy size={13}/></button></article>)}{!messages.length&&<p className="empty">Noch keine Nachrichten. Starte den lokalen Austausch.</p>}</div><div className="composer"><select value={kind} onChange={e=>setKind(e.target.value)}><option value="text">Text</option><option value="code">Code</option><option value="note">Notiz</option></select><textarea value={text} onChange={e=>setText(e.target.value)} onKeyDown={e=>{if(e.ctrlKey&&e.key==="Enter")send()}} placeholder="Prompt, Code oder Notiz … (Strg+Enter)"/><button onClick={send} disabled={busy||!text.trim()}><Send size={15}/>{busy?"Sende…":"Senden"}</button></div></Panel>
+}
+
+export function FilesPage({token,notify}:{token:string;notify:(v:string)=>void}){
+  const [files,setFiles]=useState<Data[]>([]),[busy,setBusy]=useState(false);const input=useRef<HTMLInputElement>(null);
+  const load=()=>api("/api/chat/files").then(setFiles).catch(e=>notify(e.message));useEffect(()=>{load()},[]);
+  const upload=async(list:FileList|null)=>{if(!list?.length)return;setBusy(true);const body=new FormData();Array.from(list).forEach(f=>body.append("files",f));try{await api("/api/chat/upload",{method:"POST",headers:auth(token,false),body});notify(`${list.length} Datei(en) hochgeladen.`);load()}catch(e){notify((e as Error).message)}finally{setBusy(false);if(input.current)input.current.value=""}};
+  return <Panel title="Dateibrowser & Chat Vault" icon={<FolderOpen size={15}/>} tag={`${files.length} FILES`} className="workspace"><div className="vault-head"><div><h3>Sicherer lokaler Dateiaustausch</h3><p>Dateinamen, Dateigröße und Anzahl werden serverseitig geprüft.</p></div><input ref={input} type="file" multiple onChange={e=>upload(e.target.files)}/><button onClick={()=>input.current?.click()} disabled={busy}><FileUp size={15}/>{busy?"Upload…":"Dateien hochladen"}</button></div><div className="file-grid">{files.map(f=><article key={f.name}><div><FolderOpen size={22}/></div><span><b title={f.name}>{f.name}</b><small>{size(n(f.size))}</small></span><a href={f.url} download><Download size={15}/> Download</a></article>)}{!files.length&&<p className="empty">Der Vault ist leer.</p>}</div></Panel>
+}
+
+export function ProcessesPage({items,token,notify}:{items:Data[];token:string;notify:(v:string)=>void}){
+  const [query,setQuery]=useState(""),[sort,setSort]=useState<"cpu"|"memory">("cpu"),[killing,setKilling]=useState(0);
+  const visible=useMemo(()=>items.filter(p=>`${p.name} ${p.pid}`.toLowerCase().includes(query.toLowerCase())).sort((a,b)=>n(b[sort])-n(a[sort])),[items,query,sort]);
+  const kill=async(p:Data)=>{if(!confirm(`Prozess ${p.name} (PID ${p.pid}) wirklich beenden?`))return;setKilling(p.pid);try{await api("/api/kill",{method:"POST",headers:auth(token),body:JSON.stringify({pid:p.pid})});notify("Terminate-Anfrage wurde gesendet.")}catch(e){notify((e as Error).message)}finally{setKilling(0)}};
+  return <Panel title="Prozessmanager" icon={<Cpu size={15}/>} tag={`${visible.length} PROCESSES`} className="workspace"><div className="toolbar"><label><Search size={14}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Name oder PID filtern"/></label><button className={sort==="cpu"?"selected":""} onClick={()=>setSort("cpu")}>CPU</button><button className={sort==="memory"?"selected":""} onClick={()=>setSort("memory")}>RAM</button></div><div className="table"><div className="tr head"><span>Prozess</span><span>PID</span><span>CPU</span><span>RAM</span><span>Aktion</span></div>{visible.map(p=><div className="tr" key={p.pid}><b>{p.name}</b><span>{p.pid}</span><span>{n(p.cpu).toFixed(1)}%</span><span>{n(p.memory).toFixed(1)}%</span><button onClick={()=>kill(p)} disabled={killing===p.pid}><Trash2 size={13}/>{killing===p.pid?"…":"KILL"}</button></div>)}</div></Panel>
+}
+
+export function HistoryPage({notify}:{notify:(v:string)=>void}){
+  const [points,setPoints]=useState<Data[]>([]),[minutes,setMinutes]=useState(60),[backend,setBackend]=useState("");
+  useEffect(()=>{api(`/api/history?minutes=${minutes}`).then(x=>{setPoints(x.points||[]);setBackend(x.backend||"")}).catch(e=>notify(e.message))},[minutes]);
+  const line=useMemo(()=>{const vals=points.map(p=>n(p.metrics?.cpu?.percent));return vals.length<2?"":vals.map((v,i)=>`${i?"L":"M"} ${i*100/(vals.length-1)} ${100-v}`).join(" ")},[points]);
+  return <Panel title="Historie / Telemetrie" icon={<History size={15}/>} tag={`${backend||"MEMORY"} • ${points.length} POINTS`} className="workspace"><div className="toolbar history-filter"><span>Zeitraum</span>{[15,60,360,1440].map(v=><button key={v} className={minutes===v?"selected":""} onClick={()=>setMinutes(v)}>{v<60?`${v}m`:`${v/60}h`}</button>)}</div><div className="history-chart"><div><b>CPU-Verlauf</b><span>0–100%</span></div><svg viewBox="0 0 100 100" preserveAspectRatio="none"><defs><linearGradient id="historyFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="var(--accent)" stopOpacity=".38"/><stop offset="1" stopColor="var(--accent)" stopOpacity="0"/></linearGradient></defs>{line&&<><path d={`${line} L 100 100 L 0 100 Z`} fill="url(#historyFill)"/><path d={line} fill="none" stroke="var(--accent)" strokeWidth="1.4" vectorEffect="non-scaling-stroke"/></>}</svg>{!points.length&&<p className="empty">Noch keine gespeicherten Messpunkte.</p>}</div></Panel>
+}

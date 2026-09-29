@@ -21,6 +21,11 @@ def load_profile() -> dict[str, Any]:
     return Profile(alias=socket.gethostname(), pc_name=socket.gethostname()).model_dump()
 
 
+@router.get("/profile")
+async def get_profile() -> dict[str, Any]:
+    return load_profile()
+
+
 @router.post("/profile", dependencies=[Depends(require_token)])
 async def save_profile(profile: Profile) -> dict[str, Any]:
     payload = profile.model_dump()
