@@ -16,6 +16,6 @@ jobs:
       - run: pnpm install --frozen-lockfile && pnpm run build
         working-directory: frontend
       - run: zip -r ncc-${{ github.ref_name }}.zip . -x '.git/*' 'frontend/node_modules/*'
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with: {files: "ncc-${{ github.ref_name }}.zip"}
 
