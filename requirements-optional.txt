@@ -1,4 +1,4 @@
-duckdb>=1.1,<2
+duckdb>=1.5.5,<2
 nvidia-ml-py>=12,<14
 pyinstaller>=6,<7
 
