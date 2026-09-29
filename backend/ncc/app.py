@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import socket
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -10,6 +10,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from ncc import __version__
 from ncc.api.changelog import router as changelog_router
 from ncc.api.chat import router as chat_router
 from ncc.api.metrics import router as metrics_router
@@ -43,7 +44,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         collector.stop()
 
 
-app = FastAPI(title="no0bz Command Center", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="no0bz Command Center", version=__version__, lifespan=lifespan)
 settings = get_settings()
 registry = ProviderRegistry(settings)
 
@@ -51,16 +52,20 @@ collector = SnapshotCollector(registry, settings.interval, socket.gethostname())
 store = MetricsStore(settings.retention_hours)
 recorder = TelemetryRecorder(store, collector.snapshot, settings.interval)
 node_client = NodeClient(settings, collector.snapshot)
-allowed_hosts = ["127.0.0.1", "localhost", "[::1]"]
+allowed_hosts = ["127.0.0.1", "localhost", "[::1]", socket.gethostname()]
+with suppress(OSError):
+    allowed_hosts.extend(str(info[4][0]) for info in socket.getaddrinfo(socket.gethostname(), None))
 if settings.host not in {"127.0.0.1", "::1", "localhost"}:
     allowed_hosts.append(settings.host)
-app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
+if settings.host == "0.0.0.0":
+    allowed_hosts = ["*"]
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(dict.fromkeys(allowed_hosts)))
 
 
 @app.middleware("http")
 async def secure_requests(request: Request, call_next):  # type: ignore[no-untyped-def]
     origin = request.headers.get("origin")
-    if origin and not _allowed_origin(origin):
+    if origin and not _allowed_origin(origin, request.headers.get("host", "")):
         return HTMLResponse("Origin not allowed", status_code=403)
     response = await call_next(request)
     for name, value in SECURITY_HEADERS.items():
@@ -68,7 +73,9 @@ async def secure_requests(request: Request, call_next):  # type: ignore[no-untyp
     return response
 
 
-def _allowed_origin(origin: str) -> bool:
+def _allowed_origin(origin: str, request_host: str = "") -> bool:
+    if request_host and origin in {f"http://{request_host}", f"https://{request_host}"}:
+        return True
     configured = {f"http://{settings.host}:{settings.port}", f"https://{settings.host}:{settings.port}"}
     loopback = {f"http://127.0.0.1:{settings.port}", f"http://localhost:{settings.port}"}
     return origin in configured | loopback

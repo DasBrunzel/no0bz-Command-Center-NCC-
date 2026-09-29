@@ -4,10 +4,13 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-29
+
 ### Added
 
 - Herstellerunabhängige Windows-GPU-Erkennung sowie nativer Linux-AMDGPU-Provider.
 - Echte, geglättete Netzwerk- und physische Datenträger-I/O-Raten pro Laufwerk.
+- Explizite Local-, Server- und Client-Starter für Windows und Linux.
 - Phase 0: Projektstruktur, FastAPI-Einstieg, Konfiguration, Startskripte und Frontend-Fallback.
 - Phase 1: Token-Schutz, Host-/Origin-Prüfung, Security-Header, Rate-Limits und sichere Dateinamen.
 - Phase 2: Provider-Registry mit Timeout/Backoff, psutil-, Demo-, NVML-, SMART- und hwmon-Provider sowie Hardware-Cache.

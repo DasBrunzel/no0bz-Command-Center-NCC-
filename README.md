@@ -1,6 +1,6 @@
 # no0bz Command Center (NCC)
 
-![Version](https://img.shields.io/badge/version-0.1.0-12d8f4)
+![Version](https://img.shields.io/badge/version-0.3.0-12d8f4)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776ab)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
@@ -28,7 +28,7 @@ oder persönliche Daten.
 ```powershell
 git clone https://github.com/DasBrunzel/no0bz-Command-Center-NCC-.git
 cd no0bz-Command-Center-NCC-
-scripts\start_ncc.bat
+scripts\start_ncc_local.bat
 ```
 
 ### Linux
@@ -36,8 +36,8 @@ scripts\start_ncc.bat
 ```bash
 git clone https://github.com/DasBrunzel/no0bz-Command-Center-NCC-.git
 cd no0bz-Command-Center-NCC-
-chmod +x scripts/start_ncc.sh
-./scripts/start_ncc.sh
+chmod +x scripts/start_ncc*.sh
+./scripts/start_ncc_local.sh
 ```
 
 Öffne danach <http://127.0.0.1:8350>. Beim ersten Start erzeugt NCC `.env` und zeigt
@@ -46,6 +46,21 @@ enthalten; Node.js wird nur zur Frontend-Entwicklung benötigt.
 
 Demo-Modus: setze `NCC_DEMO=1` in `.env`. LAN-Betrieb: setze bewusst `NCC_HOST=0.0.0.0`
 und `NCC_MODE=server`; lies vorher [SECURITY.md](SECURITY.md).
+
+### Local, Server und Client
+
+Es gibt keine getrennten Binärdateien: Dieselbe NCC-Anwendung übernimmt je nach
+Starter eine der drei Rollen:
+
+| Rolle | Windows | Linux | Zweck |
+|---|---|---|---|
+| Local | `scripts\start_ncc_local.bat` | `scripts/start_ncc_local.sh` | einzelner PC, nur Loopback |
+| Server | `scripts\start_ncc_server.bat` | `scripts/start_ncc_server.sh` | Dashboard und Sammelstelle im LAN |
+| Client | `scripts\start_ncc_client.bat` | `scripts/start_ncc_client.sh` | sendet seine Telemetrie an den Server |
+
+Beim Client-Start werden die Server-URL, beispielsweise
+`http://192.168.1.10:8350`, und der `NCC_TOKEN` des Servers abgefragt. Server und
+Client müssen denselben Token verwenden. Die Synchronisation läuft über Port 8350.
 
 ## Funktionen
 
@@ -76,11 +91,16 @@ Alle Werte liegen in `.env`. Die Vorlage [.env.example](.env.example) dokumentie
 | Linux AMDGPU | Linux | AMD-Auslastung, VRAM und Temperatur | aktiver `amdgpu`-Kerneltreiber |
 | Linux hwmon | Linux, Raspberry Pi OS | Temperaturen, Lüfter/GPU je nach Treiber | Leserechte auf `/sys` |
 | smartctl | Windows, Linux | Laufwerkszustand (Best Effort) | smartmontools, ggf. erhöhte Rechte |
-| LibreHardwareMonitor | Windows | Board, Lüfter, Spannungen, GPU, CPU-Power | lokaler Webserver Port 8085, ggf. Administrator |
+| LibreHardwareMonitor | Windows | optionale Zusatzwerte: Board, Lüfter, Spannungen, CPU-Power | nicht erforderlich; lokaler Webserver Port 8085 |
 | Demo | alle | vollständige synthetische Daten | `NCC_DEMO=1` |
 
 Provider, die das aktuelle System nicht unterstützt, deaktivieren sich ohne Absturz und
 erscheinen mit Grund im Hardware-Report.
+
+LibreHardwareMonitor ist ausdrücklich **keine Voraussetzung**. CPU, RAM, Netzwerk,
+Datenträger und Prozesse kommen plattformübergreifend aus `psutil`; NVIDIA verwendet
+NVML, Windows besitzt einen herstellerunabhängigen GPU-Fallback und Linux liest AMD
+direkt über `amdgpu`/sysfs. Ohne LHM fehlen lediglich einige optionale Sensorwerte.
 
 ## API
 
@@ -135,6 +155,13 @@ unbelegten Ressourcenversprechen gemacht.
 Weitere Dokumente: [Architektur](docs/architecture.md),
 [Provider hinzufügen](docs/adding-a-provider.md), [Plattform-Setup](docs/platform-setup.md),
 [Security](SECURITY.md) und [Contributing](CONTRIBUTING.md).
+
+## Versionierung
+
+NCC verwendet ab Version `0.3.0` [Semantic Versioning](https://semver.org/):
+`MAJOR.MINOR.PATCH`. Inkompatible Änderungen erhöhen MAJOR, neue kompatible
+Funktionen MINOR und kompatible Fehlerkorrekturen PATCH. Backend, Frontend,
+Dokumentation und Release-Tags tragen dieselbe Versionsnummer.
 
 ## Lizenz
 

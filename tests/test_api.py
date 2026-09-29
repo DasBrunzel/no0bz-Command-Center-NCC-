@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 from fastapi.testclient import TestClient
-from ncc.app import app
+from ncc import __version__
+from ncc.app import _allowed_origin, app
 from ncc.config import get_settings
 
 BASE_URL = "http://127.0.0.1:8350"
 
 
 def test_core_api_and_security_headers() -> None:
+    assert app.version == __version__
     with TestClient(app, base_url=BASE_URL) as client:
         response = client.get("/api/metrics")
         assert response.status_code == 200
@@ -21,6 +23,10 @@ def test_rejects_foreign_origin() -> None:
     with TestClient(app, base_url=BASE_URL) as client:
         response = client.get("/api/metrics", headers={"Origin": "https://evil.example"})
         assert response.status_code == 403
+
+
+def test_accepts_same_origin_lan_host() -> None:
+    assert _allowed_origin("http://192.168.1.20:8350", "192.168.1.20:8350")
 
 
 def test_writes_require_valid_token_for_non_loopback_client() -> None:

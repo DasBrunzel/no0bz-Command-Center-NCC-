@@ -31,7 +31,8 @@ async def live(websocket: WebSocket) -> None:
 
     settings = get_settings()
     origin = websocket.headers.get("origin")
-    allowed = {f"http://127.0.0.1:{settings.port}", f"http://localhost:{settings.port}", f"http://{settings.host}:{settings.port}"}
+    request_host = websocket.headers.get("host", "")
+    allowed = {f"http://127.0.0.1:{settings.port}", f"http://localhost:{settings.port}", f"http://{settings.host}:{settings.port}", f"http://{request_host}", f"https://{request_host}"}
     if origin and origin not in allowed:
         await websocket.close(code=1008, reason="Origin not allowed")
         return
