@@ -26,8 +26,13 @@ def cpu_model_name() -> str:
         try:
             import winreg
 
-            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"HARDWARE\DESCRIPTION\System\CentralProcessor\0") as key:
-                value, _ = winreg.QueryValueEx(key, "ProcessorNameString")
+            with winreg.OpenKey(  # type: ignore[attr-defined,unused-ignore]
+                winreg.HKEY_LOCAL_MACHINE,  # type: ignore[attr-defined,unused-ignore]
+                r"HARDWARE\DESCRIPTION\System\CentralProcessor\0",
+            ) as key:
+                value, _ = winreg.QueryValueEx(  # type: ignore[attr-defined,unused-ignore]
+                    key, "ProcessorNameString"
+                )
                 if str(value).strip():
                     return str(value).strip()
         except (ImportError, OSError):
@@ -171,7 +176,9 @@ def _windows_volume_disk_number(drive: str) -> int | None:
         class VolumeExtents(ctypes.Structure):
             _fields_ = [("count", wintypes.DWORD), ("extent", DiskExtent)]
 
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32 = ctypes.WinDLL(  # type: ignore[attr-defined,unused-ignore]
+            "kernel32", use_last_error=True
+        )
         handle = kernel32.CreateFileW(f"\\\\.\\{drive}:", 0, 3, None, 3, 0, None)
         if handle == wintypes.HANDLE(-1).value:
             return None
@@ -246,12 +253,29 @@ class WindowsGpuProvider(SensorProvider):
             import winreg
 
             path = r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}"
-            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, path) as root:
-                for index in range(winreg.QueryInfoKey(root)[0]):
+            with winreg.OpenKey(  # type: ignore[attr-defined,unused-ignore]
+                winreg.HKEY_LOCAL_MACHINE, path  # type: ignore[attr-defined,unused-ignore]
+            ) as root:
+                for index in range(
+                    winreg.QueryInfoKey(root)[0]  # type: ignore[attr-defined,unused-ignore]
+                ):
                     try:
-                        with winreg.OpenKey(root, winreg.EnumKey(root, index)) as key:
-                            name = str(winreg.QueryValueEx(key, "DriverDesc")[0])
-                            provider = str(winreg.QueryValueEx(key, "ProviderName")[0])
+                        with winreg.OpenKey(  # type: ignore[attr-defined,unused-ignore]
+                            root,
+                            winreg.EnumKey(  # type: ignore[attr-defined,unused-ignore]
+                                root, index
+                            ),
+                        ) as key:
+                            name = str(
+                                winreg.QueryValueEx(  # type: ignore[attr-defined,unused-ignore]
+                                    key, "DriverDesc"
+                                )[0]
+                            )
+                            provider = str(
+                                winreg.QueryValueEx(  # type: ignore[attr-defined,unused-ignore]
+                                    key, "ProviderName"
+                                )[0]
+                            )
                             if any(word in name.lower() for word in ("virtual", "remote", "basic display")):
                                 continue
                             self._adapters.append({"name": name, "provider": provider})
