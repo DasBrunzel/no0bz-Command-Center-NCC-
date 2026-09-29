@@ -6,6 +6,8 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ### Added
 
+- Herstellerunabhängige Windows-GPU-Erkennung sowie nativer Linux-AMDGPU-Provider.
+- Echte, geglättete Netzwerk- und physische Datenträger-I/O-Raten pro Laufwerk.
 - Phase 0: Projektstruktur, FastAPI-Einstieg, Konfiguration, Startskripte und Frontend-Fallback.
 - Phase 1: Token-Schutz, Host-/Origin-Prüfung, Security-Header, Rate-Limits und sichere Dateinamen.
 - Phase 2: Provider-Registry mit Timeout/Backoff, psutil-, Demo-, NVML-, SMART- und hwmon-Provider sowie Hardware-Cache.
@@ -21,6 +23,8 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ### Changed
 
+- Windows zeigt den vollständigen CPU-Marketingnamen aus der Registry statt der
+  generischen Family-/Model-Kennung.
 - Frontend auf ein kompaktes Nightmare-Command-Center-Layout mit fester Navigation,
   Statusleisten, technischen Telemetrie-Karten und Storage-Matrix umgestellt.
 

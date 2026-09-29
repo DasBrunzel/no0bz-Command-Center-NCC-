@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import json
 import platform
+import re
 import shutil
 import socket
 import subprocess
+import time
 import urllib.request
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -16,9 +19,44 @@ from ncc.collectors.base import Capabilities, SensorProvider
 MIB = 1024 * 1024
 
 
+@lru_cache(maxsize=1)
+def cpu_model_name() -> str:
+    """Return the marketing name instead of Windows' Family/Model identifier."""
+    if platform.system() == "Windows":
+        try:
+            import winreg
+
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"HARDWARE\DESCRIPTION\System\CentralProcessor\0") as key:
+                value, _ = winreg.QueryValueEx(key, "ProcessorNameString")
+                if str(value).strip():
+                    return str(value).strip()
+        except (ImportError, OSError):
+            pass
+    if platform.system() == "Linux":
+        try:
+            for line in Path("/proc/cpuinfo").read_text(encoding="utf-8", errors="ignore").splitlines():
+                if line.lower().startswith(("model name", "hardware")):
+                    return line.partition(":")[2].strip()
+        except OSError:
+            pass
+    return platform.processor() or platform.machine()
+
+
+def _drive_key(device: str) -> str:
+    return device.rstrip("\\/").split("\\")[-1].lower()
+
+
 class PsutilProvider(SensorProvider):
     name = "psutil"
     priority = 50
+
+    def __init__(self) -> None:
+        self._sample_time: float | None = None
+        self._network: tuple[int, int] | None = None
+        self._disk: dict[str, tuple[int, int]] = {}
+        self._network_rate = (0.0, 0.0)
+        self._disk_rates: dict[str, tuple[float, float]] = {}
+        self._windows_disk_map: dict[str, str] | None = None
 
     def is_available(self) -> bool:
         return True
@@ -27,16 +65,36 @@ class PsutilProvider(SensorProvider):
         return Capabilities(self.name, True, ["cpu", "memory", "swap", "disk", "network", "battery", "processes"])
 
     def collect(self) -> dict[str, Any]:
+        now = time.monotonic()
         memory = psutil.virtual_memory()
         swap = psutil.swap_memory()
-        net = psutil.net_io_counters()
+        net, interface = self._active_network_counters()
+        disk_counters = psutil.disk_io_counters(perdisk=True) or {}
+        elapsed = max(now - self._sample_time, 0.001) if self._sample_time is not None else 0.0
+        download, upload = self._rate_pair(
+            (net.bytes_recv, net.bytes_sent), self._network, elapsed, self._network_rate
+        )
+        self._network = (net.bytes_recv, net.bytes_sent)
+        self._network_rate = (download, upload)
         disks = []
         for partition in psutil.disk_partitions(all=False):
             try:
                 usage = psutil.disk_usage(partition.mountpoint)
             except (PermissionError, OSError):
                 continue
-            disks.append({"name": partition.device, "mount": partition.mountpoint, "percent": usage.percent, "used_gb": round(usage.used / 1024**3, 2), "total_gb": round(usage.total / 1024**3, 2)})
+            counter_key = self._counter_key(partition.device, partition.mountpoint, disk_counters)
+            counter = disk_counters.get(counter_key) if counter_key else None
+            read_rate = write_rate = 0.0
+            if counter_key is not None and counter is not None:
+                previous = self._disk.get(counter_key)
+                old_rate = self._disk_rates.get(counter_key, (0.0, 0.0))
+                read_rate, write_rate = self._rate_pair(
+                    (counter.read_bytes, counter.write_bytes), previous, elapsed, old_rate, bits=False
+                )
+                self._disk[counter_key] = (counter.read_bytes, counter.write_bytes)
+                self._disk_rates[counter_key] = (read_rate, write_rate)
+            disks.append({"name": partition.device, "mount": partition.mountpoint, "percent": usage.percent, "used_gb": round(usage.used / 1024**3, 2), "total_gb": round(usage.total / 1024**3, 2), "read_mbps": read_rate, "write_mbps": write_rate})
+        self._sample_time = now
         battery = psutil.sensors_battery()
         processes: list[dict[str, Any]] = []
         for process in psutil.process_iter(["pid", "name", "cpu_percent", "memory_percent"]):
@@ -47,15 +105,85 @@ class PsutilProvider(SensorProvider):
                 continue
         processes.sort(key=lambda item: item["cpu"] + item["memory"], reverse=True)
         return {
-            "cpu": {"percent": psutil.cpu_percent(percpu=False), "per_core": psutil.cpu_percent(percpu=True), "frequency_mhz": _frequency(), "physical_cores": psutil.cpu_count(logical=False), "logical_cores": psutil.cpu_count(logical=True), "model": platform.processor() or platform.machine()},
+            "cpu": {"percent": psutil.cpu_percent(percpu=False), "per_core": psutil.cpu_percent(percpu=True), "frequency_mhz": _frequency(), "physical_cores": psutil.cpu_count(logical=False), "logical_cores": psutil.cpu_count(logical=True), "model": cpu_model_name()},
             "memory": {"percent": memory.percent, "used_gb": round(memory.used / 1024**3, 2), "available_gb": round(memory.available / 1024**3, 2), "total_gb": round(memory.total / 1024**3, 2)},
             "swap": {"percent": swap.percent, "used_gb": round(swap.used / 1024**3, 2), "total_gb": round(swap.total / 1024**3, 2)},
             "disks": disks,
-            "network": {"bytes_sent": net.bytes_sent, "bytes_recv": net.bytes_recv, "errors": net.errin + net.errout, "drops": net.dropin + net.dropout},
+            "network": {"bytes_sent": net.bytes_sent, "bytes_recv": net.bytes_recv, "download_mbps": download, "upload_mbps": upload, "interface": interface, "errors": net.errin + net.errout, "drops": net.dropin + net.dropout},
             "battery": None if battery is None else {"percent": battery.percent, "plugged": battery.power_plugged, "seconds_left": battery.secsleft},
             "processes": processes[:30],
             "system": {"hostname": socket.gethostname(), "platform": platform.platform(), "boot_time": psutil.boot_time()},
         }
+
+    def _active_network_counters(self) -> tuple[Any, str]:
+        counters = psutil.net_io_counters(pernic=True)
+        stats = psutil.net_if_stats()
+        active = [name for name, stat in stats.items() if stat.isup and not name.lower().startswith(("loopback", "lo")) and name in counters]
+        if not active:
+            return psutil.net_io_counters(), "Auto"
+        best = max(active, key=lambda name: counters[name].bytes_recv + counters[name].bytes_sent)
+        return counters[best], best
+
+    @staticmethod
+    def _rate_pair(current: tuple[int, int], previous: tuple[int, int] | None, elapsed: float, old: tuple[float, float], *, bits: bool = True) -> tuple[float, float]:
+        if previous is None or elapsed <= 0:
+            return 0.0, 0.0
+        factor = 8 / 1_000_000 if bits else 1 / MIB
+        raw = tuple(max(0.0, (current[i] - previous[i]) * factor / elapsed) for i in range(2))
+        alpha = 0.45
+        return round(alpha * raw[0] + (1 - alpha) * old[0], 2), round(alpha * raw[1] + (1 - alpha) * old[1], 2)
+
+    def _counter_key(self, device: str, mount: str, counters: dict[str, Any]) -> str | None:
+        keys = {key.lower(): key for key in counters}
+        direct = _drive_key(device)
+        if direct in keys:
+            return keys[direct]
+        if platform.system() == "Windows":
+            mapping = self._windows_disk_mapping()
+            drive = mount[:1].upper()
+            physical = mapping.get(drive, "").lower()
+            return keys.get(physical)
+        base = re.sub(r"p?\d+$", "", direct)
+        return keys.get(base)
+
+    def _windows_disk_mapping(self) -> dict[str, str]:
+        if self._windows_disk_map is not None:
+            return self._windows_disk_map
+        self._windows_disk_map = {}
+        for drive in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
+            number = _windows_volume_disk_number(drive)
+            if number is not None:
+                self._windows_disk_map[drive] = f"PhysicalDrive{number}"
+        return self._windows_disk_map
+
+
+def _windows_volume_disk_number(drive: str) -> int | None:
+    """Map a drive letter to its physical disk without WMI/admin privileges."""
+    if platform.system() != "Windows":
+        return None
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class DiskExtent(ctypes.Structure):
+            _fields_ = [("disk_number", wintypes.DWORD), ("starting_offset", ctypes.c_longlong), ("extent_length", ctypes.c_longlong)]
+
+        class VolumeExtents(ctypes.Structure):
+            _fields_ = [("count", wintypes.DWORD), ("extent", DiskExtent)]
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        handle = kernel32.CreateFileW(f"\\\\.\\{drive}:", 0, 3, None, 3, 0, None)
+        if handle == wintypes.HANDLE(-1).value:
+            return None
+        try:
+            output = VolumeExtents()
+            returned = wintypes.DWORD()
+            ok = kernel32.DeviceIoControl(handle, 0x560000, None, 0, ctypes.byref(output), ctypes.sizeof(output), ctypes.byref(returned), None)
+            return int(output.extent.disk_number) if ok and output.count else None
+        finally:
+            kernel32.CloseHandle(handle)
+    except (AttributeError, OSError, ValueError):
+        return None
 
 
 def _frequency() -> float | None:
@@ -69,7 +197,7 @@ class NvidiaProvider(SensorProvider):
 
     def is_available(self) -> bool:
         try:
-            import pynvml  # type: ignore[import-not-found,unused-ignore]
+            import pynvml  # type: ignore[import-not-found,import-untyped,unused-ignore]
 
             pynvml.nvmlInit()
             return bool(pynvml.nvmlDeviceGetCount() > 0)
@@ -81,7 +209,7 @@ class NvidiaProvider(SensorProvider):
         return Capabilities(self.name, available, ["gpu"] if available else [], None if available else "NVML/NVIDIA GPU nicht verfügbar", "Optional nvidia-ml-py installieren")
 
     def collect(self) -> dict[str, Any]:
-        import pynvml  # type: ignore[import-not-found,unused-ignore]
+        import pynvml  # type: ignore[import-not-found,import-untyped,unused-ignore]
 
         gpus = []
         for index in range(pynvml.nvmlDeviceGetCount()):
@@ -89,6 +217,114 @@ class NvidiaProvider(SensorProvider):
             memory = pynvml.nvmlDeviceGetMemoryInfo(handle)
             utilization = pynvml.nvmlDeviceGetUtilizationRates(handle)
             gpus.append({"index": index, "name": pynvml.nvmlDeviceGetName(handle), "percent": utilization.gpu, "vram_percent": round(memory.used / memory.total * 100, 1), "temperature_c": pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU)})
+        return {"gpus": gpus}
+
+
+class WindowsGpuProvider(SensorProvider):
+    """Vendor-neutral Windows GPU data using built-in WMI and performance counters."""
+
+    name = "windows-gpu"
+    platforms = {"windows"}
+    priority = 75
+
+    def __init__(self) -> None:
+        self._adapters: list[dict[str, Any]] | None = None
+        self._last_percent = 0.0
+
+    def is_available(self) -> bool:
+        return platform.system() == "Windows" and bool(self._adapter_info())
+
+    def probe(self) -> Capabilities:
+        available = self.is_available()
+        return Capabilities(self.name, available, ["gpu"] if available else [], None if available else "Keine Windows-GPU gefunden", "Aktuellen AMD/Intel-Grafiktreiber installieren")
+
+    def _adapter_info(self) -> list[dict[str, Any]]:
+        if self._adapters is not None:
+            return self._adapters
+        self._adapters = []
+        try:
+            import winreg
+
+            path = r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}"
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, path) as root:
+                for index in range(winreg.QueryInfoKey(root)[0]):
+                    try:
+                        with winreg.OpenKey(root, winreg.EnumKey(root, index)) as key:
+                            name = str(winreg.QueryValueEx(key, "DriverDesc")[0])
+                            provider = str(winreg.QueryValueEx(key, "ProviderName")[0])
+                            if any(word in name.lower() for word in ("virtual", "remote", "basic display")):
+                                continue
+                            self._adapters.append({"name": name, "provider": provider})
+                    except OSError:
+                        continue
+        except (ImportError, OSError):
+            pass
+        return self._adapters
+
+    def collect(self) -> dict[str, Any]:
+        percent = self._gpu_percent()
+        adapters = self._adapter_info()
+        return {"gpus": [{"index": index, "name": item["name"], "percent": percent, "vram_percent": 0.0, "temperature_c": None, "source": self.name} for index, item in enumerate(adapters)]}
+
+    def _gpu_percent(self) -> float:
+        try:
+            command = "(Get-Counter '\\GPU Engine(*)\\Utilization Percentage' -ErrorAction Stop).CounterSamples | Select-Object InstanceName,CookedValue | ConvertTo-Json -Compress"
+            result = subprocess.run(["powershell", "-NoProfile", "-Command", command], capture_output=True, text=True, timeout=5, shell=False, check=False)
+            rows = json.loads(result.stdout or "[]")
+            if isinstance(rows, dict):
+                rows = [rows]
+            values = [float(row.get("CookedValue") or 0) for row in rows]
+            raw = min(100.0, sum(value for value in values if value > 0))
+            self._last_percent = round(raw * 0.5 + self._last_percent * 0.5, 1)
+        except (OSError, subprocess.SubprocessError, json.JSONDecodeError, TypeError, ValueError):
+            pass
+        return self._last_percent
+
+
+class LinuxAmdGpuProvider(SensorProvider):
+    name = "linux-amdgpu"
+    platforms = {"linux"}
+    priority = 75
+
+    def _cards(self) -> list[Path]:
+        cards = []
+        for card in Path("/sys/class/drm").glob("card[0-9]*"):
+            try:
+                if card.joinpath("device/vendor").read_text().strip().lower() == "0x1002":
+                    cards.append(card)
+            except OSError:
+                continue
+        return cards
+
+    def is_available(self) -> bool:
+        return platform.system() == "Linux" and bool(self._cards())
+
+    def probe(self) -> Capabilities:
+        available = self.is_available()
+        return Capabilities(self.name, available, ["gpu"] if available else [], None if available else "Keine AMDGPU-sysfs-Geräte gefunden", "amdgpu-Kerneltreiber aktivieren")
+
+    @staticmethod
+    def _number(path: Path) -> float | None:
+        try:
+            return float(path.read_text().strip())
+        except (OSError, ValueError):
+            return None
+
+    def collect(self) -> dict[str, Any]:
+        gpus = []
+        for index, card in enumerate(self._cards()):
+            device = card / "device"
+            used, total = self._number(device / "mem_info_vram_used"), self._number(device / "mem_info_vram_total")
+            temperature = next((self._number(path) for path in device.glob("hwmon/hwmon*/temp1_input") if self._number(path) is not None), None)
+            name = "AMD Radeon GPU"
+            try:
+                slot = device.resolve().name
+                result = subprocess.run(["lspci", "-s", slot], capture_output=True, text=True, timeout=2, shell=False, check=False)
+                if result.stdout.strip():
+                    name = result.stdout.partition(": ")[2].strip() or name
+            except (OSError, subprocess.SubprocessError):
+                pass
+            gpus.append({"index": index, "name": name, "percent": self._number(device / "gpu_busy_percent") or 0.0, "vram_percent": round(used / total * 100, 1) if used is not None and total else 0.0, "temperature_c": round(temperature / 1000, 1) if temperature is not None else None, "source": self.name})
         return {"gpus": gpus}
 
 

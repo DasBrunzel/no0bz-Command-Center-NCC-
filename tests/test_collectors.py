@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from ncc.collectors.registry import ProviderRegistry
-from ncc.collectors.system import DemoProvider, parse_lhm_tree
+from ncc.collectors.system import DemoProvider, PsutilProvider, parse_lhm_tree
 from ncc.config import Settings
 
 
@@ -21,4 +21,17 @@ def test_parses_recursive_lhm_tree() -> None:
     tree = {"Text": "root", "Children": [{"Text": "CPU Package", "Value": "61.5 °C"}]}
     sensors = parse_lhm_tree(tree)
     assert sensors == [{"name": "CPU Package", "value": 61.5, "raw": "61.5 °C"}]
+
+
+def test_rate_pair_converts_and_smooths_network_counters() -> None:
+    first = PsutilProvider._rate_pair((2_000_000, 1_000_000), (1_000_000, 500_000), 1.0, (0.0, 0.0))
+    assert first == (3.6, 1.8)
+    second = PsutilProvider._rate_pair((2_000_000, 1_000_000), (2_000_000, 1_000_000), 1.0, first)
+    assert second == (1.98, 0.99)
+
+
+def test_rate_pair_converts_disk_bytes_to_mib() -> None:
+    read, write = PsutilProvider._rate_pair((2 * 1024**2, 1024**2), (0, 0), 1.0, (0.0, 0.0), bits=False)
+    assert read == 0.9
+    assert write == 0.45
 

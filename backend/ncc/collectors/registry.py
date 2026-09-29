@@ -11,10 +11,12 @@ from ncc.collectors.base import Capabilities, SensorProvider
 from ncc.collectors.system import (
     DemoProvider,
     LibreHardwareMonitorProvider,
+    LinuxAmdGpuProvider,
     LinuxHwmonProvider,
     NvidiaProvider,
     PsutilProvider,
     SmartctlProvider,
+    WindowsGpuProvider,
 )
 from ncc.config import ROOT, Settings
 
@@ -29,6 +31,8 @@ class ProviderRegistry:
             if settings.demo
             else [
                 PsutilProvider(),
+                WindowsGpuProvider(),
+                LinuxAmdGpuProvider(),
                 NvidiaProvider(),
                 LibreHardwareMonitorProvider(str(settings.lhm_url)),
                 SmartctlProvider(),

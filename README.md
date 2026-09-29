@@ -71,7 +71,9 @@ Alle Werte liegen in `.env`. Die Vorlage [.env.example](.env.example) dokumentie
 | Provider | Plattform | Werte | Voraussetzung/Rechte |
 |---|---|---|---|
 | psutil | Windows, Linux, macOS | CPU, RAM, Swap, Disks, Netz, Akku, Prozesse | keine Zusatztools |
-| NVIDIA NVML | Windows, Linux | GPU, VRAM, Temperatur | NVIDIA-Treiber, optional `nvidia-ml-py` |
+| NVIDIA NVML | Windows, Linux | GPU, VRAM, Temperatur | NVIDIA-Treiber; `nvidia-ml-py` ist enthalten |
+| Windows GPU Counters | Windows | AMD-, Intel- und NVIDIA-Name/Auslastung | aktueller Grafiktreiber, keine Administratorrechte |
+| Linux AMDGPU | Linux | AMD-Auslastung, VRAM und Temperatur | aktiver `amdgpu`-Kerneltreiber |
 | Linux hwmon | Linux, Raspberry Pi OS | Temperaturen, Lüfter/GPU je nach Treiber | Leserechte auf `/sys` |
 | smartctl | Windows, Linux | Laufwerkszustand (Best Effort) | smartmontools, ggf. erhöhte Rechte |
 | LibreHardwareMonitor | Windows | Board, Lüfter, Spannungen, GPU, CPU-Power | lokaler Webserver Port 8085, ggf. Administrator |
