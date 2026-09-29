@@ -4,6 +4,11 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+### Documentation
+
+- Phase-1-Bestandsaufnahme für die geplante getrennte Server-, Agent-, Web- und
+  Windows-Integrationsarchitektur dokumentiert.
+
 ## [0.4.1] - 2026-09-29
 
 ### Fixed
