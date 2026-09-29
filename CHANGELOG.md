@@ -4,6 +4,21 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-29
+
+### Added
+
+- Dedizierte Tailscale-Server- und Client-Starter für Windows und Linux.
+- Token-Manager zum Erzeugen, Rotieren, Exportieren und Importieren gemeinsamer Tokens.
+- Automatische Erkennung und Validierung von Tailscale-Adressen aus `100.64.0.0/10`.
+
+### Security
+
+- Der Tailscale-Server bindet ausschließlich an seine Tailscale-IP statt an alle
+  lokalen Netzwerkschnittstellen.
+- Exportierte Token-Dateien werden mit restriktiven Dateirechten angelegt und sind
+  von Git ausgeschlossen.
+
 ## [0.3.0] - 2026-09-29
 
 ### Added

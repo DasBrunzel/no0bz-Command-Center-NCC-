@@ -10,6 +10,7 @@ frontend/dist/
 ncc_uploads/
 *.duckdb*
 ncc_system_cache.json
+ncc-token-transfer*.txt
 ncc_audit.log
 ncc_profile.json
 backend/*.egg-info/

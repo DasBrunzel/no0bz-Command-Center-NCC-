@@ -1,6 +1,6 @@
 # no0bz Command Center (NCC)
 
-![Version](https://img.shields.io/badge/version-0.3.0-12d8f4)
+![Version](https://img.shields.io/badge/version-0.4.0-12d8f4)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776ab)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
@@ -57,10 +57,49 @@ Starter eine der drei Rollen:
 | Local | `scripts\start_ncc_local.bat` | `scripts/start_ncc_local.sh` | einzelner PC, nur Loopback |
 | Server | `scripts\start_ncc_server.bat` | `scripts/start_ncc_server.sh` | Dashboard und Sammelstelle im LAN |
 | Client | `scripts\start_ncc_client.bat` | `scripts/start_ncc_client.sh` | sendet seine Telemetrie an den Server |
+| Tailscale-Server | `scripts\start_ncc_tailscale_server.bat` | `scripts/start_ncc_tailscale_server.sh` | bindet ausschließlich an die Tailscale-IP |
+| Tailscale-Client | `scripts\start_ncc_tailscale_client.bat` | `scripts/start_ncc_tailscale_client.sh` | verbindet sich über Tailscale-IP oder MagicDNS |
 
 Beim Client-Start werden die Server-URL, beispielsweise
 `http://192.168.1.10:8350`, und der `NCC_TOKEN` des Servers abgefragt. Server und
 Client müssen denselben Token verwenden. Die Synchronisation läuft über Port 8350.
+
+### Tailscale-Schnellstart
+
+Tailscale muss auf Server und Client angemeldet und verbunden sein. Auf dem Server:
+
+```powershell
+scripts\start_ncc_tailscale_server.bat
+```
+
+Der Starter erkennt ausschließlich Adressen aus Tailscales CGNAT-Bereich
+`100.64.0.0/10`, bindet NCC an diese Adresse und zeigt die fertige URL an. Existiert
+noch kein Token, werden `.env` und `ncc-token-transfer.txt` erzeugt. Übertrage diese
+Datei sicher auf den Client und starte dort:
+
+```powershell
+scripts\start_ncc_tailscale_client.bat
+```
+
+Nach dem Import sollte `ncc-token-transfer.txt` auf beiden Geräten gelöscht werden.
+Der dauerhafte Token liegt in der von Git ausgeschlossenen `.env`. Tailscale-Grants
+sollten TCP-Port 8350 nur für die vorgesehenen Clients freigeben.
+
+### Token-Verwaltung
+
+Unter Windows öffnet `scripts\manage_ncc_token.bat` ein Menü. Unter Linux stehen
+folgende Aufrufe zur Verfügung:
+
+```bash
+scripts/manage_ncc_token.sh generate
+scripts/manage_ncc_token.sh show
+scripts/manage_ncc_token.sh rotate
+scripts/manage_ncc_token.sh export ncc-token-transfer.txt
+scripts/manage_ncc_token.sh import ncc-token-transfer.txt
+```
+
+Eine Rotation macht den bisherigen Token sofort ungültig. Danach müssen die neue
+Übergabedatei auf allen Clients importiert und alle NCC-Prozesse neu gestartet werden.
 
 ## Funktionen
 

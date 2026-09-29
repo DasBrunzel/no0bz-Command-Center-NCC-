@@ -24,6 +24,15 @@ und einige hwmon-Dateien benötigen passende Gruppen-/udev-Rechte.
 Die psutil-Basiswerte funktionieren best effort. Hardwaretemperaturen und GPU-Sensoren
 werden deaktiviert, wenn kein sicherer Provider verfügbar ist.
 
+## Tailscale
+
+Verwende die dedizierten `start_ncc_tailscale_server`- und
+`start_ncc_tailscale_client`-Skripte. Der Server-Starter akzeptiert ausschließlich
+eine aktive IPv4-Adresse aus `100.64.0.0/10` und bindet NCC nur an diese Schnittstelle.
+Damit wird Port 8350 nicht automatisch im normalen LAN angeboten. Server und Clients
+verwenden denselben NCC-Token; die Übergabedatei kann mit `manage_ncc_token` erzeugt,
+exportiert und importiert werden.
+
 ## Container
 
 `docker compose up --build` startet NCC. `pid: host`, `/sys` und GPU-Durchreichung sind
