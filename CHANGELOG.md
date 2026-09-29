@@ -19,3 +19,8 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 - Phase 10: Backend-/WebSocket-Tests, Frontend-Checks, plattformübergreifende CI, Releases, Dependabot, Audit und Benchmark.
 - Phase 11: README, Architektur- und Provider-Dokumentation, Contribution-Leitfaden und Issue-Templates.
 
+### Changed
+
+- Frontend auf ein kompaktes Nightmare-Command-Center-Layout mit fester Navigation,
+  Statusleisten, technischen Telemetrie-Karten und Storage-Matrix umgestellt.
+
