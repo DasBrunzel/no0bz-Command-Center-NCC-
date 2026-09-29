@@ -41,6 +41,16 @@ def test_writes_require_valid_token_for_non_loopback_client() -> None:
         ).status_code == 200
 
 
+def test_auth_check_requires_shared_token() -> None:
+    with TestClient(app, base_url=BASE_URL) as client:
+        assert client.get("/api/auth/check").status_code == 401
+        response = client.get(
+            "/api/auth/check", headers={"X-NCC-Token": get_settings().token}
+        )
+        assert response.status_code == 200
+        assert response.json()["authorized"] is True
+
+
 def test_live_websocket() -> None:
     with TestClient(app, base_url=BASE_URL) as client, client.websocket_connect(
         f"/ws/live?token={get_settings().token}", headers={"host": "127.0.0.1:8350"}

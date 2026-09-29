@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from scripts.ncc_connection import normalize_server_url
 from scripts.ncc_token import export_token, read_token, write_token
 from scripts.tailscale_ip import valid
 
@@ -29,3 +30,9 @@ def test_tailscale_address_validation() -> None:
     assert valid("100.127.255.254") == "100.127.255.254"
     assert valid("100.128.0.1") is None
     assert valid("192.168.1.10") is None
+
+
+def test_normalize_server_url() -> None:
+    assert normalize_server_url("100.64.0.1") == "http://100.64.0.1:8350"
+    assert normalize_server_url("ncc-server:9000") == "http://ncc-server:9000"
+    assert normalize_server_url("https://ncc-server.example/") == "https://ncc-server.example:8350"

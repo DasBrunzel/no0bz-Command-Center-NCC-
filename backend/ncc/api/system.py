@@ -6,6 +6,7 @@ from typing import Any, cast
 
 from fastapi import APIRouter, Depends
 
+from ncc import __version__
 from ncc.collectors.registry import save_hardware_cache
 from ncc.config import ROOT
 from ncc.security import require_token
@@ -38,4 +39,11 @@ async def refresh_profile() -> dict[str, Any]:
 
     save_hardware_cache(registry, static_profile())
     return await system_profile()
+
+
+@router.get("/auth/check", dependencies=[Depends(require_token)])
+async def auth_check() -> dict[str, str | bool]:
+    from ncc.app import settings
+
+    return {"authorized": True, "mode": settings.mode, "version": __version__}
 

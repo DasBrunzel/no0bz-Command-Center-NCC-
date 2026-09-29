@@ -1,6 +1,6 @@
 # no0bz Command Center (NCC)
 
-![Version](https://img.shields.io/badge/version-0.4.0-12d8f4)
+![Version](https://img.shields.io/badge/version-0.4.1-12d8f4)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776ab)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
@@ -81,6 +81,16 @@ Datei sicher auf den Client und starte dort:
 scripts\start_ncc_tailscale_client.bat
 ```
 
+Alternativ können Ziel und Übergabedatei direkt angegeben werden:
+
+```powershell
+scripts\start_ncc_tailscale_client.bat 100.100.100.10 ncc-token-transfer.txt
+```
+
+Der Client prüft Adresse, Server-Modus und gemeinsamen Token vor dem eigentlichen
+Start. Bei einem abweichenden Token oder gesperrten Port erscheint dadurch eine
+konkrete Fehlermeldung statt einer stillen Verbindungswiederholung.
+
 Nach dem Import sollte `ncc-token-transfer.txt` auf beiden Geräten gelöscht werden.
 Der dauerhafte Token liegt in der von Git ausgeschlossenen `.env`. Tailscale-Grants
 sollten TCP-Port 8350 nur für die vorgesehenen Clients freigeben.
@@ -153,6 +163,7 @@ direkt über `amdgpu`/sysfs. Ohne LHM fehlen lediglich einige optionale Sensorwe
 | POST | `/api/nodes/register` | Node registrieren | Token + Rate-Limit |
 | POST | `/api/nodes/telemetry` | Node-Snapshot | Token + Rate-Limit |
 | GET | `/api/multipc/mode` | Betriebsmodus | nein |
+| GET | `/api/auth/check` | Client-Verbindung und Token prüfen | Token |
 | POST | `/api/profile` | Profil speichern | Token |
 | GET | `/api/system/profile` | Hardware-Cache | nein |
 | POST | `/api/system/profile/refresh` | Hardware neu erkennen | Token |

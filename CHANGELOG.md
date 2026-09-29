@@ -4,6 +4,15 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-09-29
+
+### Fixed
+
+- Windows-Batchdateien werden mit CMD-kompatiblen CRLF-Zeilenenden ausgeliefert.
+- Tailscale-Client normalisiert IPs, MagicDNS-Namen und vollständige URLs.
+- Gemeinsame Token-Datei wird automatisch importiert und vor dem Start geprüft.
+- Client/Server-Fehler sind sichtbar statt unbemerkter Wiederholungsversuche.
+
 ## [0.4.0] - 2026-09-29
 
 ### Added
