@@ -4,6 +4,22 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.5.0-alpha.1] - 2026-09-30
+
+### Added
+
+- Eigenständige, GUI-lose Server-Anwendung als getrenntes Python-Paket.
+- Versionierte Server-API unter `/api/v1` mit Live- und Readiness-Prüfung.
+- PostgreSQL-Datenmodell für Nodes, Telemetrie, Benutzer, Agent-Tokens und Audit-Ereignisse.
+- Erste Alembic-Migration sowie PostgreSQL- und Server-Dienste für Docker Compose.
+- Eigener `ncc-server`-Kommandozeilenstart und separate Server-Konfiguration.
+
+### Changed
+
+- Projektversion nach Semantic Versioning auf `0.5.0-alpha.1` angehoben.
+- Das Server-Container-Image enthält und startet keine Browseroberfläche und keine
+  lokalen Hardware-Sammler mehr.
+
 ### Documentation
 
 - Phase-1-Bestandsaufnahme für die geplante getrennte Server-, Agent-, Web- und

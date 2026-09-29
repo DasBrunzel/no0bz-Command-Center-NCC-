@@ -1,15 +1,32 @@
 services:
-  ncc:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ncc
+      POSTGRES_USER: ncc
+      POSTGRES_PASSWORD: ${NCC_POSTGRES_PASSWORD:-change-me}
+    volumes:
+      - ncc-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ncc -d ncc"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  ncc-server:
     build: .
     ports: ["8350:8350"]
     environment:
-      NCC_HOST: 0.0.0.0
-      NCC_MODE: server
-    volumes:
-      - ./ncc-data:/app/data
-      - /sys:/sys:ro
-    pid: host
+      NCC_SERVER_HOST: 0.0.0.0
+      NCC_SERVER_PORT: 8350
+      NCC_SERVER_DATABASE_URL: postgresql+psycopg://ncc:${NCC_POSTGRES_PASSWORD:-change-me}@postgres:5432/ncc
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["sh", "-c", "alembic upgrade head && python main_server.py"]
     restart: unless-stopped
-# NVIDIA: install the NVIDIA Container Toolkit and add `gpus: all`.
-# Host PID and /sys access expose sensitive system metadata; enable only on trusted hosts.
+
+volumes:
+  ncc-postgres:
 

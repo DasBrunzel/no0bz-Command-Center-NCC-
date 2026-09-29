@@ -1,5 +1,20 @@
 # Architektur
 
+## NCC 0.5 Zielarchitektur
+
+```text
+Windows-/Linux-Agenten ── HTTPS / API v1 ──► NCC Server ──► PostgreSQL
+                                                    │
+                                                    └──► spätere Fleet-Weboberfläche
+```
+
+Der NCC-Server ist seit `0.5.0-alpha.1` eine eigene GUI-lose Anwendung. Er startet
+keine lokalen Hardware-Provider. Agent, Browseroberfläche und Windows-Integration
+werden als getrennte Komponenten weiterentwickelt. PostgreSQL speichert den
+Betriebszustand dauerhaft; Alembic versioniert jede Schemaänderung.
+
+## NCC 0.4 Kompatibilitätsarchitektur
+
 ```text
 Provider (psutil / NVML / hwmon / SMART / Demo)
         │ Probe + collect, eigener Timeout, Backoff

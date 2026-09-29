@@ -1,10 +1,29 @@
 # no0bz Command Center (NCC)
 
-![Version](https://img.shields.io/badge/version-0.4.1-12d8f4)
+![Version](https://img.shields.io/badge/version-0.5.0--alpha.1-12d8f4)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776ab)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 Real-Time System Monitor & Local Sync Hub (Python/FastAPI + React).
+
+> **NCC 0.5 befindet sich im Neuaufbau.** `0.5.0-alpha.1` enthält das neue,
+> GUI-lose Server-Fundament mit PostgreSQL und versionierter API. Das vorhandene
+> lokale Dashboard bleibt vorübergehend als NCC-0.4-Kompatibilitätsschicht erhalten.
+
+## NCC-0.5-Server (Alpha)
+
+Der neue Server ist eine separate Anwendung: Er sammelt keine lokale Hardware und
+liefert keine Browser-GUI aus. Mit Docker Compose werden PostgreSQL, Migrationen und
+der Server gemeinsam gestartet:
+
+```powershell
+$env:NCC_POSTGRES_PASSWORD = "ein-langes-eigenes-passwort"
+docker compose up --build
+```
+
+Danach stehen der Status unter <http://127.0.0.1:8350/api/v1/status/live> und die
+API-Dokumentation unter <http://127.0.0.1:8350/api/docs> bereit. Einzelheiten und
+die genaue Abgrenzung stehen im [Phase-2-Bericht](docs/phase-2-foundation.md).
 
 NCC ist ein lokales, quelloffenes Monitoring-Dashboard für Power User, Gamer,
 Entwickler und Homelabs. Es sammelt Systemwerte über austauschbare Provider, streamt
@@ -47,10 +66,10 @@ enthalten; Node.js wird nur zur Frontend-Entwicklung benötigt.
 Demo-Modus: setze `NCC_DEMO=1` in `.env`. LAN-Betrieb: setze bewusst `NCC_HOST=0.0.0.0`
 und `NCC_MODE=server`; lies vorher [SECURITY.md](SECURITY.md).
 
-### Local, Server und Client
+### NCC-0.4-Kompatibilitätsmodi
 
-Es gibt keine getrennten Binärdateien: Dieselbe NCC-Anwendung übernimmt je nach
-Starter eine der drei Rollen:
+Die bisherige NCC-Anwendung übernimmt je nach Starter weiterhin eine der drei
+Legacy-Rollen. Diese Starter gehören noch nicht zur neuen NCC-0.5-Architektur:
 
 | Rolle | Windows | Linux | Zweck |
 |---|---|---|---|
