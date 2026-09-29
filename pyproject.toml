@@ -39,6 +39,6 @@ packages = ["ncc"]
 mypy_path = "backend"
 
 [tool.pytest.ini_options]
-pythonpath = ["backend"]
+pythonpath = ["backend", "."]
 testpaths = ["tests"]
 
