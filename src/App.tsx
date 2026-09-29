@@ -543,6 +543,8 @@ export default function App() {
     total_disk_write: 0.0,
     net_recv_mbps: 0.0,
     net_sent_mbps: 0.0,
+    network_speed_label: 'LAN 1 GbE',
+    network_adapter_name: 'Ethernet',
     fans_rpm: 0,
     hostname: 'no0bz-Station',
     uptime: '0m',
@@ -644,7 +646,7 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
     audioAlert: false,
     maxVaultCacheGB: 10,
     autoPurgeDuckDBHours: 24,
-    preferredAdapter: 'Ethernet (10 GbE Realtek Gaming)',
+    preferredAdapter: 'Auto-Detect (System NIC)',
   });
 
   // Live timer tick
@@ -863,6 +865,8 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
               gpu_vram_pct: typeof raw.gpu?.vram_percent === 'number' ? raw.gpu.vram_percent : prev.gpu_vram_pct,
               net_recv_mbps: typeof raw.network?.recv_mbps === 'number' ? raw.network.recv_mbps : prev.net_recv_mbps,
               net_sent_mbps: typeof raw.network?.sent_mbps === 'number' ? raw.network.sent_mbps : prev.net_sent_mbps,
+              network_speed_label: raw.network?.speed_label || prev.network_speed_label || 'LAN 1 GbE',
+              network_adapter_name: raw.network?.adapter_name || prev.network_adapter_name || 'Ethernet',
               total_disk_read: raw.total_disk_io ? raw.total_disk_io.read_mbs : prev.total_disk_read,
               total_disk_write: raw.total_disk_io ? raw.total_disk_io.write_mbs : prev.total_disk_write,
               hostname: raw.hostname || prev.hostname,
@@ -1103,6 +1107,8 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
       gpu_vram_pct: activeViewNode.gpu_load || 20,
       net_recv_mbps: activeViewNode.net_recv_mbps,
       net_sent_mbps: activeViewNode.net_sent_mbps,
+      network_speed_label: (activeViewNode as any).speed_label || (activeViewNode as any).network_speed_label || metrics.network_speed_label || 'LAN 1 GbE',
+      network_adapter_name: (activeViewNode as any).adapter_name || (activeViewNode as any).network_adapter_name || metrics.network_adapter_name || 'Ethernet',
       uptime: activeViewNode.last_seen ? `Status: ${activeViewNode.last_seen}` : metrics.uptime
     };
   }, [activeViewNode, metrics]);
@@ -1528,7 +1534,7 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                 >
                   <div className="flex items-center gap-2.5">
                     <Globe className="w-4 h-4 text-amber-400" />
-                    <span>MULTI-PC HUB</span>
+                    <span>NEXUS RIG MATRIX</span>
                   </div>
                   <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${
                     activeTab === 'multipc' 
@@ -1856,8 +1862,8 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                       <span className="font-mono font-bold text-xs tracking-wider">NETWORK I/O</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-emerald-300">
-                        LAN 10 GbE
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-emerald-300 font-bold">
+                        {displayedMetrics.network_speed_label || (activeViewNode ? 'LAN 1 GbE' : (systemProfile?.network_interfaces?.[0]?.speed_label || 'LAN 1 GbE'))}
                       </span>
                       <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-950/70 border border-emerald-700/60 text-emerald-400 font-bold">
                         PING {activeViewNode ? activeViewNode.ping_ms : 3}ms
@@ -1898,7 +1904,7 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
 
                   <div className="pt-2 mt-1 border-t border-zinc-800/60 flex items-center justify-between text-[10px] font-mono text-zinc-400">
                     <span>BUFFERS: 0% LOSS</span>
-                    <span className="text-zinc-500">NIC: Realtek RTL8125 2.5G</span>
+                    <span className="text-zinc-500">NIC: {displayedMetrics.network_adapter_name || (systemProfile?.network_interfaces?.[0]?.name || 'Ethernet Controller')}</span>
                   </div>
                 </div>
 
@@ -2009,7 +2015,7 @@ Deliver zero-copy ring buffer implementations with C++20 atomic memory fences.`,
                   <div>
                     <div className="flex items-center gap-2">
                       <h2 className="font-mono font-bold text-base text-white">
-                        no0bz MULTI-PC HUB &amp; SERVER CLUSTER
+                        no0bz NEXUS RIG MATRIX // NEURAL CLUSTER
                       </h2>
                       <span className={`text-[10px] font-mono px-2 py-0.5 rounded font-bold ${
                         multiPcMode === 'host'

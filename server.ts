@@ -399,6 +399,32 @@ function readLinuxNetBytes() {
     return { recv: 0, sent: 0 };
   }
 }
+function detectNicInfo() {
+  const ifaces = os.networkInterfaces();
+  let adapterName = 'Ethernet';
+  let speedLabel = 'LAN 1 GbE';
+  for (const [name, list] of Object.entries(ifaces)) {
+    if (!list) continue;
+    if (name.toLowerCase().includes('lo') || name.toLowerCase().includes('loopback')) continue;
+    for (const a of list) {
+      if (a.family === 'IPv4' && !a.internal && !a.address.startsWith('127.')) {
+        adapterName = name;
+        if (name.toLowerCase().includes('wifi') || name.toLowerCase().includes('wlan') || name.toLowerCase().includes('wireless')) {
+          speedLabel = 'Wi-Fi (WLAN)';
+        } else if (name.toLowerCase().includes('10g') || name.toLowerCase().includes('10gbe')) {
+          speedLabel = 'LAN 10 GbE';
+        } else if (name.toLowerCase().includes('2.5g')) {
+          speedLabel = 'LAN 2.5 GbE';
+        } else {
+          speedLabel = 'LAN 1 GbE';
+        }
+        return { adapter_name: adapterName, speed_label: speedLabel };
+      }
+    }
+  }
+  return { adapter_name: adapterName, speed_label: speedLabel };
+}
+
 prevNetBytes = readLinuxNetBytes();
 
 function sampleSystemMetrics() {
@@ -497,6 +523,8 @@ function sampleSystemMetrics() {
     network: {
       recv_mbps: recvMbps,
       sent_mbps: sentMbps,
+      speed_label: detectNicInfo().speed_label,
+      adapter_name: detectNicInfo().adapter_name,
       total_recv_gb: +(currNet.recv / (1024 ** 3)).toFixed(2),
       total_sent_gb: +(currNet.sent / (1024 ** 3)).toFixed(2)
     },
@@ -701,7 +729,8 @@ async function startServer() {
         last_seen: 'Jetzt'
       };
     }
-    res.json({ status: 'recorded' });
+    const serverNode = getClusterNodes().find(n => n.is_host) || connectedNodes['node_host'];
+    res.json({ status: 'recorded', server_node: serverNode });
   });
 
   // Processes & Task Manager

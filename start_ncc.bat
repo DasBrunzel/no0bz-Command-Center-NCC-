@@ -1,9 +1,9 @@
 @echo off
-title no0bz Command Center (NCC) v3.9.0
+title no0bz Command Center (NCC) v3.12.0
 echo ========================================================
-echo   Starting no0bz Command Center (NCC) v3.9.0...
+echo   Starting no0bz Command Center (NCC) v3.12.0...
 echo   Web GUI Port:       8350
-echo   Dedicated Remote:   8351 (Multi-PC Cluster Hub)
+echo   Nexus Rig Matrix:   Cluster Ready
 echo ========================================================
 python -m pip install -r requirements.txt
 echo.

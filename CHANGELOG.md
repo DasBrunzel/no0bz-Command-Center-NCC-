@@ -6,6 +6,34 @@ Das Format basiert auf [Keep a Changelog](https://keepachangelog.com/de/1.0.0/) 
 
 ---
 
+## [v3.12.0] - 2026-09-29
+
+### 🚀 Neu & Hervorgehoben (Client/Server-Trennung, Nexus Rig Matrix & Reale NIC-Erkennung)
+- **Interaktive Start-Abfrage im Terminal (Client vs. Server Trennung)**:
+  - Beim Start von `main.py` oder `start_ncc.bat` im Terminal wird der Nutzer nun interaktiv gefragt, in welchem Modus das System gestartet werden soll:
+    - `[1] Server-Modus (Master Hub Server)`: Verwaltet das Cluster, empfängt Telemetrie & Chat von allen Clients.
+    - `[2] Client-Modus (Cluster Node / Zweitrechner)`: Fragt gezielt ab, ob eine Verbindung zu einem Server aufgebaut werden soll (mit Eingabe der Server-IP/Port) oder Standalone gestartet wird.
+    - `[3] Standalone-Modus (Lokaler Einzel-PC)`: Autarker Betrieb ohne Netzwerkverbindungen.
+  - Automatisierte Starts über `--mode [host|server|client|local|standalone]` und `--yes` (`-y`) bleiben für Skripte und Autostart voll funktionsfähig.
+- **Multi-PC Hub umbenannt zu "NEXUS RIG MATRIX"**:
+  - Der Multi-PC Hub wurde in das viel coolere **"NEXUS RIG MATRIX // NEURAL CLUSTER COMMAND"** umbenannt.
+  - Verbesserte Kartenansicht, klare Rollenverteilung (`HOST` vs `CLIENT`), Ping-Anzeige und Ein-Klick-Dashboard-Umschaltung.
+- **Echte Netzwerk-Erkennung (NIC) & Beseitigung der statischen "LAN 10 GbE" Anzeige**:
+  - Die Netzwerkkarte und deren tatsächliche Verbindungsgeschwindigkeit werden nun dynamisch über `psutil.net_if_stats()` ermittelt:
+    - 1.000 Mbit/s -> **LAN 1 GbE**
+    - 2.500 Mbit/s -> **LAN 2.5 GbE**
+    - 10.000 Mbit/s -> **LAN 10 GbE**
+    - WLAN/Wireless -> **Wi-Fi (WLAN)**
+  - Der genaue Adapter-Name wird im Kartenfuß angezeigt (z. B. Realtek, Intel oder System-NIC).
+- **Behebung der Terminal-Fehler im Server/Client-Betrieb**:
+  - Beseitigung des `ValueError: signal only works in main thread`-Fehlers, der durch einen zweiten uvicorn-Server in einem Hintergrund-Thread verursacht wurde. Alle Cluster- und Telemetrie-Endpunkte laufen nun stabil und ressourcenschonend über den Hauptdienst auf Port 8350.
+- **Zuverlässiger Telemetrie- & Chat-Sync zwischen Client und Server**:
+  - `ClientStreamer` verbindet sich automatisch mit dem Standard-Port 8350 des Servers (kein versehentlicher Fallback auf Port 80 mehr).
+  - Der Server antwortet auf Telemetrie-Pushes direkt mit seinen eigenen Live-Metriken, sodass der Client in der Nexus Matrix und im Dashboard die echten Live-Werte des Master Servers sieht.
+  - Chat-Nachrichten synchronisieren sich kontinuierlich und beidseitig zwischen Master Server und allen verbundenen Clients.
+
+---
+
 ## [v3.11.0] - 2026-09-28
 
 ### 🚀 Neu & Behoben (Multi-PC, Chat & Cluster Inspector)

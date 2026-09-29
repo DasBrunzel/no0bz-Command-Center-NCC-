@@ -56,10 +56,13 @@ except ImportError:
 
 from contextlib import asynccontextmanager
 
-VERSION = "v3.11.0"
+VERSION = "v3.12.0"
 PORT = 8350
 REMOTE_PORT = 8351
 LHM_URL = "http://127.0.0.1:8085/data.json"
+
+server_sync_lock = threading.Lock()
+server_telemetry_cache: Dict[str, Any] = {}
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, "ncc_config.json")
@@ -79,7 +82,7 @@ os.makedirs(LEGACY_UPLOAD_DIR, exist_ok=True)
 def load_ncc_config() -> Dict[str, Any]:
     cfg = {
         "server_mode": "host",
-        "client_server_url": "192.168.1.100:8351",
+        "client_server_url": "192.168.1.100:8350",
         "remote_port": REMOTE_PORT,
         "version": VERSION
     }
@@ -101,7 +104,7 @@ def save_ncc_config(cfg: Dict[str, Any]):
 
 initial_cfg = load_ncc_config()
 server_mode = initial_cfg.get("server_mode", "host")
-client_server_url = initial_cfg.get("client_server_url", "192.168.1.100:8351")
+client_server_url = initial_cfg.get("client_server_url", "192.168.1.100:8350")
 remote_port = int(initial_cfg.get("remote_port", REMOTE_PORT))
 
 def get_active_vault_dir() -> str:
@@ -262,6 +265,62 @@ def detect_gpu_info() -> Dict[str, Any]:
         gpu_info["name"] = "Integrated Display Controller"
     return gpu_info
 
+# Active Network Interface & Speed Detection
+def detect_primary_nic_info() -> Dict[str, Any]:
+    """Detects active network card, link speed (1 GbE, 2.5 GbE, 10 GbE, 100 Mbps, Wi-Fi), and IP."""
+    adapter_name = "Ethernet"
+    speed_mbps = 1000
+    speed_label = "LAN 1 GbE"
+    ip_addr = "127.0.0.1"
+
+    try:
+        stats = psutil.net_if_stats()
+        addrs = psutil.net_if_addrs()
+
+        best_iface = None
+        for name, addr_list in addrs.items():
+            if "loopback" in name.lower() or name.lower().startswith("lo"):
+                continue
+            ipv4_addrs = [a.address for a in addr_list if a.family == socket.AF_INET and not a.address.startswith("127.")]
+            if not ipv4_addrs:
+                continue
+
+            stat = stats.get(name)
+            is_up = stat.isup if stat else True
+            speed = stat.speed if stat else 0
+
+            if is_up:
+                best_iface = (name, ipv4_addrs[0], speed)
+                if speed > 0:
+                    break
+
+        if best_iface:
+            name, ip_addr, speed_mbps = best_iface
+            adapter_name = name
+
+            if speed_mbps >= 10000:
+                speed_label = f"LAN {speed_mbps // 1000} GbE" if speed_mbps % 1000 == 0 else f"LAN {speed_mbps / 1000:.1f} GbE"
+            elif speed_mbps >= 2500:
+                speed_label = "LAN 2.5 GbE" if speed_mbps == 2500 else f"LAN {speed_mbps / 1000:.1f} GbE"
+            elif speed_mbps >= 1000:
+                speed_label = "LAN 1 GbE" if speed_mbps == 1000 else f"LAN {speed_mbps / 1000:.1f} GbE"
+            elif speed_mbps > 0:
+                speed_label = f"LAN {speed_mbps} Mbps"
+            else:
+                if any(w in name.lower() for w in ["wi-fi", "wifi", "wlan", "wireless"]):
+                    speed_label = "Wi-Fi (WLAN)"
+                else:
+                    speed_label = "LAN 1 GbE"
+    except Exception:
+        pass
+
+    return {
+        "name": adapter_name,
+        "speed_mbps": speed_mbps,
+        "speed_label": speed_label,
+        "ip": ip_addr
+    }
+
 # Fast-Boot Hardware & System Cache Probe
 def probe_system_profile() -> Dict[str, Any]:
     hostname = os.uname().nodename if hasattr(os, "uname") else os.environ.get("COMPUTERNAME", "no0bz-Station")
@@ -270,6 +329,7 @@ def probe_system_profile() -> Dict[str, Any]:
     swap = psutil.swap_memory()
     real_cpu = detect_cpu_name()
     real_gpu = detect_gpu_info()
+    nic_info = detect_primary_nic_info()
     
     # Disk layout
     disk_info = []
@@ -294,12 +354,23 @@ def probe_system_profile() -> Dict[str, Any]:
     net_ifaces = []
     try:
         addrs = psutil.net_if_addrs()
+        stats = psutil.net_if_stats()
         for iface_name, addr_list in addrs.items():
             for a in addr_list:
                 if a.family == socket.AF_INET and not a.address.startswith("127."):
-                    net_ifaces.append({"name": iface_name, "ip": a.address})
+                    stat = stats.get(iface_name)
+                    speed_mbps = stat.speed if stat else 0
+                    net_ifaces.append({
+                        "name": iface_name,
+                        "ip": a.address,
+                        "speed_mbps": speed_mbps,
+                        "speed_label": nic_info["speed_label"] if iface_name == nic_info["name"] else (f"LAN {speed_mbps} Mbps" if speed_mbps > 0 else "Auto")
+                    })
     except Exception:
         pass
+
+    if not net_ifaces:
+        net_ifaces.append(nic_info)
 
     return {
         "hostname": hostname,
@@ -315,6 +386,8 @@ def probe_system_profile() -> Dict[str, Any]:
         "swap_total_gb": round(swap.total / (1024**3), 1),
         "disks": disk_info,
         "network_interfaces": net_ifaces,
+        "network_speed_label": nic_info["speed_label"],
+        "network_adapter_name": nic_info["name"],
         "gpu_name": real_gpu["name"],
         "gpu_vendor": real_gpu["vendor"],
         "gpu_vram_total_gb": real_gpu["vram_total_gb"],
@@ -384,6 +457,8 @@ live_data: Dict[str, Any] = {
     "network": {
         "sent_mbps": 0.0,
         "recv_mbps": 0.0,
+        "speed_label": "LAN 1 GbE",
+        "adapter_name": "Ethernet",
         "total_sent_gb": 0.0,
         "total_recv_gb": 0.0
     },
@@ -923,8 +998,11 @@ class DataCollector(threading.Thread):
                     live_data["disks"] = disks_info
                     live_data["total_disk_io"]["read_mbs"] = total_read_mbs
                     live_data["total_disk_io"]["write_mbs"] = total_write_mbs
+                    nic = detect_primary_nic_info()
                     live_data["network"]["sent_mbps"] = net_sent_mbps
                     live_data["network"]["recv_mbps"] = net_recv_mbps
+                    live_data["network"]["speed_label"] = nic["speed_label"]
+                    live_data["network"]["adapter_name"] = nic["name"]
                     live_data["network"]["total_sent_gb"] = round(curr_net.bytes_sent / (1024**3), 2)
                     live_data["network"]["total_recv_gb"] = round(curr_net.bytes_recv / (1024**3), 2)
                     live_data["fans"] = fans
@@ -992,38 +1070,33 @@ async def remote_node_websocket(websocket: WebSocket):
     except Exception as e:
         print(f"[REMOTE WS ERROR] {e}")
 
-_remote_hub_started = False
-def run_remote_hub_server():
-    global _remote_hub_started
-    if _remote_hub_started:
-        return
-    _remote_hub_started = True
-    try:
-        config = uvicorn.Config(
-            remote_app,
-            host="0.0.0.0",
-            port=remote_port,
-            log_level="warning",
-            access_log=False
-        )
-        server = uvicorn.Server(config)
-        server.run()
-    except Exception as err:
-        print(f"[REMOTE HUB NOTICE] Could not bind port {remote_port}: {err}")
-
 class ClientStreamer(threading.Thread):
-    """Client node background worker: streams real hardware metrics to master server on remote_port (8351)."""
+    """Client node background worker: streams real hardware metrics to master server on port 8350, and syncs server telemetry and chat."""
     def __init__(self, target_url: str):
         super().__init__(daemon=True)
         self.target_url = target_url
         self.running = True
 
     def run(self):
-        print(f"[CLIENT NODE] Starting telemetry push worker to {self.target_url}...")
+        clean_target = self.target_url.strip()
+        if not clean_target.startswith("http://") and not clean_target.startswith("https://"):
+            clean_target = f"http://{clean_target}"
+        
+        # Ensure default port 8350 if not specified
+        from urllib.parse import urlparse
+        parsed = urlparse(clean_target)
+        if not parsed.port:
+            clean_target = f"{parsed.scheme}://{parsed.netloc or parsed.path}:8350"
+        
+        telemetry_endpoint = f"{clean_target.rstrip('/')}/api/nodes/telemetry"
+        chat_endpoint = f"{clean_target.rstrip('/')}/api/chat/messages"
+        print(f"[CLIENT NODE] Starting cluster sync worker -> {telemetry_endpoint} ...")
+
         prev_net = psutil.net_io_counters()
         prev_time = time.time()
         hostname = os.uname().nodename if hasattr(os, "uname") else os.environ.get("COMPUTERNAME", "no0bz-Client")
         node_id = f"client_{hostname.lower().replace(' ', '_')}"
+        poll_chat_counter = 0
 
         while self.running:
             try:
@@ -1039,10 +1112,12 @@ class ClientStreamer(threading.Thread):
                 prev_net = curr_net
                 prev_time = now_time
 
-                # Probe GPU & CPU
+                # Probe GPU, CPU, NIC
                 gpu = detect_gpu_info()
                 cpu_model = detect_cpu_name()
+                nic_info = detect_primary_nic_info()
 
+                t_start = time.time()
                 payload = {
                     "node_id": node_id,
                     "pc_name": hostname,
@@ -1050,33 +1125,60 @@ class ClientStreamer(threading.Thread):
                     "role": "Client Node",
                     "avatar": "💻",
                     "cpu_load": cpu_load,
+                    "cpu_temp": live_data.get("cpu", {}).get("temp_c", 42.0),
+                    "cpu_model": cpu_model,
                     "ram_percent": ram.percent,
+                    "ram_total_gb": round(ram.total / (1024**3), 1),
+                    "ram_used_gb": round(ram.used / (1024**3), 1),
+                    "gpu_load": live_data.get("gpu", {}).get("load", 0.0),
+                    "gpu_temp": live_data.get("gpu", {}).get("temp_c", 38.0),
+                    "gpu_model": gpu.get("name", "Integrated Graphics"),
                     "net_recv_mbps": net_recv_mbps,
                     "net_sent_mbps": net_sent_mbps,
+                    "speed_label": nic_info["speed_label"],
+                    "adapter_name": nic_info["name"],
                     "os": f"{platform.system()} {platform.release()}",
-                    "cpu_model": cpu_model,
-                    "gpu_model": gpu.get("name", "Integrated Graphics"),
                     "is_host": False,
                     "ping_ms": 1
                 }
 
-                url = self.target_url.strip()
-                if not url.startswith("http://") and not url.startswith("https://"):
-                    url = f"http://{url}"
-                if not url.endswith("/api/nodes/telemetry"):
-                    url = f"{url.rstrip('/')}/api/nodes/telemetry"
-
                 req = urllib.request.Request(
-                    url,
+                    telemetry_endpoint,
                     data=json.dumps(payload).encode("utf-8"),
-                    headers={"Content-Type": "application/json", "User-Agent": "no0bz-Client/3.9.0"}
+                    headers={"Content-Type": "application/json", "User-Agent": f"no0bz-Client/{VERSION}"}
                 )
                 try:
-                    with urllib.request.urlopen(req, timeout=1.5) as resp:
-                        pass
+                    with urllib.request.urlopen(req, timeout=2.0) as resp:
+                        measured_ping = max(1, int((time.time() - t_start) * 1000))
+                        if resp.status == 200:
+                            resp_data = json.loads(resp.read().decode("utf-8"))
+                            server_telem = resp_data.get("server_telemetry")
+                            if server_telem:
+                                server_telem["ping_ms"] = measured_ping
+                                server_telem["last_seen"] = "Live (Verbunden)"
+                                with server_sync_lock:
+                                    server_telemetry_cache.update(server_telem)
                 except Exception:
-                    pass
-            except Exception as e:
+                    with server_sync_lock:
+                        server_telemetry_cache["last_seen"] = "Offline (Warte auf Server...)"
+
+                # Sync chat messages every 3 iterations
+                poll_chat_counter += 1
+                if poll_chat_counter % 3 == 0:
+                    try:
+                        req_chat = urllib.request.Request(chat_endpoint, headers={"User-Agent": f"no0bz-Client/{VERSION}"})
+                        with urllib.request.urlopen(req_chat, timeout=2.0) as c_resp:
+                            if c_resp.status == 200:
+                                srv_msgs = json.loads(c_resp.read().decode("utf-8"))
+                                if isinstance(srv_msgs, list):
+                                    with chat_lock:
+                                        existing_ids = {m.get("id") for m in chat_messages}
+                                        for m in srv_msgs:
+                                            if m.get("id") not in existing_ids:
+                                                chat_messages.append(m)
+                    except Exception:
+                        pass
+            except Exception:
                 pass
 
 @asynccontextmanager
@@ -1084,14 +1186,10 @@ async def lifespan(app: FastAPI):
     collector = DataCollector()
     collector.start()
 
-    # Start dedicated Remote Hub on Port 8351 if server_mode is host
-    if server_mode == "host":
-        threading.Thread(target=run_remote_hub_server, daemon=True).start()
-        print(f"[REMOTE HUB] Dedicated Remote Port {remote_port} active for cluster connections")
-
     # Start client streamer if server_mode is client
     if server_mode == "client":
-        threading.Thread(target=lambda: ClientStreamer(client_server_url).start(), daemon=True).start()
+        streamer = ClientStreamer(client_server_url)
+        streamer.start()
         print(f"[CLIENT NODE] Streaming telemetry to {client_server_url}")
 
     yield
@@ -1112,30 +1210,40 @@ def get_cluster_nodes() -> List[Dict[str, Any]]:
     with nodes_lock:
         if server_mode == "client":
             server_host_ip = (client_server_url.split(":")[0] if client_server_url else "192.168.1.100").replace("http://", "").replace("https://", "")
+            with server_sync_lock:
+                st = dict(server_telemetry_cache)
+
+            nic_info = detect_primary_nic_info()
             server_node = {
                 "id": "node_master_server",
-                "pc_name": f"Server Hub ({server_host_ip})",
+                "pc_name": st.get("hostname") or f"Server Hub ({server_host_ip})",
                 "display_name": "Master Hub Server",
                 "role": "Master Hub Server",
                 "avatar": "👑",
                 "ip": server_host_ip,
-                "os": "no0bz Cluster Master Server",
-                "cpu_model": "Master Host CPU",
-                "gpu_model": "NVIDIA RTX Master GPU",
-                "ping_ms": 2,
-                "last_seen": "Live (Verbunden)",
-                "cpu_load": 14.8,
-                "ram_percent": 41.5,
-                "gpu_load": 18.0,
-                "net_recv_mbps": 3.4,
-                "net_sent_mbps": 2.1,
+                "os": st.get("os", "no0bz Cluster Master Server"),
+                "cpu_model": st.get("cpu_model", "Master Host CPU"),
+                "gpu_model": st.get("gpu_name") or st.get("gpu_model", "NVIDIA RTX Master GPU"),
+                "ping_ms": st.get("ping_ms", 2),
+                "last_seen": st.get("last_seen", "Live (Verbunden)"),
+                "cpu_load": st.get("cpu_load", 14.8),
+                "cpu_temp": st.get("cpu_temp", 44.0),
+                "ram_percent": st.get("ram_percent", 41.5),
+                "ram_total_gb": st.get("ram_total_gb", 32.0),
+                "ram_used_gb": st.get("ram_used_gb", 13.2),
+                "gpu_load": st.get("gpu_load", 18.0),
+                "gpu_temp": st.get("gpu_temp", 42.0),
+                "net_recv_mbps": st.get("net_recv_mbps", 3.4),
+                "net_sent_mbps": st.get("net_sent_mbps", 2.1),
+                "speed_label": st.get("network_speed_label", "LAN 1 GbE"),
+                "adapter_name": st.get("network_adapter_name", "Ethernet"),
                 "is_host": True,
-                "status": "online"
+                "status": "online" if "Offline" not in st.get("last_seen", "") else "offline"
             }
             local_client = {
                 "id": "node_client_local",
                 "pc_name": curr_hostname,
-                "display_name": "Client Workstation",
+                "display_name": f"{curr_hostname} (Client)",
                 "role": "Client Node (Lokal)",
                 "avatar": "💻",
                 "ip": get_local_ip(),
@@ -1145,10 +1253,16 @@ def get_cluster_nodes() -> List[Dict[str, Any]]:
                 "ping_ms": 0,
                 "last_seen": "Live",
                 "cpu_load": live_data.get("cpu", {}).get("load", 0.0),
+                "cpu_temp": live_data.get("cpu", {}).get("temp_c", 40.0),
                 "ram_percent": live_data.get("ram", {}).get("percent", 0.0),
+                "ram_total_gb": live_data.get("ram", {}).get("total_gb", 16.0),
+                "ram_used_gb": live_data.get("ram", {}).get("used_gb", 4.0),
                 "gpu_load": live_data.get("gpu", {}).get("load", 0.0),
+                "gpu_temp": live_data.get("gpu", {}).get("temp_c", 38.0),
                 "net_recv_mbps": live_data.get("network", {}).get("recv_mbps", 0.0),
                 "net_sent_mbps": live_data.get("network", {}).get("sent_mbps", 0.0),
+                "speed_label": nic_info["speed_label"],
+                "adapter_name": nic_info["name"],
                 "is_host": False,
                 "status": "online"
             }
@@ -1267,9 +1381,18 @@ def receive_node_telemetry(payload: Dict[str, Any]):
         raise HTTPException(status_code=400, detail="node_id required")
 
     cpu_load = float(payload.get("cpu_load", 0.0))
+    cpu_temp = float(payload.get("cpu_temp", 42.0))
     ram_percent = float(payload.get("ram_percent", 0.0))
+    ram_total_gb = float(payload.get("ram_total_gb", 16.0))
+    ram_used_gb = float(payload.get("ram_used_gb", 4.0))
+    gpu_load = float(payload.get("gpu_load", 0.0))
+    gpu_temp = float(payload.get("gpu_temp", 38.0))
+    gpu_model = payload.get("gpu_model", "Client GPU")
+    cpu_model = payload.get("cpu_model", "Client CPU")
     net_recv_mbps = float(payload.get("net_recv_mbps", 0.0))
     net_sent_mbps = float(payload.get("net_sent_mbps", 0.0))
+    speed_label = payload.get("speed_label", "LAN 1 GbE")
+    adapter_name = payload.get("adapter_name", "Ethernet")
     pc_name = payload.get("pc_name", "Remote-Node")
     display_name = payload.get("display_name", pc_name)
 
@@ -1277,9 +1400,18 @@ def receive_node_telemetry(payload: Dict[str, Any]):
         if node_id in connected_nodes:
             node = connected_nodes[node_id]
             node["cpu_load"] = cpu_load
+            node["cpu_temp"] = cpu_temp
+            node["cpu_model"] = cpu_model
             node["ram_percent"] = ram_percent
+            node["ram_total_gb"] = ram_total_gb
+            node["ram_used_gb"] = ram_used_gb
+            node["gpu_load"] = gpu_load
+            node["gpu_temp"] = gpu_temp
+            node["gpu_model"] = gpu_model
             node["net_recv_mbps"] = net_recv_mbps
             node["net_sent_mbps"] = net_sent_mbps
+            node["speed_label"] = speed_label
+            node["adapter_name"] = adapter_name
             node["last_seen"] = "Jetzt"
             if "ping_ms" in payload:
                 node["ping_ms"] = payload["ping_ms"]
@@ -1292,11 +1424,20 @@ def receive_node_telemetry(payload: Dict[str, Any]):
                 "avatar": payload.get("avatar", "💻"),
                 "ip": payload.get("ip", "192.168.1.x"),
                 "os": payload.get("os", "Client OS"),
+                "cpu_model": cpu_model,
+                "cpu_temp": cpu_temp,
+                "gpu_model": gpu_model,
+                "gpu_load": gpu_load,
+                "gpu_temp": gpu_temp,
+                "ram_total_gb": ram_total_gb,
+                "ram_used_gb": ram_used_gb,
                 "ping_ms": payload.get("ping_ms", 10),
                 "cpu_load": cpu_load,
                 "ram_percent": ram_percent,
                 "net_recv_mbps": net_recv_mbps,
                 "net_sent_mbps": net_sent_mbps,
+                "speed_label": speed_label,
+                "adapter_name": adapter_name,
                 "is_host": False,
                 "last_seen": "Jetzt"
             }
@@ -1312,7 +1453,27 @@ def receive_node_telemetry(payload: Dict[str, Any]):
         net_sent_mbps=net_sent_mbps,
         is_host=False
     )
-    return {"status": "recorded"}
+
+    nic = detect_primary_nic_info()
+    server_telem = {
+        "hostname": curr_hostname,
+        "cpu_load": live_data.get("cpu", {}).get("load", 0.0),
+        "cpu_temp": live_data.get("cpu", {}).get("temp_c", 44.0),
+        "cpu_model": detect_cpu_name(),
+        "ram_percent": live_data.get("ram", {}).get("percent", 0.0),
+        "ram_total_gb": live_data.get("ram", {}).get("total_gb", 32.0),
+        "ram_used_gb": live_data.get("ram", {}).get("used_gb", 12.0),
+        "gpu_name": live_data.get("gpu", {}).get("name", "Master GPU"),
+        "gpu_load": live_data.get("gpu", {}).get("load", 0.0),
+        "gpu_temp": live_data.get("gpu", {}).get("temp_c", 42.0),
+        "net_recv_mbps": live_data.get("network", {}).get("recv_mbps", 0.0),
+        "net_sent_mbps": live_data.get("network", {}).get("sent_mbps", 0.0),
+        "network_speed_label": nic["speed_label"],
+        "network_adapter_name": nic["name"],
+        "os": f"{platform.system()} {platform.release()}",
+        "is_host": True
+    }
+    return {"status": "recorded", "server_telemetry": server_telem}
 
 @app.get("/api/multipc/mode")
 def get_multipc_mode():
@@ -1883,14 +2044,83 @@ def index_html_page():
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description=f"no0bz Command Center (NCC) {VERSION}")
-    parser.add_argument("--mode", choices=["host", "local", "client"], help="Operating mode: host (Server), local (Standalone), client (Cluster Node)")
+    parser.add_argument("--mode", choices=["host", "server", "local", "standalone", "client"], help="Operating mode: host/server (Master Server), local/standalone (Single PC), client (Cluster Node)")
     parser.add_argument("--port", type=int, default=PORT, help=f"Web GUI port (default: {PORT})")
     parser.add_argument("--remote-port", type=int, default=REMOTE_PORT, help=f"Dedicated Remote Hub port (default: {REMOTE_PORT})")
-    parser.add_argument("--server", type=str, help="Master Server IP:Port for client node streaming (e.g. 192.168.1.100:8351)")
+    parser.add_argument("--server", type=str, help="Master Server IP:Port for client node streaming (e.g. 192.168.1.100:8350)")
+    parser.add_argument("--yes", "-y", action="store_true", help="Non-interactive: skip prompt and use configured mode")
 
     args, unknown = parser.parse_known_args()
-    if args.mode:
-        server_mode = args.mode
+
+    mode_arg = args.mode
+    if mode_arg in ["server", "host"]:
+        mode_arg = "host"
+    elif mode_arg in ["local", "standalone"]:
+        mode_arg = "local"
+
+    if mode_arg:
+        server_mode = mode_arg
+    elif not args.yes and sys.stdin.isatty():
+        print("\n" + "=" * 70)
+        print(f"  👑 no0bz Command Center (NCC) {VERSION} // SYSTEM SETUP")
+        print("=" * 70)
+        print("  Wähle den Betriebsmodus für dieses System:\n")
+        print("  [1] 👑 SERVER-MODUS (Master Hub Server)")
+        print("      • Verwaltet das gesamte Cluster & alle Client-PCs")
+        print("      • Empfängt Telemetrie & Chat von Clients")
+        print("      • Zentrales Dashboard & 24h DuckDB-Speicherung\n")
+        print("  [2] 💻 CLIENT-MODUS (Cluster Node / Zweitrechner)")
+        print("      • Verbindet sich mit dem no0bz Master Server")
+        print("      • Überträgt Hardware-Telemetrie an den Server")
+        print("      • Zugriff auf Server-Dashboard & Chat über Nexus Matrix\n")
+        print("  [3] 🖥️ STANDALONE-MODUS (Lokaler Einzel-PC)")
+        print("      • Lokales Dashboard ohne Netzwerk-Streaming")
+        print("=" * 70)
+
+        saved_mode = initial_cfg.get("server_mode", "host")
+        default_choice = "1" if saved_mode == "host" else ("2" if saved_mode == "client" else "3")
+        try:
+            choice = input(f"  Auswahl [1/2/3] (Standard: {default_choice}): ").strip()
+        except (EOFError, KeyboardInterrupt):
+            choice = default_choice
+
+        if not choice:
+            choice = default_choice
+
+        if choice == "1":
+            server_mode = "host"
+        elif choice == "2":
+            print("\n" + "-" * 70)
+            print("  🔗 CLIENT-NODE EINSTELLUNG:")
+            print("  Soll dieser Client mit einem no0bz Server verbunden werden?")
+            print("  [1] 🔗 Ja, mit Server verbinden (Cluster Node)")
+            print("  [2] 🖥️ Nein, im Standalone-Modus starten (nur lokales Dashboard)")
+            print("-" * 70)
+            try:
+                sub_choice = input("  Auswahl [1/2] (Standard: 1): ").strip() or "1"
+            except (EOFError, KeyboardInterrupt):
+                sub_choice = "1"
+
+            if sub_choice == "1":
+                server_mode = "client"
+                default_srv = initial_cfg.get("client_server_url", "192.168.1.100:8350")
+                print(f"\n  Gib die IP-Adresse oder den Hostnamen des no0bz Servers ein:")
+                print(f"  (Beispiel: 192.168.1.100 oder 192.168.1.100:8350)")
+                try:
+                    srv_input = input(f"  Server-Adresse [{default_srv}]: ").strip()
+                except (EOFError, KeyboardInterrupt):
+                    srv_input = default_srv
+                if srv_input:
+                    client_server_url = srv_input
+                else:
+                    client_server_url = default_srv
+                if ":" not in client_server_url.replace("http://", "").replace("https://", ""):
+                    client_server_url = f"{client_server_url}:8350"
+            else:
+                server_mode = "local"
+        elif choice == "3":
+            server_mode = "local"
+
     if args.port:
         PORT = args.port
     if args.remote_port:
@@ -1912,19 +2142,22 @@ if __name__ == "__main__":
         f"🔗 CLIENT NODE (Streamt an {client_server_url})"
     )
 
-    print("=" * 68)
+    nic_info = detect_primary_nic_info()
+
+    print("\n" + "=" * 70)
     print(f"  👑 no0bz Command Center (NCC) - {VERSION}")
     print(f"  Betriebsmodus:           {mode_label}")
+    print(f"  Netzwerkkarte (NIC):     {nic_info['name']} ({nic_info['speed_label']})")
     print(f"  Web GUI & Dashboard:     http://localhost:{PORT}")
     if server_mode == "host":
         print(f"  Dedizierter Remote-Port: {remote_port} (Multi-PC Cluster Verbindung)")
     print(f"  Live WebSocket Feed:     ws://localhost:{PORT}/ws/live")
-    print("=" * 68)
+    print("=" * 70)
     if not MULTIPART_AVAILABLE:
         print("  [Notice] File uploads disabled. To enable: pip install python-multipart")
     if not PYNVML_AVAILABLE:
         print("  [Notice] NVIDIA GPU sensors: install with 'pip install nvidia-ml-py'")
     if not DUCKDB_AVAILABLE:
         print("  [Notice] 24h DuckDB metrics logging: install with 'pip install duckdb'")
-    print("=" * 68)
+    print("=" * 70 + "\n")
     uvicorn.run("main:app", host="0.0.0.0", port=PORT, reload=False, workers=1)
