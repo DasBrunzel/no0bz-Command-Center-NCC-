@@ -1,0 +1,15 @@
+services:
+  ncc:
+    build: .
+    ports: ["8350:8350"]
+    environment:
+      NCC_HOST: 0.0.0.0
+      NCC_MODE: server
+    volumes:
+      - ./ncc-data:/app/data
+      - /sys:/sys:ro
+    pid: host
+    restart: unless-stopped
+# NVIDIA: install the NVIDIA Container Toolkit and add `gpus: all`.
+# Host PID and /sys access expose sensitive system metadata; enable only on trusted hosts.
+

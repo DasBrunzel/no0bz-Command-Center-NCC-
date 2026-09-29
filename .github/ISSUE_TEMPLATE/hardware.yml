@@ -1,0 +1,19 @@
+name: Hardware support
+description: Unterstützung für Hardware oder Sensoren anfragen
+body:
+  - type: input
+    id: os
+    attributes: {label: Betriebssystem, Kernel/Build}
+    validations: {required: true}
+  - type: textarea
+    id: hardware
+    attributes: {label: CPU, GPU, Mainboard und relevante Geräte}
+    validations: {required: true}
+  - type: textarea
+    id: report
+    attributes: {label: Bereinigter NCC-Hardware-Report}
+    validations: {required: true}
+  - type: textarea
+    id: tools
+    attributes: {label: Installierte Tools und Treiberversionen}
+

@@ -1,0 +1,44 @@
+name: CI
+on:
+  push:
+  pull_request:
+jobs:
+  backend:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.10", "3.13"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "${{ matrix.python-version }}"}
+      - run: python -m pip install -e .[dev]
+      - run: ruff check backend tests scripts
+      - run: mypy
+      - run: pytest -q
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: {version: 10}
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: pnpm, cache-dependency-path: frontend/pnpm-lock.yaml}
+      - run: pnpm install --frozen-lockfile
+        working-directory: frontend
+      - run: pnpm run typecheck
+        working-directory: frontend
+      - run: pnpm run lint
+        working-directory: frontend
+      - run: pnpm run build
+        working-directory: frontend
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install pip-audit
+      - run: pip-audit -r requirements.txt
+

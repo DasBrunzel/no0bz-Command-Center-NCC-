@@ -1,0 +1,23 @@
+name: Bug report
+description: Reproduzierbaren NCC-Fehler melden
+body:
+  - type: input
+    id: version
+    attributes: {label: NCC-Version}
+    validations: {required: true}
+  - type: input
+    id: os
+    attributes: {label: Betriebssystem und Version}
+    validations: {required: true}
+  - type: textarea
+    id: steps
+    attributes: {label: Schritte zum Reproduzieren}
+    validations: {required: true}
+  - type: textarea
+    id: expected
+    attributes: {label: Erwartetes und tatsächliches Verhalten}
+    validations: {required: true}
+  - type: textarea
+    id: logs
+    attributes: {label: Bereinigte Logs, ohne Token oder Seriennummern}
+

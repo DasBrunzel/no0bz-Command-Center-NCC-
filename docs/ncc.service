@@ -1,0 +1,21 @@
+[Unit]
+Description=no0bz Command Center
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ncc
+Group=ncc
+WorkingDirectory=/opt/ncc
+Environment=PYTHONPATH=/opt/ncc/backend
+ExecStart=/opt/ncc/.venv/bin/python /opt/ncc/main.py
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/ncc
+
+[Install]
+WantedBy=multi-user.target
+
