@@ -33,6 +33,32 @@ jobs:
         working-directory: frontend
       - run: pnpm run build
         working-directory: frontend
+  database:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: ncc
+          POSTGRES_USER: ncc
+          POSTGRES_PASSWORD: ncc-ci-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ncc -d ncc"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      NCC_SERVER_DATABASE_URL: postgresql+psycopg://ncc:ncc-ci-password@127.0.0.1:5432/ncc
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: python -m pip install -e .[dev]
+      - run: alembic upgrade head
+      - run: alembic current
+      - run: pytest -q tests/test_server_foundation.py
   audit:
     runs-on: ubuntu-latest
     steps:
