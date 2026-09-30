@@ -1,14 +1,14 @@
 # no0bz Command Center (NCC)
 
-![Version](https://img.shields.io/badge/version-0.5.0--beta.1-ff334f)
+![Version](https://img.shields.io/badge/version-0.5.0--beta.2-ff334f)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776ab)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 Real-Time System Monitor & Local Sync Hub (Python/FastAPI + React).
 
-> **NCC 0.5 befindet sich im Neuaufbau.** `0.5.0-beta.1` ergänzt den eigenständigen
-> Server, PostgreSQL und den Windows-/Linux-Agenten um eine moderne, vom Server
-> ausgelieferte Fleet-Weboberfläche. Das vorhandene
+> **NCC 0.5 befindet sich im Neuaufbau.** `0.5.0-beta.2` ergänzt Server, Agent und
+> Fleet-Weboberfläche um echte Windows-Dienste, Linux-systemd-Units, sichere Installer
+> und eine gemeinsame Verbindungsdiagnose. Das vorhandene
 > lokale Dashboard bleibt vorübergehend als NCC-0.4-Kompatibilitätsschicht erhalten.
 
 ## NCC-0.5-Server und Fleet-Dashboard (Beta)
@@ -66,6 +66,40 @@ Für Tailscale existieren `start_ncc_agent_tailscale.bat` und
 `start_ncc_agent_tailscale.sh`. Messwerte werden zuerst in einem begrenzten lokalen
 SQLite-Puffer gespeichert und nach Verbindungsunterbrechungen automatisch übertragen.
 Die vollständige Anleitung steht im [Phase-4-Bericht](docs/phase-4-agent.md).
+
+### Dauerbetrieb als Dienst
+
+Unter Windows werden Server oder Agent über einen Doppelklick installiert; die
+PowerShell-Installation fordert bei Bedarf selbst Administratorrechte an:
+
+```text
+scripts\install_ncc_server_tailscale_service.bat
+scripts\install_ncc_agent_tailscale_service.bat
+```
+
+Ohne Tailscale stehen `install_ncc_server_service.bat` und
+`install_ncc_agent_service.bat` bereit. Unter Linux:
+
+```bash
+sudo ./scripts/install_ncc_server_tailscale_service.sh
+sudo ./scripts/install_ncc_agent_tailscale_service.sh SERVER-NAME-ODER-IP
+```
+
+Die Installer bewahren vorhandene Konfigurationen und Tokens bei Updates. Normales
+Deinstallieren entfernt nur den Dienst; `-Purge` unter Windows beziehungsweise
+`--purge` unter Linux löscht auf ausdrücklichen Wunsch auch Konfiguration oder
+Agent-Puffer. Status und Logs zeigt `ncc_service_status.bat` beziehungsweise
+`ncc_service_status.sh`.
+
+Eine Verbindung lässt sich ohne Änderungen mit `ncc-doctor` prüfen. Token sollten
+über `NCC_DOCTOR_TOKEN` gesetzt werden, damit sie nicht in der Prozessliste stehen:
+
+```powershell
+$env:NCC_DOCTOR_TOKEN = "dashboard-token"
+ncc-doctor server --server-url http://100.100.100.10:8350 --tailscale --allow-insecure-http
+```
+
+Alle Details stehen im [Phase-6-Bericht](docs/phase-6-services.md).
 
 NCC ist ein lokales, quelloffenes Monitoring-Dashboard für Power User, Gamer,
 Entwickler und Homelabs. Es sammelt Systemwerte über austauschbare Provider, streamt

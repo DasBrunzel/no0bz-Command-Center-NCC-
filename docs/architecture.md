@@ -28,6 +28,12 @@ Eine getrennt geschützte, nur lesende Fleet-API stellt Zusammenfassung, Nodes,
 Online-Status, letzte Messwerte und begrenzte Telemetrieverläufe bereit. Der
 Dashboard-Token ist ausdrücklich nicht identisch mit individuellen Agent-Tokens.
 
+Seit `0.5.0-beta.2` werden Server und Agent als Betriebssystemdienste betrieben. Unter
+Windows übernimmt ein kleiner pywin32-Diensthost den Lebenszyklus des jeweiligen
+Python-Prozesses. Unter Linux übernimmt systemd Neustart, Logausgabe und Härtung.
+Konfigurationen liegen in `%ProgramData%\no0bz\NCC\config` beziehungsweise `/etc/ncc`;
+sie sind damit vom Programmcode und von Git-Updates getrennt.
+
 ```text
 Provider ─► Agent-Snapshot ─► SQLite-FIFO ─► HTTPS/Tailscale ─► API v1
                                                               │

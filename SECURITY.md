@@ -17,6 +17,15 @@ Bind to `0.0.0.0` only deliberately. Put NCC behind a trusted HTTPS reverse prox
 restrict ingress with a firewall, rotate `NCC_TOKEN`, and do not expose port 8350 to
 the public internet. Use a private network or VPN between nodes.
 
+## Service credentials
+
+Die Dienstinstaller speichern Agent-, Dashboard- und Datenbankzugänge nicht im
+Repository. Windows verwendet `%ProgramData%\no0bz\NCC\config` mit ACL-Zugriff nur für
+SYSTEM und Administratoren. Linux verwendet `/etc/ncc`; die Agent-Konfiguration ist
+`0600`, die Server-Konfiguration `0640` für `root:ncc`. Eine normale Deinstallation
+bewahrt diese Dateien. Verwende die ausdrückliche Purge-Option nur, wenn auch Tokens
+und lokale Agentdaten endgültig entfernt werden sollen.
+
 ## Reporting
 
 Please use GitHub private vulnerability reporting and avoid publishing exploit details

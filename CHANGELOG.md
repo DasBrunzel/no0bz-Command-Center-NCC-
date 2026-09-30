@@ -4,6 +4,31 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.5.0-beta.2] - 2026-10-01
+
+### Added
+
+- Echte Windows-Dienste für NCC Server und NCC Agent über `pywin32`.
+- Native, gehärtete systemd-Units für Server und Agent unter Linux.
+- Interaktive Windows- und Linux-Installer für normalen und Tailscale-Betrieb.
+- Sichere Update-Installation, die vorhandene Konfigurationen, Tokens und Agent-Puffer
+  bewahrt.
+- Deinstallationswerkzeuge mit optionalem, ausdrücklich anzuforderndem Daten-Purge.
+- Status- und Logwerkzeuge für beide Betriebssysteme.
+- `ncc-doctor` für API-, Datenbank-, Token-, DNS- und Tailscale-Diagnosen.
+- `ncc-migrate` für reproduzierbare Datenbankmigrationen in Dienstumgebungen.
+- Plattformübergreifende CI-Prüfung der Installationsskripte.
+
+### Security
+
+- Dienstkonfigurationen werden außerhalb des Repositorys mit eingeschränkten
+  Dateirechten gespeichert.
+- Windows-Dienste laufen ohne sichtbares Konsolenfenster und erhalten automatische,
+  begrenzte Neustartregeln.
+- systemd-Dienste verwenden Prozesshärtung; der Server läuft als eigener `ncc`-Benutzer.
+- Diagnosetokens können über eine Umgebungsvariable übergeben werden und müssen nicht
+  in der Prozessliste erscheinen.
+
 ## [0.5.0-beta.1] - 2026-09-30
 
 ### Added

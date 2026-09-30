@@ -1,0 +1,29 @@
+[Unit]
+Description=no0bz Command Center Server
+Documentation=https://github.com/DasBrunzel/no0bz-Command-Center-NCC-
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=ncc
+Group=ncc
+WorkingDirectory=/opt/no0bz/ncc
+EnvironmentFile=/etc/ncc/server.env
+ExecStartPre=/opt/no0bz/ncc/venv/bin/ncc-migrate --config /etc/ncc/server.env --alembic /opt/no0bz/ncc/alembic.ini
+ExecStart=/opt/no0bz/ncc/venv/bin/ncc-server
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=25s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LockPersonality=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

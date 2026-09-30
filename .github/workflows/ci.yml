@@ -67,4 +67,29 @@ jobs:
         with: {python-version: "3.12"}
       - run: pip install pip-audit
       - run: pip-audit -r requirements.txt
+  service-packaging:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Linux service scripts
+        if: runner.os == 'Linux'
+        run: sh -n scripts/install_ncc_agent_service.sh scripts/install_ncc_server_service.sh scripts/uninstall_ncc_service.sh scripts/install_ncc_agent_tailscale_service.sh scripts/install_ncc_server_tailscale_service.sh
+      - name: Validate Windows service scripts
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $parseErrors = @()
+          Get-ChildItem scripts -Filter '*ncc*service.ps1' | ForEach-Object {
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors)
+            $parseErrors += $errors
+          }
+          if ($parseErrors.Count) {
+            $parseErrors | Format-List
+            exit 1
+          }
 

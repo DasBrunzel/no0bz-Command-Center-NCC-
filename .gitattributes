@@ -1,3 +1,10 @@
 *.bat -text
 scripts/start_ncc_agent.bat text eol=crlf
 scripts/start_ncc_agent_tailscale.bat text eol=crlf
+scripts/install_ncc_agent_service.bat text eol=crlf
+scripts/install_ncc_agent_tailscale_service.bat text eol=crlf
+scripts/install_ncc_server_service.bat text eol=crlf
+scripts/install_ncc_server_tailscale_service.bat text eol=crlf
+scripts/uninstall_ncc_agent_service.bat text eol=crlf
+scripts/uninstall_ncc_server_service.bat text eol=crlf
+scripts/ncc_service_status.bat text eol=crlf

@@ -1,0 +1,130 @@
+[CmdletBinding()]
+param(
+    [Parameter(Mandatory = $true)]
+    [ValidateSet("Agent", "Server")]
+    [string]$Component,
+    [switch]$Tailscale
+)
+
+$ErrorActionPreference = "Stop"
+$identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+$principal = [Security.Principal.WindowsPrincipal]::new($identity)
+if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    $arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Component $Component"
+    if ($Tailscale) { $arguments += " -Tailscale" }
+    Start-Process powershell.exe -Verb RunAs -ArgumentList $arguments
+    exit
+}
+
+function Read-SecretText([string]$Prompt) {
+    $secure = Read-Host $Prompt -AsSecureString
+    $pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+    try { return [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer) }
+    finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer) }
+}
+
+function Quote-DotEnv([string]$Value) {
+    if ($Value.Contains("`r") -or $Value.Contains("`n")) { throw "Konfigurationswerte dürfen keine Zeilenumbrüche enthalten." }
+    return '"' + $Value.Replace('\', '\\').Replace('"', '\"') + '"'
+}
+
+$projectRoot = Split-Path -Parent $PSScriptRoot
+$installRoot = Join-Path $env:ProgramData "no0bz\NCC"
+$venvRoot = Join-Path $installRoot "venv"
+$venvPython = Join-Path $venvRoot "Scripts\python.exe"
+$configRoot = Join-Path $installRoot "config"
+$migrationRoot = Join-Path $installRoot "migrations"
+New-Item -ItemType Directory -Force -Path $installRoot, $configRoot, (Join-Path $installRoot "logs") | Out-Null
+
+if (-not (Test-Path $venvPython)) {
+    $launcher = Get-Command py -ErrorAction SilentlyContinue
+    if ($launcher) { & $launcher.Source -3 -m venv $venvRoot }
+    else { & (Get-Command python -ErrorAction Stop).Source -m venv $venvRoot }
+}
+& $venvPython -m pip install --upgrade $projectRoot
+if ($LASTEXITCODE -ne 0) { throw "NCC konnte nicht in die Dienstumgebung installiert werden." }
+
+$name = $Component.ToLowerInvariant()
+$configPath = Join-Path $configRoot "$name.env"
+if (-not (Test-Path $configPath)) {
+    if ($Component -eq "Agent") {
+        $serverUrl = ""
+        if ($Tailscale) {
+            $target = Read-Host "Tailscale-IP oder MagicDNS-Name des NCC-Servers"
+            if ($target -notmatch '^[A-Za-z0-9.:-]+$') { throw "Ungültige Tailscale-Adresse." }
+            if ($target.Contains(":")) { $serverUrl = "http://[${target}]:8350" }
+            else { $serverUrl = "http://${target}:8350" }
+        } else {
+            $serverUrl = Read-Host "NCC Server-URL (HTTPS)"
+        }
+        $agentToken = Read-SecretText "Individueller Agent-Token"
+        if (-not $serverUrl -or -not $agentToken) { throw "Server-URL und Agent-Token sind erforderlich." }
+        $env:NCC_VALIDATE_URL = $serverUrl
+        $env:NCC_VALIDATE_INSECURE = [int]$Tailscale.IsPresent
+        try {
+            & $venvPython -c "import os; from ncc_service.doctor import validate_url; validate_url(os.environ['NCC_VALIDATE_URL'], os.environ['NCC_VALIDATE_INSECURE'] == '1')"
+            if ($LASTEXITCODE -ne 0) { throw "Die Server-URL ist nicht zulässig." }
+        } finally {
+            Remove-Item Env:NCC_VALIDATE_URL, Env:NCC_VALIDATE_INSECURE -ErrorAction SilentlyContinue
+        }
+        $dataRoot = Join-Path $installRoot "agent-data"
+        New-Item -ItemType Directory -Force -Path $dataRoot | Out-Null
+        $lines = @(
+            "NCC_AGENT_SERVER_URL=$(Quote-DotEnv $serverUrl)",
+            "NCC_AGENT_TOKEN=$(Quote-DotEnv $agentToken)",
+            "NCC_AGENT_DATA_DIR=$(Quote-DotEnv $dataRoot)",
+            "NCC_AGENT_ALLOW_INSECURE_HTTP=$([int]$Tailscale.IsPresent)"
+        )
+    } else {
+        $bindHost = "127.0.0.1"
+        if ($Tailscale) {
+            $tailscaleCommand = Get-Command tailscale -ErrorAction SilentlyContinue
+            if (-not $tailscaleCommand) { throw "Tailscale wurde nicht gefunden." }
+            $bindHost = (& $tailscaleCommand.Source ip -4 | Select-Object -First 1).Trim()
+            if ($bindHost -notmatch '^100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.') { throw "Keine gültige Tailscale-IP gefunden." }
+        } else {
+            $enteredHost = Read-Host "Bind-Adresse des Servers [127.0.0.1]"
+            if ($enteredHost) { $bindHost = $enteredHost }
+        }
+        $databaseUrl = Read-SecretText "PostgreSQL-Verbindungs-URL"
+        if (-not $databaseUrl) { throw "Die Datenbank-URL ist erforderlich." }
+        $dashboardToken = & $venvPython -c "import secrets; print(secrets.token_urlsafe(32))"
+        $lines = @(
+            "NCC_SERVER_HOST=$(Quote-DotEnv $bindHost)",
+            "NCC_SERVER_PORT=8350",
+            "NCC_SERVER_DATABASE_URL=$(Quote-DotEnv $databaseUrl)",
+            "NCC_SERVER_DASHBOARD_TOKEN=$(Quote-DotEnv $dashboardToken)",
+            "NCC_SERVER_DASHBOARD_ALLOW_LOOPBACK_WITHOUT_TOKEN=0"
+        )
+        if (Test-Path $migrationRoot) { Remove-Item -LiteralPath $migrationRoot -Recurse -Force }
+        Copy-Item -LiteralPath (Join-Path $projectRoot "migrations") -Destination $migrationRoot -Recurse
+        Copy-Item -LiteralPath (Join-Path $projectRoot "alembic.ini") -Destination (Join-Path $installRoot "alembic.ini") -Force
+    }
+    [IO.File]::WriteAllLines($configPath, $lines, [Text.UTF8Encoding]::new($false))
+    Write-Host "[NCC] Neue $Component-Konfiguration wurde geschützt gespeichert."
+    if ($Component -eq "Server") { Write-Host "[NCC] Dashboard-Token (jetzt sicher notieren): $dashboardToken" }
+} else {
+    Write-Host "[NCC] Vorhandene $Component-Konfiguration bleibt erhalten."
+    if ($Component -eq "Server") {
+        if (Test-Path $migrationRoot) { Remove-Item -LiteralPath $migrationRoot -Recurse -Force }
+        Copy-Item -LiteralPath (Join-Path $projectRoot "migrations") -Destination $migrationRoot -Recurse
+        Copy-Item -LiteralPath (Join-Path $projectRoot "alembic.ini") -Destination (Join-Path $installRoot "alembic.ini") -Force
+    }
+}
+& icacls.exe $configPath /inheritance:r /grant:r '*S-1-5-18:F' '*S-1-5-32-544:F' | Out-Null
+
+if ($Component -eq "Server") {
+    & $venvPython -m ncc_service.migrate --config $configPath --alembic (Join-Path $installRoot "alembic.ini")
+    if ($LASTEXITCODE -ne 0) { throw "Die Datenbankmigration ist fehlgeschlagen." }
+}
+
+$serviceName = if ($Component -eq "Agent") { "NccAgent" } else { "NccServer" }
+$serviceExists = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+$verb = if ($serviceExists) { "update" } else { "install" }
+& $venvPython -m ncc_service.windows $name --startup auto $verb
+if ($LASTEXITCODE -ne 0) { throw "Der Windows-Dienst konnte nicht registriert werden." }
+& sc.exe failure $serviceName reset= 86400 actions= restart/5000/restart/15000/restart/60000 | Out-Null
+if ($serviceExists -and $serviceExists.Status -eq "Running") { Restart-Service -Name $serviceName }
+else { Start-Service -Name $serviceName }
+Write-Host "[NCC] $Component-Dienst läuft. Konfiguration: $configPath"
+Write-Host "[NCC] Logdatei: $(Join-Path $installRoot "logs\$name.log")"
