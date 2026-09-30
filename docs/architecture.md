@@ -18,6 +18,18 @@ nur den Token-Hash und bindet den Zugang bei der Aufnahme dauerhaft an eine stab
 Maschinen-ID. Authentifizierte Heartbeats aktualisieren `last_seen_at`; der
 Online-Status wird aus diesem Zeitstempel und dem konfigurierten Timeout abgeleitet.
 
+Seit `0.5.0-alpha.3` sammelt ein eigener `ncc_agent`-Prozess die Hardwaredaten. Jeder
+Messpunkt wird vor der Übertragung in einem begrenzten lokalen SQLite-Puffer gespeichert.
+Der Server dedupliziert Wiederholungen anhand einer agentseitigen Sample-UUID, bevor
+er die nodebezogenen Punkte in PostgreSQL übernimmt.
+
+```text
+Provider ─► Agent-Snapshot ─► SQLite-FIFO ─► HTTPS/Tailscale ─► API v1
+                                                              │
+                                                              ▼
+                                              PostgreSQL telemetry_points
+```
+
 ## NCC 0.4 Kompatibilitätsarchitektur
 
 ```text

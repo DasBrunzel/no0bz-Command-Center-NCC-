@@ -15,12 +15,15 @@ from ncc_server.node_service import (
     enroll_node,
     is_online,
     record_heartbeat,
+    store_telemetry,
 )
 from ncc_server.schemas import (
     HeartbeatResponse,
     NodeEnrollmentRequest,
     NodeHeartbeatRequest,
     NodeResponse,
+    TelemetryBatchRequest,
+    TelemetryBatchResponse,
 )
 
 router = APIRouter(prefix="/nodes", tags=["agents"])
@@ -98,3 +101,22 @@ def _node_response(node: Node, settings: ServerSettings) -> NodeResponse:
         last_seen_at=node.last_seen_at,
         heartbeat_interval_seconds=settings.heartbeat_interval_seconds,
     )
+
+
+@router.post(
+    "/telemetry",
+    response_model=TelemetryBatchResponse,
+    dependencies=[Depends(limited("v1-node-telemetry", 120))],
+)
+async def telemetry(
+    payload: TelemetryBatchRequest,
+    token: AgentToken = Depends(require_agent_token),
+    session: Session = Depends(database_session),
+) -> TelemetryBatchResponse:
+    try:
+        accepted, duplicates = store_telemetry(session, token, payload.points)
+    except TokenNotEnrolledError as exc:
+        raise HTTPException(status_code=409, detail="agent token is not enrolled") from exc
+    except NodeNotApprovedError as exc:
+        raise HTTPException(status_code=403, detail="node is not approved") from exc
+    return TelemetryBatchResponse(accepted=accepted, duplicates=duplicates)

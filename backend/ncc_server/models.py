@@ -42,10 +42,14 @@ class Node(Base):
 
 class TelemetryPoint(Base):
     __tablename__ = "telemetry_points"
-    __table_args__ = (Index("ix_telemetry_node_recorded", "node_id", "recorded_at"),)
+    __table_args__ = (
+        Index("ix_telemetry_node_recorded", "node_id", "recorded_at"),
+        Index("ux_telemetry_node_sample", "node_id", "sample_id", unique=True),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     node_id: Mapped[str] = mapped_column(ForeignKey("nodes.id", ondelete="CASCADE"), nullable=False)
+    sample_id: Mapped[str | None] = mapped_column(String(36))
     recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     payload: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
     node: Mapped[Node] = relationship(back_populates="telemetry")

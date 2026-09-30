@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Literal
+from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class NodeEnrollmentRequest(BaseModel):
@@ -40,3 +41,38 @@ class HeartbeatResponse(BaseModel):
     node_id: str
     server_time: datetime
     next_heartbeat_seconds: int
+
+
+class TelemetryPointRequest(BaseModel):
+    sample_id: UUID
+    recorded_at: datetime
+    metrics: dict[str, object] = Field(max_length=256)
+
+    @field_validator("recorded_at")
+    @classmethod
+    def validate_recorded_at(cls, value: datetime) -> datetime:
+        if value.tzinfo is None:
+            raise ValueError("recorded_at must include a timezone")
+        normalized = value.astimezone(timezone.utc)
+        if normalized > datetime.now(timezone.utc) + timedelta(minutes=5):
+            raise ValueError("recorded_at is too far in the future")
+        return normalized
+
+
+class TelemetryBatchRequest(BaseModel):
+    points: list[TelemetryPointRequest] = Field(min_length=1, max_length=100)
+
+    @model_validator(mode="after")
+    def validate_payload_size(self) -> TelemetryBatchRequest:
+        sample_ids = [point.sample_id for point in self.points]
+        if len(sample_ids) != len(set(sample_ids)):
+            raise ValueError("telemetry batch contains duplicate sample IDs")
+        size = len(self.model_dump_json().encode("utf-8"))
+        if size > 2 * 1024 * 1024:
+            raise ValueError("telemetry batch exceeds 2 MiB")
+        return self
+
+
+class TelemetryBatchResponse(BaseModel):
+    accepted: int
+    duplicates: int

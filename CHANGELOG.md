@@ -4,6 +4,25 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.5.0-alpha.3] - 2026-09-30
+
+### Added
+
+- Eigenständiger GUI-loser Windows-/Linux-Agent mit stabiler lokaler Geräte-UUID.
+- Plattformübergreifende Hardwareerfassung über die vorhandene Provider-Schicht.
+- Begrenzter, persistenter SQLite-Offline-Puffer mit FIFO-Verhalten.
+- Gebündelte Telemetrieübertragung mit exponentiellem Reconnect-Backoff.
+- Idempotente Sample-IDs verhindern doppelte Messpunkte nach unsicheren Antworten.
+- Windows-, Linux- und Tailscale-Starter für den neuen Agenten.
+- Dritte Alembic-Migration für eindeutige Telemetrie-Sample-IDs.
+
+### Security
+
+- Agent-Token wird nur im Authorization-Header übertragen und nicht protokolliert.
+- Normales Remote-HTTP wird abgewiesen; unsicheres HTTP muss für ein geschütztes
+  Tailscale-Netz ausdrücklich aktiviert werden.
+- Identitätsdatei und Offline-Puffer erhalten unter Unix restriktive Dateirechte.
+
 ## [0.5.0-alpha.2] - 2026-09-30
 
 ### Added

@@ -1,13 +1,14 @@
 # no0bz Command Center (NCC)
 
-![Version](https://img.shields.io/badge/version-0.5.0--alpha.2-12d8f4)
+![Version](https://img.shields.io/badge/version-0.5.0--alpha.3-12d8f4)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776ab)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 Real-Time System Monitor & Local Sync Hub (Python/FastAPI + React).
 
-> **NCC 0.5 befindet sich im Neuaufbau.** `0.5.0-alpha.2` enthält das neue,
-> GUI-lose Server-Fundament, PostgreSQL sowie individuelle Agent-Tokens und Heartbeats. Das vorhandene
+> **NCC 0.5 befindet sich im Neuaufbau.** `0.5.0-alpha.3` enthält den GUI-losen
+> Server, PostgreSQL, individuelle Agent-Tokens und einen echten Windows-/Linux-Agenten
+> mit Offline-Puffer. Das vorhandene
 > lokale Dashboard bleibt vorübergehend als NCC-0.4-Kompatibilitätsschicht erhalten.
 
 ## NCC-0.5-Server (Alpha)
@@ -39,6 +40,25 @@ ncc-agent-token revoke TOKEN-ID
 Der Agent bindet diesen Token über `/api/v1/nodes/enroll` dauerhaft an seine
 Maschinen-ID und sendet danach `/api/v1/nodes/heartbeat`. Details stehen im
 [Phase-3-Bericht](docs/phase-3-agent-enrollment.md).
+
+### Neuer Windows-/Linux-Agent
+
+Der Agent benötigt kein Browserfenster und keinen lokalen Webserver:
+
+```powershell
+scripts\start_ncc_agent.bat
+```
+
+Unter Linux:
+
+```bash
+./scripts/start_ncc_agent.sh
+```
+
+Für Tailscale existieren `start_ncc_agent_tailscale.bat` und
+`start_ncc_agent_tailscale.sh`. Messwerte werden zuerst in einem begrenzten lokalen
+SQLite-Puffer gespeichert und nach Verbindungsunterbrechungen automatisch übertragen.
+Die vollständige Anleitung steht im [Phase-4-Bericht](docs/phase-4-agent.md).
 
 NCC ist ein lokales, quelloffenes Monitoring-Dashboard für Power User, Gamer,
 Entwickler und Homelabs. Es sammelt Systemwerte über austauschbare Provider, streamt

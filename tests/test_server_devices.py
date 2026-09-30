@@ -8,7 +8,7 @@ from ncc_server.agent_tokens import hash_agent_token, issue_agent_token, revoke_
 from ncc_server.app import create_app
 from ncc_server.config import ServerSettings
 from ncc_server.database import Database
-from ncc_server.models import AgentToken, Base, Node, utc_now
+from ncc_server.models import AgentToken, Base, Node, TelemetryPoint, utc_now
 from sqlalchemy import select
 
 
@@ -61,6 +61,29 @@ def test_token_enrollment_and_heartbeat_are_persistent(tmp_path: Path) -> None:
         assert heartbeat.status_code == 200
         assert heartbeat.json()["node_id"] == node_id
         assert heartbeat.json()["next_heartbeat_seconds"] == 12
+        telemetry_payload = {
+            "points": [
+                {
+                    "sample_id": "12345678-1234-4234-8234-123456789abc",
+                    "recorded_at": utc_now().isoformat(),
+                    "metrics": {"cpu": {"percent": 42.0}},
+                }
+            ]
+        }
+        telemetry = client.post(
+            "/api/v1/nodes/telemetry", json=telemetry_payload, headers=headers
+        )
+        assert telemetry.json() == {"accepted": 1, "duplicates": 0}
+        duplicate = client.post(
+            "/api/v1/nodes/telemetry", json=telemetry_payload, headers=headers
+        )
+        assert duplicate.json() == {"accepted": 0, "duplicates": 1}
+        repeated_in_batch = client.post(
+            "/api/v1/nodes/telemetry",
+            json={"points": telemetry_payload["points"] * 2},
+            headers=headers,
+        )
+        assert repeated_in_batch.status_code == 422
         assert client.get("/api/v1/nodes/me", headers=headers).status_code == 200
 
     reopened = make_database(path)
@@ -75,6 +98,7 @@ def test_token_enrollment_and_heartbeat_are_persistent(tmp_path: Path) -> None:
         assert node is not None
         assert node.metadata_json == {"tailscale": True}
         assert node.last_seen_at is not None
+        assert session.query(TelemetryPoint).count() == 1
     reopened.dispose()
 
 

@@ -7,8 +7,12 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ncc_server.models import AgentToken, AuditEvent, Node, utc_now
-from ncc_server.schemas import NodeEnrollmentRequest, NodeHeartbeatRequest
+from ncc_server.models import AgentToken, AuditEvent, Node, TelemetryPoint, utc_now
+from ncc_server.schemas import (
+    NodeEnrollmentRequest,
+    NodeHeartbeatRequest,
+    TelemetryPointRequest,
+)
 
 
 class EnrollmentConflictError(Exception):
@@ -98,6 +102,54 @@ def record_heartbeat(
 
 def bound_node(session: Session, token: AgentToken) -> Node:
     return _bound_node(session, token)
+
+
+def store_telemetry(
+    session: Session,
+    token: AgentToken,
+    points: list[TelemetryPointRequest],
+) -> tuple[int, int]:
+    node = _bound_node(session, token)
+    if not node.approved:
+        raise NodeNotApprovedError
+    sample_ids = [str(point.sample_id) for point in points]
+    existing = set(
+        session.scalars(
+            select(TelemetryPoint.sample_id).where(
+                TelemetryPoint.node_id == node.id,
+                TelemetryPoint.sample_id.in_(sample_ids),
+            )
+        ).all()
+    )
+    accepted = 0
+    duplicates = 0
+    for point in points:
+        sample_id = str(point.sample_id)
+        if sample_id in existing:
+            duplicates += 1
+            continue
+        try:
+            with session.begin_nested():
+                session.add(
+                    TelemetryPoint(
+                        node_id=node.id,
+                        sample_id=sample_id,
+                        recorded_at=point.recorded_at,
+                        payload=point.metrics,
+                    )
+                )
+                session.flush()
+        except IntegrityError:
+            duplicates += 1
+        else:
+            existing.add(sample_id)
+            accepted += 1
+    now = utc_now()
+    node.last_seen_at = now
+    node.updated_at = now
+    token.last_used_at = now
+    session.commit()
+    return accepted, duplicates
 
 
 def is_online(node: Node, offline_after_seconds: int) -> bool:
