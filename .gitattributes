@@ -1,1 +1,3 @@
 *.bat -text
+scripts/start_ncc_agent.bat text eol=crlf
+scripts/start_ncc_agent_tailscale.bat text eol=crlf
