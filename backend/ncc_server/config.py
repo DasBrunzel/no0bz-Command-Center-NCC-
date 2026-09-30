@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 
 from ncc.config import ENV_FILE
-from pydantic import Field
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,6 +20,8 @@ class ServerSettings(BaseSettings):
     database_check_on_start: bool = True
     heartbeat_interval_seconds: int = Field(default=10, ge=5, le=300)
     node_offline_after_seconds: int = Field(default=30, ge=10, le=3600)
+    dashboard_token: SecretStr = SecretStr("")
+    dashboard_allow_loopback_without_token: bool = True
 
 
 @lru_cache

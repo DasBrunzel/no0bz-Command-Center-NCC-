@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hmac
+import ipaddress
 from collections.abc import Iterator
 
 from fastapi import Depends, Header, HTTPException, Request, status
@@ -29,6 +31,26 @@ def require_agent_token(
     return record
 
 
+def require_dashboard_access(
+    request: Request,
+    authorization: str | None = Header(default=None),
+    x_ncc_dashboard_token: str | None = Header(default=None),
+) -> None:
+    settings = request.app.state.server_settings
+    configured = settings.dashboard_token.get_secret_value()
+    supplied = x_ncc_dashboard_token or _bearer_token(authorization) or ""
+    if configured and supplied and hmac.compare_digest(configured, supplied):
+        return
+    client_host = request.client.host if request.client else ""
+    if settings.dashboard_allow_loopback_without_token and _is_loopback(client_host):
+        return
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="missing or invalid dashboard token",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
 def _bearer_token(authorization: str | None) -> str | None:
     if not authorization:
         return None
@@ -36,3 +58,10 @@ def _bearer_token(authorization: str | None) -> str | None:
     if separator and scheme.lower() == "bearer" and credentials:
         return credentials
     return None
+
+
+def _is_loopback(value: str) -> bool:
+    try:
+        return ipaddress.ip_address(value).is_loopback
+    except ValueError:
+        return value.lower() == "localhost"

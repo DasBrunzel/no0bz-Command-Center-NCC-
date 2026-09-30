@@ -1,59 +1,105 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Activity, Clock3, Cpu, Crown, Database, FolderOpen, Globe2, HardDrive, History, MessageSquare, MonitorCog, Network, Server, Settings, X, Zap } from "lucide-react";
+import {
+  Activity, Bell, Boxes, Check, ChevronRight, CircleGauge, Clock3, Cpu,
+  HardDrive, KeyRound, LayoutDashboard, MemoryStick, Menu, MonitorCog,
+  Moon, Network, RefreshCw, Search, Server, Settings, ShieldCheck,
+  Signal, Wifi, WifiOff, X,
+} from "lucide-react";
 import "./index.css";
-import { ChatPage, FilesPage, HistoryPage, NodesPage, ProcessesPage } from "./Workspaces";
 
-type Data = Record<string, any>;
-type Page = "dashboard" | "nodes" | "chat" | "files" | "processes" | "history";
-type Sample = { down: number; up: number };
-const THEMES = [["nightmare","Nightmare Red"],["cachyos","CachyOS Cyan"],["cyber","Cyber Neon"],["oled","Dark Matter OLED"],["light","Clean Light"],["matrix","Matrix Hacker"],["dracula","Dracula"],["nordic","Nordic Frost"],["amber","Retro Amber"]];
-const NAV: {id:Page;label:string;icon:React.ReactNode;badge?:string}[] = [
-  {id:"dashboard",label:"Dashboard",icon:<Activity size={15}/>},
-  {id:"nodes",label:"Multi-PC Hub",icon:<Globe2 size={15}/>,badge:"Local"},
-  {id:"chat",label:"Chat & Prompts",icon:<MessageSquare size={15}/>,badge:"P2P"},
-  {id:"files",label:"Dateibrowser",icon:<FolderOpen size={15}/>},
-  {id:"processes",label:"Prozesse",icon:<Cpu size={15}/>},
-  {id:"history",label:"Historie (DuckDB)",icon:<History size={15}/>,badge:"24h"},
+type Metrics = Record<string, any>;
+type Telemetry = {sample_id:string|null;recorded_at:string;metrics:Metrics};
+type Node = {
+  node_id:string;machine_id:string;display_name:string;platform:string;approved:boolean;
+  online:boolean;agent_version:string|null;metadata:Record<string,unknown>;
+  created_at:string;last_seen_at:string|null;latest:Telemetry|null;
+};
+type Summary = {total_nodes:number;online_nodes:number;offline_nodes:number;pending_nodes:number;telemetry_points:number;server_time:string};
+type Theme = "nightmare"|"cachyos"|"cyber"|"oled"|"light"|"matrix"|"dracula"|"nordic"|"amber";
+type Page = "fleet"|"telemetry"|"settings";
+
+const THEMES:{id:Theme;name:string;color:string}[] = [
+  {id:"nightmare",name:"Nightmare Red",color:"#ff334f"},{id:"cachyos",name:"CachyOS Cyan",color:"#18d7ec"},
+  {id:"cyber",name:"Cyber Neon",color:"#ff35d3"},{id:"oled",name:"Dark Matter OLED",color:"#e8edf5"},
+  {id:"light",name:"Clean Light",color:"#d52f4b"},{id:"matrix",name:"Matrix Hacker",color:"#36f276"},
+  {id:"dracula",name:"Dracula",color:"#ff6680"},{id:"nordic",name:"Nordic Frost",color:"#88c0d0"},
+  {id:"amber",name:"Retro Amber",color:"#ffb52e"},
 ];
-const n=(v:unknown)=>typeof v==="number"&&Number.isFinite(v)?v:0;
+const num=(value:unknown)=>typeof value==="number"&&Number.isFinite(value)?value:0;
+const ago=(value:string|null)=>{
+  if(!value)return "Noch nie"; const seconds=Math.max(0,Math.floor((Date.now()-new Date(value).getTime())/1000));
+  if(seconds<10)return "Gerade eben"; if(seconds<60)return `Vor ${seconds} Sek.`; if(seconds<3600)return `Vor ${Math.floor(seconds/60)} Min.`;
+  if(seconds<86400)return `Vor ${Math.floor(seconds/3600)} Std.`; return new Date(value).toLocaleDateString("de-DE");
+};
+const headers=(token:string):Record<string,string>=>token?{"X-NCC-Dashboard-Token":token}:{};
+async function getJson<T>(url:string,token:string):Promise<T>{
+  const response=await fetch(url,{headers:headers(token)});
+  if(!response.ok){const error=new Error(response.status===401?"AUTH":"REQUEST") as Error&{status:number};error.status=response.status;throw error}
+  return response.json() as Promise<T>;
+}
 
-function Dial({label,value,tone}:{label:string;value:number;tone:string}){
+function Brand(){return <div className="brand"><div className="brand-mark"><Signal size={22}/></div><div><strong>no<span>0</span>bz</strong><small>COMMAND CENTER</small></div></div>}
+function StatusDot({online}:{online:boolean}){return <span className={`status-dot ${online?"is-online":"is-offline"}`}><i/>{online?"ONLINE":"OFFLINE"}</span>}
+
+function StatCard({label,value,detail,icon,tone="accent"}:{label:string;value:string|number;detail:string;icon:React.ReactNode;tone?:string}){
+  return <article className={`stat-card tone-${tone}`}><div className="stat-icon">{icon}</div><div><span>{label}</span><strong>{value}</strong><small>{detail}</small></div></article>
+}
+
+function Gauge({label,value,tone="accent",detail}:{label:string;value:number;tone?:string;detail:string}){
   const safe=Math.max(0,Math.min(100,value));
-  return <div className={`dial ${tone}`}><svg viewBox="0 0 120 120" role="img" aria-label={`${label}: ${safe.toFixed(1)} Prozent`}><circle className="track" cx="60" cy="60" r="46" fill="none" strokeWidth="8"/><circle className="arc" cx="60" cy="60" r="46" fill="none" strokeWidth="8" strokeLinecap="round" strokeDasharray="289" strokeDashoffset={289*(1-safe/100)}/></svg><div><strong>{safe.toFixed(1)}%</strong><span>{label}</span></div></div>;
-}
-function Meter({value,tone="cyan"}:{value:number;tone?:string}){return <div className="meter"><i className={tone} style={{width:`${Math.max(0,Math.min(100,value))}%`}}/></div>}
-function Panel({title,icon,tag,children,className=""}:{title:string;icon:React.ReactNode;tag?:string;children:React.ReactNode;className?:string}){return <section className={`panel ${className}`}><header><h2>{icon}{title}</h2>{tag&&<b>{tag}</b>}</header>{children}</section>}
-function NetGraph({samples}:{samples:Sample[]}){
-  const ref=useRef<HTMLCanvasElement>(null);
-  useEffect(()=>{const c=ref.current;if(!c)return;const d=devicePixelRatio||1,w=c.clientWidth,h=c.clientHeight;c.width=w*d;c.height=h*d;const x=c.getContext("2d");if(!x)return;x.scale(d,d);x.clearRect(0,0,w,h);x.strokeStyle="rgba(255,255,255,.06)";for(let r=1;r<4;r++){x.beginPath();x.moveTo(0,h*r/4);x.lineTo(w,h*r/4);x.stroke()}const max=Math.max(1,...samples.flatMap(s=>[s.down,s.up]));(["down","up"] as const).forEach((key,k)=>{const color=k?"#ffb000":"#ff304f";x.beginPath();x.strokeStyle=color;x.shadowColor=color;x.shadowBlur=7;x.lineWidth=2;samples.forEach((s,i)=>{const px=i*w/Math.max(samples.length-1,1),py=h-s[key]/max*(h-10)-5;i?x.lineTo(px,py):x.moveTo(px,py)});x.stroke();x.shadowBlur=0})},[samples]);return <canvas ref={ref}/>;
+  return <article className={`gauge-card tone-${tone}`}><header><span>{label}</span><b>{detail}</b></header><div className="gauge"><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="48" className="gauge-track"/><circle cx="60" cy="60" r="48" className="gauge-value" strokeDasharray="301.6" strokeDashoffset={301.6*(1-safe/100)}/></svg><div><strong>{safe.toFixed(1)}%</strong><small>AUSLASTUNG</small></div></div></article>
 }
 
-function Dashboard({m,samples}:{m:Data;samples:Sample[]}){
-  const cpu=m.cpu||{},ram=m.memory||{},swap=m.swap||{},gpu=m.gpus?.[0]||{},net=m.network||{},disks=m.disks||[];
-  const down=n(net.download_mbps),up=n(net.upload_mbps);
-  return <><div className="metrics-grid">
-    <Panel title="CPU Metrics" icon={<Cpu size={14}/>} tag={cpu.model||"Processor"}><Dial label="CPU Load" value={n(cpu.percent)} tone="red"/><p className="sensor-note">{cpu.temperature_c?`${cpu.temperature_c}°C`:"Sensor n/a"} • {cpu.frequency_mhz?`${cpu.frequency_mhz} MHz`:"Takt n/a"}</p><div className="rule"/><div className="labels"><span>{cpu.logical_cores||0} Logical Cores</span><span>Per-Core Load</span></div><div className="cores">{(cpu.per_core||[0,0,0,0]).slice(0,8).map((v:number,i:number)=><span key={i}><i style={{height:`${Math.max(5,v)}%`}}/></span>)}</div></Panel>
-    <Panel title="Memory / DDR" icon={<Activity size={14}/>} tag={`${n(ram.total_gb).toFixed(1)} GB Total`}><Dial label="RAM Usage" value={n(ram.percent)} tone="blue"/><p className="sensor-note">{n(ram.used_gb).toFixed(1)} GB / {n(ram.total_gb).toFixed(1)} GB</p><div className="rule"/><div className="barline"><span>Physical RAM</span><b>{n(ram.percent).toFixed(0)}%</b></div><Meter value={n(ram.percent)} tone="blue"/><div className="barline"><span>Swap / Pagefile</span><b>{n(swap.percent).toFixed(0)}%</b></div><Meter value={n(swap.percent)} tone="purple"/></Panel>
-    <Panel title="GPU Accelerator" icon={<MonitorCog size={14}/>} tag={gpu.name||"Unavailable"}><Dial label="GPU Load" value={n(gpu.percent)} tone="purple"/><p className="sensor-note">{gpu.temperature_c?`${gpu.temperature_c}°C`:"Sensor n/a"} • {gpu.power_w?`${gpu.power_w}W TGP`:"Power n/a"}</p><div className="rule"/><div className="barline"><span>VRAM Speicher</span><b>{n(gpu.vram_percent).toFixed(0)}%</b></div><Meter value={n(gpu.vram_percent)} tone="purple"/><div className="labels"><span>GPU Compute</span><span>{gpu.fan_rpm||0} RPM Fans</span></div></Panel>
-    <Panel title="Network I/O" icon={<Network size={14}/>} tag="LAN AUTO"><div className="rate"><div><span>↓ RX</span><b>{down.toFixed(1)} M</b></div><div><span>↑ TX</span><b>{up.toFixed(1)} M</b></div></div><div className="chart"><div><span>● RX {down.toFixed(1)}</span><span>● TX {up.toFixed(1)}</span><b>60s LIVE</b></div><NetGraph samples={samples}/></div><div className="labels"><span>Buffers: 0% loss</span><span>NIC: {net.interface||"Auto"}</span></div></Panel>
-  </div><Panel title="Storage Matrix & individuelle SSD Geschwindigkeiten" icon={<HardDrive size={15}/>} className="storage"><div className="storage-top"><span>Echtzeit Lese- & Schreibraten für jedes verbundene Laufwerk</span><div><b>Total Read: {down.toFixed(1)} MB/s</b><b>Total Write: {up.toFixed(1)} MB/s</b></div></div><div className="drives">{disks.length?disks.map((d:Data)=><article key={`${d.name}-${d.mount}`}><h3><span><HardDrive size={13}/>{d.mount||d.name}</span><b>{n(d.percent).toFixed(0)}%</b></h3><small>{d.name} • {d.fstype||"Disk"}</small><Meter value={n(d.percent)}/><div className="capacity"><span>{n(d.used_gb).toFixed(0)} GB used</span><span>{Math.max(0,n(d.total_gb)-n(d.used_gb)).toFixed(0)} GB free</span></div><div className="disk-rate"><div><span>↓ Read</span><b>{n(d.read_mbps).toFixed(1)} <small>MB/s</small></b></div><div><span>↑ Write</span><b>{n(d.write_mbps).toFixed(1)} <small>MB/s</small></b></div></div></article>):<p className="empty">Keine Laufwerke verfügbar</p>}</div></Panel></>;
+function Sparkline({points,metric,color="var(--accent)"}:{points:Telemetry[];metric:(m:Metrics)=>number;color?:string}){
+  const values=points.map(point=>Math.max(0,Math.min(100,metric(point.metrics))));
+  const line=values.length>1?values.map((value,index)=>`${index?"L":"M"} ${(index/(values.length-1))*100} ${100-value}`).join(" "):"";
+  const gradient=`fill-${color.replace(/\W/g,"")}`;
+  return <div className="sparkline"><svg viewBox="0 0 100 100" preserveAspectRatio="none"><defs><linearGradient id={gradient} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={color} stopOpacity=".35"/><stop offset="1" stopColor={color} stopOpacity="0"/></linearGradient></defs>{line&&<><path d={`${line} L 100 100 L 0 100 Z`} fill={`url(#${gradient})`}/><path d={line} fill="none" stroke={color} strokeWidth="1.7" vectorEffect="non-scaling-stroke"/></>}</svg>{!line&&<span>Noch nicht genug Messwerte</span>}</div>
+}
+
+function Fleet({nodes,selected,onSelect,query,onQuery}:{nodes:Node[];selected:Node|null;onSelect:(id:string)=>void;query:string;onQuery:(v:string)=>void}){
+  const filtered=nodes.filter(node=>`${node.display_name} ${node.platform} ${node.machine_id}`.toLowerCase().includes(query.toLowerCase()));
+  return <div className="fleet-layout"><section className="surface node-browser"><header className="section-head"><div><span className="eyebrow">INFRASTRUKTUR</span><h2>Deine Geräte</h2></div><b>{nodes.filter(n=>n.online).length}/{nodes.length} AKTIV</b></header><label className="search"><Search size={15}/><input value={query} onChange={e=>onQuery(e.target.value)} placeholder="Gerät suchen …"/></label><div className="node-stack">{filtered.map(node=>{const m=node.latest?.metrics||{};return <button key={node.node_id} className={selected?.node_id===node.node_id?"selected":""} onClick={()=>onSelect(node.node_id)}><div className={`device-icon ${node.online?"online":""}`}><Server size={20}/></div><div className="node-copy"><strong>{node.display_name}</strong><span>{node.platform} · {node.agent_version||"Agent unbekannt"}</span><div><i style={{width:`${num(m.cpu?.percent)}%`}}/><small>CPU {num(m.cpu?.percent).toFixed(0)}%</small></div></div><StatusDot online={node.online}/><ChevronRight size={16}/></button>})}{!filtered.length&&<div className="empty"><Boxes size={30}/><strong>Keine Geräte gefunden</strong><span>Starte einen NCC-Agenten oder ändere die Suche.</span></div>}</div></section><NodeOverview node={selected}/></div>
+}
+
+function NodeOverview({node}:{node:Node|null}){
+  if(!node)return <section className="surface empty-stage"><Server size={45}/><h2>Noch kein Gerät verbunden</h2><p>Sobald ein Agent Daten sendet, erscheint er automatisch in dieser Fleet.</p></section>;
+  const m=node.latest?.metrics||{},cpu=m.cpu||{},memory=m.memory||{},gpu=m.gpus?.[0]||{},network=m.network||{};
+  return <section className="node-overview"><div className="surface hero"><div><span className="eyebrow">AUSGEWÄHLTER NODE</span><h1>{node.display_name}</h1><p>{node.platform.toUpperCase()} · {String(node.metadata.architecture||"Architektur unbekannt")} · {node.machine_id}</p></div><div className="hero-status"><StatusDot online={node.online}/><small>{ago(node.last_seen_at)}</small></div></div><div className="gauge-grid"><Gauge label="CPU" value={num(cpu.percent)} detail={cpu.model||"Processor"}/><Gauge label="ARBEITSSPEICHER" value={num(memory.percent)} tone="blue" detail={`${num(memory.used_gb).toFixed(1)} / ${num(memory.total_gb).toFixed(1)} GB`}/><Gauge label="GPU" value={num(gpu.percent)} tone="purple" detail={gpu.name||"Nicht erkannt"}/></div><div className="detail-grid"><article className="surface compact"><header><Network size={16}/><span>NETZWERK</span></header><div className="rate-pair"><div><small>DOWNLOAD</small><strong>{num(network.download_mbps).toFixed(1)}</strong><span>Mbps</span></div><div><small>UPLOAD</small><strong>{num(network.upload_mbps).toFixed(1)}</strong><span>Mbps</span></div></div><footer>{network.interface||"Automatische Schnittstelle"}</footer></article><article className="surface compact"><header><HardDrive size={16}/><span>LAUFWERKE</span></header><div className="disk-list">{(m.disks||[]).slice(0,3).map((disk:Metrics,index:number)=><div key={`${disk.mount}-${index}`}><span>{disk.mount||disk.name||`Disk ${index+1}`}</span><div><i style={{width:`${num(disk.percent)}%`}}/></div><b>{num(disk.percent).toFixed(0)}%</b></div>)}{!(m.disks||[]).length&&<p>Keine Laufwerksdaten</p>}</div></article></div></section>
+}
+
+function TelemetryPage({node,points}:{node:Node|null;points:Telemetry[]}){
+  if(!node)return <section className="surface empty-stage"><Activity size={44}/><h2>Keine Telemetrie verfügbar</h2></section>;
+  const latest=node.latest?.metrics||{},cpu=latest.cpu||{},memory=latest.memory||{},gpu=latest.gpus?.[0]||{};
+  return <div className="telemetry-page"><div className="surface telemetry-title"><div><span className="eyebrow">LIVE TELEMETRIE</span><h1>{node.display_name}</h1><p>{points.length} Messpunkte im aktuellen Diagramm</p></div><StatusDot online={node.online}/></div><div className="chart-grid"><article className="surface chart-card"><header><div className="chart-icon red"><Cpu size={17}/></div><div><span>CPU-LAST</span><strong>{num(cpu.percent).toFixed(1)}%</strong></div></header><Sparkline points={points} metric={m=>num(m.cpu?.percent)}/></article><article className="surface chart-card"><header><div className="chart-icon blue"><MemoryStick size={17}/></div><div><span>RAM-AUSLASTUNG</span><strong>{num(memory.percent).toFixed(1)}%</strong></div></header><Sparkline points={points} metric={m=>num(m.memory?.percent)} color="var(--blue)"/></article><article className="surface chart-card"><header><div className="chart-icon purple"><MonitorCog size={17}/></div><div><span>GPU-LAST</span><strong>{num(gpu.percent).toFixed(1)}%</strong></div></header><Sparkline points={points} metric={m=>num(m.gpus?.[0]?.percent)} color="var(--purple)"/></article></div><section className="surface metadata"><header className="section-head"><div><span className="eyebrow">NODE INFORMATION</span><h2>Systemdetails</h2></div></header><dl><dt>Geräte-ID</dt><dd>{node.machine_id}</dd><dt>Plattform</dt><dd>{node.platform}</dd><dt>Agent-Version</dt><dd>{node.agent_version||"Unbekannt"}</dd><dt>Erster Kontakt</dt><dd>{new Date(node.created_at).toLocaleString("de-DE")}</dd><dt>Letzter Kontakt</dt><dd>{node.last_seen_at?new Date(node.last_seen_at).toLocaleString("de-DE"):"Noch nie"}</dd><dt>Status</dt><dd><StatusDot online={node.online}/></dd></dl></section></div>
+}
+
+function SettingsPage({theme,onTheme,onToken}:{theme:Theme;onTheme:(v:Theme)=>void;onToken:()=>void}){
+  return <div className="settings-page"><section className="surface settings-card"><header className="section-head"><div><span className="eyebrow">DARSTELLUNG</span><h2>Theme auswählen</h2></div><Moon size={19}/></header><div className="theme-grid">{THEMES.map(item=><button key={item.id} className={theme===item.id?"active":""} onClick={()=>onTheme(item.id)}><i style={{background:item.color}}/><span>{item.name}</span>{theme===item.id&&<Check size={15}/>}</button>)}</div></section><section className="surface settings-card"><header className="section-head"><div><span className="eyebrow">SICHERHEIT</span><h2>Dashboard-Zugang</h2></div><ShieldCheck size={19}/></header><p>Der Dashboard-Token ist vom Agent-Token getrennt und bleibt ausschließlich in diesem Browser gespeichert.</p><button className="primary" onClick={onToken}><KeyRound size={16}/> Dashboard-Token ändern</button></section></div>
+}
+
+function Login({onSave,error}:{onSave:(value:string)=>void;error:boolean}){
+  const [value,setValue]=useState("");
+  return <div className="login"><div className="login-glow"/><section><Brand/><div className="login-icon"><KeyRound size={26}/></div><span className="eyebrow">GESCHÜTZTER ZUGANG</span><h1>Willkommen, Commander.</h1><p>Gib den Dashboard-Token deines NCC-Servers ein. Beim lokalen Zugriff kann das Feld leer bleiben.</p><form onSubmit={event=>{event.preventDefault();onSave(value)}}><label>Dashboard-Token<input autoFocus type="password" value={value} onChange={e=>setValue(e.target.value)} placeholder="Token eingeben"/></label>{error&&<small className="form-error">Der Token wurde nicht akzeptiert.</small>}<button className="primary" type="submit"><ShieldCheck size={17}/> Verbindung herstellen</button></form></section></div>
 }
 
 function App(){
-  const initialTheme=localStorage.getItem("ncc-layout-version")==="2"?(localStorage.getItem("ncc-theme")||"nightmare"):"nightmare";
-  const [snap,setSnap]=useState<Data>({metrics:{}}),[online,setOnline]=useState(false),[samples,setSamples]=useState<Sample[]>([]),[page,setPage]=useState<Page>("dashboard"),[modal,setModal]=useState<"settings"|"changelog"|null>(null),[theme,setTheme]=useState(initialTheme),[token,setToken]=useState(localStorage.getItem("ncc-token")||""),[change,setChange]=useState(""),[nodes,setNodes]=useState<Data[]>([]),[mode,setMode]=useState("local"),[clock,setClock]=useState(new Date()),[error,setError]=useState("");
-  useEffect(()=>{document.documentElement.dataset.theme=theme;localStorage.setItem("ncc-theme",theme);localStorage.setItem("ncc-layout-version","2")},[theme]);
-  useEffect(()=>{const t=setInterval(()=>setClock(new Date()),1000);return()=>clearInterval(t)},[]);
-  useEffect(()=>{let ws:WebSocket|undefined,t=0,closed=false,delay=1000,last:{s:number;r:number;t:number}|null=null;const connect=()=>{ws=new WebSocket(`${location.protocol==="https:"?"wss":"ws"}://${location.host}/ws/live?token=${encodeURIComponent(token)}`);ws.onopen=()=>{setOnline(true);delay=1000};ws.onmessage=e=>{const next=JSON.parse(e.data),net=next.metrics?.network||{},now=Date.now();let down=n(net.download_mbps),up=n(net.upload_mbps);if(!down&&!up&&last){const sec=Math.max((now-last.t)/1000,.2);down=Math.max(0,(n(net.bytes_recv)-last.r)*8/sec/1e6);up=Math.max(0,(n(net.bytes_sent)-last.s)*8/sec/1e6);next.metrics.network.download_mbps=down;next.metrics.network.upload_mbps=up}last={s:n(net.bytes_sent),r:n(net.bytes_recv),t:now};setSnap(next);setSamples(v=>[...v.slice(-59),{down,up}])};ws.onclose=()=>{setOnline(false);if(!closed){t=window.setTimeout(connect,delay);delay=Math.min(delay*2,30000)}};ws.onerror=()=>setError("Live-Verbindung unterbrochen – Reconnect läuft.")};connect();return()=>{closed=true;clearTimeout(t);ws?.close()}},[token]);
-  useEffect(()=>{fetch("/api/nodes").then(r=>r.json()).then(setNodes).catch(()=>undefined);fetch("/api/multipc/mode").then(r=>r.json()).then(v=>setMode(v.mode)).catch(()=>undefined)},[snap.timestamp]);
-  const m=snap.metrics||{},cpu=m.cpu||{},ram=m.memory||{},gpu=m.gpus?.[0]||{},host=m.system?.hostname||snap.node_id||"NCC NODE";
-  const changelog=()=>{fetch("/api/changelog").then(r=>r.json()).then(v=>setChange(v.markdown||"")).catch(()=>setChange("Changelog konnte nicht geladen werden."));setModal("changelog")};
-  const saveToken=(v:string)=>{localStorage.setItem("ncc-token",v);setToken(v)};
-  const notify=(v:string)=>{setError(v);window.setTimeout(()=>setError(""),4500)};
-  return <div className="app"><header className="topbar"><div className="brand"><div><Crown size={20}/></div><section><strong>no<span>0</span>bz</strong><small>◆ Nightmare <i>v0.4.1</i></small></section></div><div className="system"><b>● {online?"LIVE MODUS":"BACKEND GETRENNT"}</b><span>• WEB: 8350</span><span>• SYNC: 8350</span></div><div className="host"><Server size={13}/><b>{host}</b><span>| {mode.toUpperCase()}</span></div><div className="clock"><Clock3 size={13}/>{clock.toLocaleTimeString("de-DE")}</div><div className="top-actions"><button onClick={()=>setPage("nodes")}><Globe2 size={13}/> {mode}</button><button onClick={changelog}><Database size={13}/> Changelog</button><button className="hot" onClick={()=>setTheme("nightmare")}><Zap size={13}/> Nightmare</button><button onClick={()=>setModal("settings")}><Crown size={13}/> Commander</button></div></header>
-  <aside><label>Hauptmenü</label><nav>{NAV.map(x=><button key={x.id} className={page===x.id?"active":""} onClick={()=>setPage(x.id)}>{x.icon}<span>{x.label}</span>{x.badge&&<b>{x.badge}</b>}</button>)}<button onClick={()=>setModal("settings")}><Settings size={15}/><span>Einstellungen</span></button></nav><div className="quick"><header><span>Quick Stats</span><b>{online?"Online":"Offline"}</b></header><dl><dt>CPU Last:</dt><dd>{n(cpu.percent).toFixed(1)}%</dd><dt>GPU Last:</dt><dd>{n(gpu.percent).toFixed(1)}%</dd><dt>RAM Belegt:</dt><dd>{n(ram.used_gb).toFixed(1)} GB</dd><dt>Disks Read:</dt><dd>{n(m.network?.download_mbps).toFixed(1)} MB/s</dd></dl></div><footer><b>no0bz Command Center</b><span>// MORE FPS + MORE POWER //</span></footer></aside>
-  <main>{page==="dashboard"?<Dashboard m={m} samples={samples}/>:page==="nodes"?<NodesPage nodes={nodes} mode={mode}/>:page==="chat"?<ChatPage token={token} notify={notify}/>:page==="files"?<FilesPage token={token} notify={notify}/>:page==="processes"?<ProcessesPage items={m.processes||[]} token={token} notify={notify}/>:<HistoryPage notify={notify}/>}</main><div className="statusbar"><b>no0bz COMMAND CENTER</b><span>|</span><a>v0.4.1</a><span>|</span><em>// {theme.toUpperCase()} MODE</em><div>RAM: {n(ram.used_gb).toFixed(1)} / {n(ram.total_gb).toFixed(1)} GB • <b>// NO LIMITS //</b></div></div>
-  {modal&&<div className="modalback" onMouseDown={e=>e.target===e.currentTarget&&setModal(null)}><div className="modal"><header><h2>{modal==="settings"?"Systemeinstellungen":"Changelog"}</h2><button onClick={()=>setModal(null)}><X size={17}/></button></header>{modal==="settings"?<div className="form"><label>Theme<select value={theme} onChange={e=>setTheme(e.target.value)}>{THEMES.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label><label>NCC Token<input value={token} onChange={e=>saveToken(e.target.value)} type="password"/></label><p>Theme und Token werden ausschließlich lokal gespeichert.</p></div>:<pre>{change}</pre>}</div></div>}{error&&<button className="toast" onClick={()=>setError("")}>{error}</button>}</div>;
+  const [theme,setTheme]=useState<Theme>(()=>(localStorage.getItem("ncc-fleet-theme") as Theme)||"nightmare");
+  const [token,setToken]=useState(()=>localStorage.getItem("ncc-dashboard-token")||"");
+  const [authenticated,setAuthenticated]=useState<boolean|null>(null),[authError,setAuthError]=useState(false);
+  const [nodes,setNodes]=useState<Node[]>([]),[summary,setSummary]=useState<Summary|null>(null),[selectedId,setSelectedId]=useState(""),[points,setPoints]=useState<Telemetry[]>([]);
+  const [page,setPage]=useState<Page>("fleet"),[query,setQuery]=useState(""),[loading,setLoading]=useState(true),[sidebar,setSidebar]=useState(false),[clock,setClock]=useState(new Date());
+  const selected=nodes.find(node=>node.node_id===selectedId)||nodes[0]||null;
+  const load=useCallback(async(silent=false)=>{if(!silent)setLoading(true);try{const [nextNodes,nextSummary]=await Promise.all([getJson<Node[]>("/api/v1/fleet/nodes",token),getJson<Summary>("/api/v1/fleet/summary",token)]);setNodes(nextNodes);setSummary(nextSummary);setAuthenticated(true);setAuthError(false);setSelectedId(current=>nextNodes.some(node=>node.node_id===current)?current:(nextNodes[0]?.node_id||""))}catch(error){if((error as Error&{status?:number}).status===401){setAuthenticated(false);setAuthError(true)}}finally{setLoading(false)}},[token]);
+  useEffect(()=>{document.documentElement.dataset.theme=theme;localStorage.setItem("ncc-fleet-theme",theme)},[theme]);
+  useEffect(()=>{void load();const poll=window.setInterval(()=>void load(true),5000);return()=>clearInterval(poll)},[load]);
+  useEffect(()=>{const timer=window.setInterval(()=>setClock(new Date()),1000);return()=>clearInterval(timer)},[]);
+  useEffect(()=>{if(!selected)return;getJson<Telemetry[]>(`/api/v1/fleet/nodes/${selected.node_id}/telemetry?limit=120`,token).then(setPoints).catch(()=>setPoints([]))},[selected?.node_id,selected?.latest?.recorded_at,token]);
+  const saveToken=(value:string)=>{localStorage.setItem("ncc-dashboard-token",value);setToken(value);setAuthenticated(null);setAuthError(false)};
+  const nav=useMemo(()=>[{id:"fleet" as Page,label:"Fleet Übersicht",icon:<LayoutDashboard size={17}/>},{id:"telemetry" as Page,label:"Telemetrie",icon:<CircleGauge size={17}/>},{id:"settings" as Page,label:"Einstellungen",icon:<Settings size={17}/>}],[]);
+  if(authenticated!==true)return <Login onSave={saveToken} error={authenticated===false&&authError}/>;
+  return <div className="shell"><aside className={sidebar?"open":""}><div className="aside-top"><Brand/><button className="close-menu" onClick={()=>setSidebar(false)}><X size={19}/></button></div><nav><span>COMMAND CENTER</span>{nav.map(item=><button key={item.id} className={page===item.id?"active":""} onClick={()=>{setPage(item.id);setSidebar(false)}}>{item.icon}<b>{item.label}</b>{page===item.id&&<i/>}</button>)}</nav><div className="server-health"><header><span>SERVER STATUS</span><b><i/> BEREIT</b></header><dl><dt>Nodes online</dt><dd>{summary?.online_nodes||0}</dd><dt>Messpunkte</dt><dd>{summary?.telemetry_points.toLocaleString("de-DE")||0}</dd><dt>API</dt><dd>v1</dd></dl></div><footer><ShieldCheck size={14}/><span>GESICHERTE VERBINDUNG</span><b>v0.5.0-beta.1</b></footer></aside><div className="mobile-scrim" onClick={()=>setSidebar(false)}/><div className="content"><header className="topbar"><button className="menu" onClick={()=>setSidebar(true)}><Menu size={20}/></button><div><span className="eyebrow">NO0BZ INFRASTRUCTURE</span><strong>{page==="fleet"?"Fleet Command":page==="telemetry"?"Telemetry Center":"System Settings"}</strong></div><div className="top-actions"><div className="clock"><Clock3 size={14}/><span>{clock.toLocaleTimeString("de-DE")}</span></div><button aria-label="Benachrichtigungen"><Bell size={17}/><i/></button><button className="refresh" onClick={()=>void load()} aria-label="Aktualisieren"><RefreshCw size={17} className={loading?"spin":""}/></button><div className="commander"><span>C</span><div><b>Commander</b><small>Administrator</small></div></div></div></header><main><div className="summary-grid"><StatCard label="GESAMTE NODES" value={summary?.total_nodes||0} detail="Registrierte Agenten" icon={<Server size={20}/>} /><StatCard label="ONLINE" value={summary?.online_nodes||0} detail="Aktiv verbunden" icon={<Wifi size={20}/>} tone="green"/><StatCard label="OFFLINE" value={summary?.offline_nodes||0} detail="Verbindung getrennt" icon={<WifiOff size={20}/>} tone="muted"/><StatCard label="MESSPUNKTE" value={(summary?.telemetry_points||0).toLocaleString("de-DE")} detail="In der Datenbank" icon={<Activity size={20}/>} tone="blue"/></div>{page==="fleet"?<Fleet nodes={nodes} selected={selected} onSelect={setSelectedId} query={query} onQuery={setQuery}/>:page==="telemetry"?<TelemetryPage node={selected} points={points}/>:<SettingsPage theme={theme} onTheme={setTheme} onToken={()=>setAuthenticated(false)}/>}</main><footer className="statusbar"><span><i/> NCC SERVER VERBUNDEN</span><b>{selected?`${selected.display_name} · ${ago(selected.last_seen_at)}`:"WARTE AUF AGENTEN"}</b><span>{clock.toLocaleDateString("de-DE")}</span></footer></div></div>;
 }
+
 createRoot(document.getElementById("root")!).render(<React.StrictMode><App/></React.StrictMode>);

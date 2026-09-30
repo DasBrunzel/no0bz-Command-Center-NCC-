@@ -76,3 +76,32 @@ class TelemetryBatchRequest(BaseModel):
 class TelemetryBatchResponse(BaseModel):
     accepted: int
     duplicates: int
+
+
+class FleetTelemetryPoint(BaseModel):
+    sample_id: str | None
+    recorded_at: datetime
+    metrics: dict[str, object]
+
+
+class FleetNodeResponse(BaseModel):
+    node_id: str
+    machine_id: str
+    display_name: str
+    platform: str
+    approved: bool
+    online: bool
+    agent_version: str | None
+    metadata: dict[str, object]
+    created_at: datetime
+    last_seen_at: datetime | None
+    latest: FleetTelemetryPoint | None
+
+
+class FleetSummaryResponse(BaseModel):
+    total_nodes: int
+    online_nodes: int
+    offline_nodes: int
+    pending_nodes: int
+    telemetry_points: int
+    server_time: datetime

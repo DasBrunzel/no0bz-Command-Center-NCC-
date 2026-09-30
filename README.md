@@ -1,30 +1,37 @@
 # no0bz Command Center (NCC)
 
-![Version](https://img.shields.io/badge/version-0.5.0--alpha.3-12d8f4)
+![Version](https://img.shields.io/badge/version-0.5.0--beta.1-ff334f)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776ab)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 Real-Time System Monitor & Local Sync Hub (Python/FastAPI + React).
 
-> **NCC 0.5 befindet sich im Neuaufbau.** `0.5.0-alpha.3` enthält den GUI-losen
-> Server, PostgreSQL, individuelle Agent-Tokens und einen echten Windows-/Linux-Agenten
-> mit Offline-Puffer. Das vorhandene
+> **NCC 0.5 befindet sich im Neuaufbau.** `0.5.0-beta.1` ergänzt den eigenständigen
+> Server, PostgreSQL und den Windows-/Linux-Agenten um eine moderne, vom Server
+> ausgelieferte Fleet-Weboberfläche. Das vorhandene
 > lokale Dashboard bleibt vorübergehend als NCC-0.4-Kompatibilitätsschicht erhalten.
 
-## NCC-0.5-Server (Alpha)
+## NCC-0.5-Server und Fleet-Dashboard (Beta)
 
-Der neue Server ist eine separate Anwendung: Er sammelt keine lokale Hardware und
-liefert keine Browser-GUI aus. Mit Docker Compose werden PostgreSQL, Migrationen und
-der Server gemeinsam gestartet:
+Der neue Server ist eine separate Anwendung. Er sammelt keine lokale Hardware, stellt
+aber die Fleet-Weboberfläche und die Messwerte aller verbundenen Agenten bereit. Mit
+Docker Compose werden PostgreSQL, Migrationen und der Server gemeinsam gestartet:
 
 ```powershell
 $env:NCC_POSTGRES_PASSWORD = "ein-langes-eigenes-passwort"
+$env:NCC_SERVER_DASHBOARD_TOKEN = "ein-langer-zufaelliger-dashboard-token"
 docker compose up --build
 ```
 
-Danach stehen der Status unter <http://127.0.0.1:8350/api/v1/status/live> und die
-API-Dokumentation unter <http://127.0.0.1:8350/api/docs> bereit. Einzelheiten und
-die genaue Abgrenzung stehen im [Phase-2-Bericht](docs/phase-2-foundation.md).
+Danach steht das Dashboard unter <http://127.0.0.1:8350> bereit. Status und
+API-Dokumentation liegen unter `/api/v1/status/live` und `/api/docs`. Lokal ist die
+Oberfläche ohne Token erreichbar. Für LAN, Tailscale oder einen Reverse Proxy muss
+`NCC_SERVER_DASHBOARD_TOKEN` gesetzt und die Loopback-Ausnahme deaktiviert werden.
+Details stehen im [Phase-5-Bericht](docs/phase-5-fleet-ui.md).
+
+Nach der lokalen Installation kann ein sicherer Dashboard-Token mit
+`ncc-dashboard-token` erzeugt werden. Das Werkzeug zeigt ihn genau zur Übernahme in
+die Serverumgebung an und speichert ihn nicht selbst.
 
 ### Agent-Token und Geräteaufnahme
 

@@ -5,10 +5,10 @@
 ```text
 Windows-/Linux-Agenten ── HTTPS / API v1 ──► NCC Server ──► PostgreSQL
                                                     │
-                                                    └──► spätere Fleet-Weboberfläche
+Browser ◄──── Fleet-API + statische React-App ──────┘
 ```
 
-Der NCC-Server ist seit `0.5.0-alpha.1` eine eigene GUI-lose Anwendung. Er startet
+Der NCC-Server ist seit `0.5.0-alpha.1` eine eigene Anwendung ohne native GUI. Er startet
 keine lokalen Hardware-Provider. Agent, Browseroberfläche und Windows-Integration
 werden als getrennte Komponenten weiterentwickelt. PostgreSQL speichert den
 Betriebszustand dauerhaft; Alembic versioniert jede Schemaänderung.
@@ -22,6 +22,11 @@ Seit `0.5.0-alpha.3` sammelt ein eigener `ncc_agent`-Prozess die Hardwaredaten. 
 Messpunkt wird vor der Übertragung in einem begrenzten lokalen SQLite-Puffer gespeichert.
 Der Server dedupliziert Wiederholungen anhand einer agentseitigen Sample-UUID, bevor
 er die nodebezogenen Punkte in PostgreSQL übernimmt.
+
+Seit `0.5.0-beta.1` liefert der Server die gebaute React-Fleet-Oberfläche selbst aus.
+Eine getrennt geschützte, nur lesende Fleet-API stellt Zusammenfassung, Nodes,
+Online-Status, letzte Messwerte und begrenzte Telemetrieverläufe bereit. Der
+Dashboard-Token ist ausdrücklich nicht identisch mit individuellen Agent-Tokens.
 
 ```text
 Provider ─► Agent-Snapshot ─► SQLite-FIFO ─► HTTPS/Tailscale ─► API v1

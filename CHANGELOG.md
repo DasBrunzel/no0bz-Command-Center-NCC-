@@ -4,6 +4,25 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.5.0-beta.1] - 2026-09-30
+
+### Added
+
+- Moderne, responsive Fleet-Weboberfläche für Desktop, Tablet und Smartphone.
+- Geräteübersicht mit Online-Status, letztem Kontakt und aktuellen CPU-, RAM-, GPU-,
+  Netzwerk- und Laufwerkswerten.
+- Telemetrieansicht mit den letzten 120 Messpunkten je Gerät.
+- Neun dauerhaft im Browser gespeicherte Themes.
+- Nur lesende Fleet-API für Zusammenfassung, Nodes und Telemetrieverläufe.
+- Auslieferung der gebauten React-App direkt durch den eigenständigen NCC-Server.
+- Kleines `ncc-dashboard-token`-Werkzeug zur sicheren Erzeugung des Browser-Zugangs.
+
+### Security
+
+- Separater Dashboard-Token; Agent-Tokens werden niemals an den Browser gegeben.
+- Tokenloser Dashboard-Zugriff ist standardmäßig ausschließlich über Loopback möglich
+  und kann für Serverbetrieb vollständig deaktiviert werden.
+
 ## [0.5.0-alpha.3] - 2026-09-30
 
 ### Added

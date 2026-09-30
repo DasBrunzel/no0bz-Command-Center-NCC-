@@ -3,10 +3,12 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Request, status
 
 from ncc_server import __version__
+from ncc_server.api.v1.fleet import router as fleet_router
 from ncc_server.api.v1.nodes import router as nodes_router
 
 router = APIRouter(prefix="/api/v1")
 router.include_router(nodes_router)
+router.include_router(fleet_router)
 
 
 @router.get("/status/live", tags=["status"])

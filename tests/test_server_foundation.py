@@ -27,13 +27,14 @@ class FakeDatabase:
         self.engine.dispose()
 
 
-def test_server_has_versioned_api_and_no_browser_gui() -> None:
+def test_server_has_versioned_api_and_fleet_browser_gui() -> None:
     database = FakeDatabase()
     settings = ServerSettings(database_url="sqlite+pysqlite:///:memory:")
     application = create_app(settings, database)  # type: ignore[arg-type]
     with TestClient(application) as client:
         root = client.get("/")
-        assert root.json()["service"] == "ncc-server"
+        assert root.status_code == 200
+        assert 'id="root"' in root.text
         assert root.headers["x-content-type-options"] == "nosniff"
         assert client.get("/api/v1/status/live").status_code == 200
         assert client.get("/api/v1/status/ready").status_code == 200

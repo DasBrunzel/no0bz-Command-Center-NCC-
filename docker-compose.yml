@@ -21,6 +21,8 @@ services:
       NCC_SERVER_HOST: 0.0.0.0
       NCC_SERVER_PORT: 8350
       NCC_SERVER_DATABASE_URL: postgresql+psycopg://ncc:${NCC_POSTGRES_PASSWORD:-change-me}@postgres:5432/ncc
+      NCC_SERVER_DASHBOARD_TOKEN: ${NCC_SERVER_DASHBOARD_TOKEN:-}
+      NCC_SERVER_DASHBOARD_ALLOW_LOOPBACK_WITHOUT_TOKEN: 0
     depends_on:
       postgres:
         condition: service_healthy
