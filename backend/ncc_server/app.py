@@ -36,6 +36,7 @@ def create_app(
         openapi_url="/api/openapi.json",
     )
     application.state.database = active_database
+    application.state.server_settings = active_settings
 
     @application.middleware("http")
     async def security_headers(request, call_next):  # type: ignore[no-untyped-def]

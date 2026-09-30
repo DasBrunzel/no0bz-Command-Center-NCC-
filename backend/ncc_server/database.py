@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from contextlib import contextmanager
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
@@ -17,6 +18,11 @@ class Database:
             connection.execute(text("SELECT 1"))
 
     def sessions(self) -> Iterator[Session]:
+        with self.session() as session:
+            yield session
+
+    @contextmanager
+    def session(self) -> Iterator[Session]:
         with self._sessions() as session:
             yield session
 

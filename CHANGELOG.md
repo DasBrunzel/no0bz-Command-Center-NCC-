@@ -4,6 +4,24 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.5.0-alpha.2] - 2026-09-30
+
+### Added
+
+- Individuelle, widerrufbare Agent-Tokens mit optionalem Ablaufdatum und einmaliger
+  Klartextausgabe über das Werkzeug `ncc-agent-token`.
+- Persistente Geräteaufnahme, die einen Token dauerhaft an genau eine Maschinen-ID bindet.
+- Authentifizierte Heartbeats und eine Agent-Selbstansicht unter `/api/v1/nodes`.
+- Dauerhafte Agent-Version, Metadaten, letzter Kontakt und letzte Token-Verwendung.
+- Audit-Ereignisse für Token-Erstellung, Token-Widerruf und Geräteaufnahme.
+- Zweite Alembic-Migration für den neuen Agent- und Heartbeat-Zustand.
+
+### Security
+
+- Agent-Tokens werden ausschließlich als SHA-256-Hash gespeichert.
+- Abgelaufene, widerrufene, unbekannte und bereits anders gebundene Tokens werden abgewiesen.
+- Der gemeinsame NCC-0.4-Token wird von der neuen API nicht akzeptiert.
+
 ## [0.5.0-alpha.1] - 2026-09-30
 
 ### Added

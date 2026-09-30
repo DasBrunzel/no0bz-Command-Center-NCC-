@@ -13,6 +13,11 @@ keine lokalen Hardware-Provider. Agent, Browseroberfläche und Windows-Integrati
 werden als getrennte Komponenten weiterentwickelt. PostgreSQL speichert den
 Betriebszustand dauerhaft; Alembic versioniert jede Schemaänderung.
 
+Seit `0.5.0-alpha.2` besitzt jeder Agent einen eigenen Zugang. Der Server speichert
+nur den Token-Hash und bindet den Zugang bei der Aufnahme dauerhaft an eine stabile
+Maschinen-ID. Authentifizierte Heartbeats aktualisieren `last_seen_at`; der
+Online-Status wird aus diesem Zeitstempel und dem konfigurierten Timeout abgeleitet.
+
 ## NCC 0.4 Kompatibilitätsarchitektur
 
 ```text

@@ -23,11 +23,19 @@ class Node(Base):
     display_name: Mapped[str] = mapped_column(String(128), nullable=False)
     platform: Mapped[str] = mapped_column(String(32), nullable=False)
     approved: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    agent_version: Mapped[str | None] = mapped_column(String(32))
+    metadata_json: Mapped[dict[str, object]] = mapped_column("metadata", JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
     )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False
+    )
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     telemetry: Mapped[list[TelemetryPoint]] = relationship(
+        back_populates="node", cascade="all, delete-orphan"
+    )
+    tokens: Mapped[list[AgentToken]] = relationship(
         back_populates="node", cascade="all, delete-orphan"
     )
 
@@ -68,6 +76,8 @@ class AgentToken(Base):
     )
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    node: Mapped[Node | None] = relationship(back_populates="tokens")
 
 
 class AuditEvent(Base):
