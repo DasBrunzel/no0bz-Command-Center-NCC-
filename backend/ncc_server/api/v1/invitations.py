@@ -28,7 +28,11 @@ router = APIRouter(
 async def invitations(
     session: Session = Depends(database_session),
 ) -> list[AgentInvitationResponse]:
-    records = session.scalars(select(AgentToken).order_by(AgentToken.created_at.desc())).all()
+    records = session.scalars(
+        select(AgentToken)
+        .where(AgentToken.revoked_at.is_(None))
+        .order_by(AgentToken.created_at.desc())
+    ).all()
     return [_response(session, record) for record in records]
 
 

@@ -4,6 +4,13 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.5.0-beta.5] - 2026-10-01
+
+### Fixed
+
+- Widerrufene Einladungen verschwinden aus der normalen Token-Verwaltung. Der
+  Sicherheitsnachweis bleibt weiterhin im Audit-Log erhalten.
+
 ## [0.5.0-beta.4] - 2026-10-01
 
 ### Fixed

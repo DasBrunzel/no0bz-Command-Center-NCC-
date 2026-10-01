@@ -59,6 +59,7 @@ def test_dashboard_can_issue_list_and_revoke_invitations(tmp_path: Path) -> None
         )
         assert revoked.status_code == 200
         assert revoked.json()["status"] == "revoked"
+        assert client.get("/api/v1/agent-invitations", headers=headers).json() == []
         removed = client.delete(
             f"/api/v1/agent-invitations/{created['token_id']}", headers=headers
         )
