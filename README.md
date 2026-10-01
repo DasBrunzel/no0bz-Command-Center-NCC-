@@ -1,12 +1,12 @@
 # no0bz Command Center (NCC)
 
-![Version](https://img.shields.io/badge/version-0.5.0--beta.2-ff334f)
+![Version](https://img.shields.io/badge/version-0.5.0--beta.3-ff334f)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776ab)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 Real-Time System Monitor & Local Sync Hub (Python/FastAPI + React).
 
-> **NCC 0.5 befindet sich im Neuaufbau.** `0.5.0-beta.2` ergänzt Server, Agent und
+> **NCC 0.5 befindet sich im Neuaufbau.** `0.5.0-beta.3` ergänzt Server, Agent und
 > Fleet-Weboberfläche um echte Windows-Dienste, Linux-systemd-Units, sichere Installer
 > und eine gemeinsame Verbindungsdiagnose. Das vorhandene
 > lokale Dashboard bleibt vorübergehend als NCC-0.4-Kompatibilitätsschicht erhalten.
@@ -35,8 +35,10 @@ die Serverumgebung an und speichert ihn nicht selbst.
 
 ### Agent-Token und Geräteaufnahme
 
-Nach dem Start und der Datenbankmigration erzeugt der Server für jeden Rechner einen
-eigenen Zugang. Der Klartext wird nur bei der Erstellung angezeigt:
+Im Dashboard unter **Gerät hinzufügen** kann der Administrator für jeden Rechner eine
+individuelle Einladung erzeugen, einmalig kopieren, den Status sehen und sie bei Bedarf
+widerrufen. Der Klartext wird nur direkt nach der Erstellung angezeigt. Für automatisierte
+oder lokale Notfallabläufe bleibt das Kommandozeilenwerkzeug verfügbar:
 
 ```powershell
 ncc-agent-token create --name "Gaming-PC"
@@ -46,7 +48,7 @@ ncc-agent-token revoke TOKEN-ID
 
 Der Agent bindet diesen Token über `/api/v1/nodes/enroll` dauerhaft an seine
 Maschinen-ID und sendet danach `/api/v1/nodes/heartbeat`. Details stehen im
-[Phase-3-Bericht](docs/phase-3-agent-enrollment.md).
+[Phase-7-Bericht](docs/phase-7-dashboard-onboarding.md).
 
 ### Neuer Windows-/Linux-Agent
 

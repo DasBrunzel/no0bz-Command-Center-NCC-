@@ -4,6 +4,22 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.5.0-beta.3] - 2026-10-01
+
+### Added
+
+- Dashboard-geführte Geräteaufnahme: individuelle Agent-Einladungen direkt im Bereich
+  **Gerät hinzufügen** erstellen, einmalig kopieren, überwachen und widerrufen.
+- Wählbare Token-Laufzeiten (24 Stunden, 7 Tage, 30 Tage oder ohne Ablauf).
+- Geschützte Verwaltungs-API für Agent-Einladungen unter `/api/v1/agent-invitations`.
+
+### Security
+
+- Der Klartext eines Einladungs-Tokens wird nur in der Erstellungsantwort geliefert;
+  Listen und Statusansichten enthalten nie Geheimnisse.
+- Dashboard-erstellte und widerrufene Einladungen werden mit dem Akteur `dashboard`
+  im Audit-Log vermerkt.
+
 ## [0.5.0-beta.2] - 2026-10-01
 
 ### Added

@@ -28,6 +28,8 @@ def issue_agent_token(
     session: Session,
     name: str,
     expires_at: datetime | None,
+    *,
+    actor_type: str = "server-cli",
 ) -> IssuedAgentToken:
     plaintext = f"{TOKEN_PREFIX}{secrets.token_urlsafe(32)}"
     record = AgentToken(
@@ -39,7 +41,7 @@ def issue_agent_token(
     session.flush()
     session.add(
         AuditEvent(
-            actor_type="server-cli",
+            actor_type=actor_type,
             action="agent-token.created",
             details=json.dumps(
                 {"token_id": record.id, "name": name, "expires_at": _iso(expires_at)},
@@ -69,7 +71,9 @@ def agent_token_is_expired(record: AgentToken) -> bool:
     return record.expires_at is not None and _as_utc(record.expires_at) <= utc_now()
 
 
-def revoke_agent_token(session: Session, token_id: str) -> bool:
+def revoke_agent_token(
+    session: Session, token_id: str, *, actor_type: str = "server-cli"
+) -> bool:
     record = session.get(AgentToken, token_id)
     if record is None:
         return False
@@ -77,7 +81,7 @@ def revoke_agent_token(session: Session, token_id: str) -> bool:
         record.revoked_at = utc_now()
         session.add(
             AuditEvent(
-                actor_type="server-cli",
+                actor_type=actor_type,
                 action="agent-token.revoked",
                 details=json.dumps({"token_id": record.id}, separators=(",", ":")),
             )

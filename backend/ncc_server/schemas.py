@@ -105,3 +105,32 @@ class FleetSummaryResponse(BaseModel):
     pending_nodes: int
     telemetry_points: int
     server_time: datetime
+
+
+class AgentInvitationCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=128)
+    expires_hours: int = Field(default=168, ge=0, le=8760)
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        if not normalized:
+            raise ValueError("name must not be blank")
+        return normalized
+
+
+class AgentInvitationResponse(BaseModel):
+    token_id: str
+    name: str
+    status: Literal["ready", "bound", "expired", "revoked"]
+    node_id: str | None
+    node_name: str | None
+    created_at: datetime
+    expires_at: datetime | None
+    last_used_at: datetime | None
+    revoked_at: datetime | None
+
+
+class AgentInvitationCreatedResponse(AgentInvitationResponse):
+    token: str
