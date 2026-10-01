@@ -4,8 +4,10 @@ Ab `0.5.0-beta.3` erstellt ein Administrator Agent-Einladungen im Fleet-Dashboar
 
 1. Dashboard öffnen und **Gerät hinzufügen** wählen.
 2. Einen eindeutigen Gerätenamen und eine Laufzeit wählen.
-3. Den einmalig angezeigten Token kopieren.
-4. Den Token im Agent-Installer des Zielsystems eingeben.
+3. Das Zielsystem (Windows oder Linux) auswählen und den einmalig angezeigten Token kopieren.
+4. Den im Dashboard erzeugten Installationsbefehl auf dem Zielsystem ausführen.
+   Die Server-Adresse wird vorausgefüllt; der Agent-Token wird anschließend verdeckt
+   abgefragt und erscheint nicht im Befehlsverlauf.
 
 Der Server speichert nur den Hash des Tokens. Der Klartext kann nach dem Schließen der
 Anzeige nicht wiederhergestellt werden. Die Übersicht zeigt ausschließlich Namen,

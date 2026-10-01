@@ -3,7 +3,10 @@ param(
     [Parameter(Mandatory = $true)]
     [ValidateSet("Agent", "Server")]
     [string]$Component,
-    [switch]$Tailscale
+    [switch]$Tailscale,
+    [ValidatePattern('^[A-Za-z0-9.:-]+$')]
+    [string]$ServerUrl,
+    [switch]$ReplaceConfig
 )
 
 $ErrorActionPreference = "Stop"
@@ -12,6 +15,8 @@ $principal = [Security.Principal.WindowsPrincipal]::new($identity)
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     $arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Component $Component"
     if ($Tailscale) { $arguments += " -Tailscale" }
+    if ($ServerUrl) { $arguments += " -ServerUrl $ServerUrl" }
+    if ($ReplaceConfig) { $arguments += " -ReplaceConfig" }
     Start-Process powershell.exe -Verb RunAs -ArgumentList $arguments
     exit
 }
@@ -46,16 +51,17 @@ if ($LASTEXITCODE -ne 0) { throw "NCC konnte nicht in die Dienstumgebung install
 
 $name = $Component.ToLowerInvariant()
 $configPath = Join-Path $configRoot "$name.env"
-if (-not (Test-Path $configPath)) {
+if (-not (Test-Path $configPath) -or $ReplaceConfig) {
     if ($Component -eq "Agent") {
         $serverUrl = ""
         if ($Tailscale) {
-            $target = Read-Host "Tailscale-IP oder MagicDNS-Name des NCC-Servers"
+            $target = $ServerUrl
+            if (-not $target) { $target = Read-Host "Tailscale-IP oder MagicDNS-Name des NCC-Servers" }
             if ($target -notmatch '^[A-Za-z0-9.:-]+$') { throw "Ungültige Tailscale-Adresse." }
             if ($target.Contains(":")) { $serverUrl = "http://[${target}]:8350" }
             else { $serverUrl = "http://${target}:8350" }
         } else {
-            $serverUrl = Read-Host "NCC Server-URL (HTTPS)"
+            $serverUrl = if ($ServerUrl) { $ServerUrl } else { Read-Host "NCC Server-URL (HTTPS)" }
         }
         $agentToken = Read-SecretText "Individueller Agent-Token"
         if (-not $serverUrl -or -not $agentToken) { throw "Server-URL und Agent-Token sind erforderlich." }
@@ -101,7 +107,8 @@ if (-not (Test-Path $configPath)) {
         Copy-Item -LiteralPath (Join-Path $projectRoot "alembic.ini") -Destination (Join-Path $installRoot "alembic.ini") -Force
     }
     [IO.File]::WriteAllLines($configPath, $lines, [Text.UTF8Encoding]::new($false))
-    Write-Host "[NCC] Neue $Component-Konfiguration wurde geschützt gespeichert."
+    $configAction = if ($ReplaceConfig) { "ersetzt" } else { "geschützt gespeichert" }
+    Write-Host "[NCC] Neue $Component-Konfiguration wurde $configAction."
     if ($Component -eq "Server") { Write-Host "[NCC] Dashboard-Token (jetzt sicher notieren): $dashboardToken" }
 } else {
     Write-Host "[NCC] Vorhandene $Component-Konfiguration bleibt erhalten."

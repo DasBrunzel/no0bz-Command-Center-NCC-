@@ -133,6 +133,14 @@ def test_linux_agent_installer_can_explicitly_replace_existing_credentials() -> 
     assert '[ "$replace_config" -eq 1 ]' in installer
 
 
+def test_windows_agent_installer_can_preselect_a_tailscale_server() -> None:
+    root = Path(__file__).resolve().parents[1]
+    installer = (root / "scripts/install_ncc_service.ps1").read_text(encoding="utf-8")
+    assert "[string]$ServerUrl" in installer
+    assert "[switch]$ReplaceConfig" in installer
+    assert "$target = $ServerUrl" in installer
+
+
 def test_service_host_launches_the_venv_python(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
