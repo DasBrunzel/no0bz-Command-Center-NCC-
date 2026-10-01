@@ -40,3 +40,7 @@ def main() -> None:
     parser.add_argument("--alembic", type=Path, required=True)
     args = parser.parse_args()
     upgrade(args.config, args.alembic)
+
+
+if __name__ == "__main__":
+    main()

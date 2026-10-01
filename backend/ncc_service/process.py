@@ -9,6 +9,21 @@ from pathlib import Path
 from ncc_service.environment import load_environment_file
 
 
+def child_python_executable() -> str:
+    """Return python.exe when the current process is hosted by pythonservice.exe."""
+    executable = Path(sys.executable)
+    if executable.name.lower() != "pythonservice.exe":
+        return sys.executable
+    candidates = (
+        executable.parent / "Scripts" / "python.exe",
+        executable.with_name("python.exe"),
+    )
+    for candidate in candidates:
+        if candidate.is_file():
+            return str(candidate)
+    raise FileNotFoundError(f"Python interpreter not found next to service host: {executable}")
+
+
 class ManagedProcess:
     def __init__(self, module: str, config_path: Path, log_path: Path) -> None:
         self.module = module
@@ -23,7 +38,7 @@ class ManagedProcess:
         creation_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         with self.log_path.open("ab", buffering=0) as output:
             self.process = subprocess.Popen(  # noqa: S603 - fixed interpreter and module
-                [sys.executable, "-m", self.module],
+                [child_python_executable(), "-m", self.module],
                 stdin=subprocess.DEVNULL,
                 stdout=output,
                 stderr=subprocess.STDOUT,

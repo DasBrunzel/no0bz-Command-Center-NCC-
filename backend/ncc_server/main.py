@@ -8,3 +8,7 @@ from ncc_server.config import get_server_settings
 def main() -> None:
     settings = get_server_settings()
     uvicorn.run("ncc_server.app:app", host=settings.host, port=settings.port, reload=False)
+
+
+if __name__ == "__main__":
+    main()

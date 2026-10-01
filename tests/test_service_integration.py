@@ -10,6 +10,7 @@ from ncc_service.doctor import main as doctor_main
 from ncc_service.doctor import run_checks, validate_url
 from ncc_service.environment import load_environment_file
 from ncc_service.migrate import upgrade
+from ncc_service.process import child_python_executable
 from sqlalchemy import create_engine, text
 
 
@@ -123,6 +124,18 @@ def test_service_packaging_contains_safe_defaults() -> None:
     assert "User=ncc" in server
     assert "NCC_AGENT_TOKEN" not in agent
     assert "NCC_SERVER_DASHBOARD_TOKEN" not in server
+
+
+def test_service_host_launches_the_venv_python(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    service_host = tmp_path / "pythonservice.exe"
+    interpreter = tmp_path / "Scripts" / "python.exe"
+    interpreter.parent.mkdir()
+    service_host.touch()
+    interpreter.touch()
+    monkeypatch.setattr(sys, "executable", str(service_host))
+    assert child_python_executable() == str(interpreter)
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows service host test")
