@@ -126,6 +126,13 @@ def test_service_packaging_contains_safe_defaults() -> None:
     assert "NCC_SERVER_DASHBOARD_TOKEN" not in server
 
 
+def test_linux_agent_installer_can_explicitly_replace_existing_credentials() -> None:
+    root = Path(__file__).resolve().parents[1]
+    installer = (root / "scripts/install_ncc_agent_service.sh").read_text(encoding="utf-8")
+    assert "--replace-config" in installer
+    assert '[ "$replace_config" -eq 1 ]' in installer
+
+
 def test_service_host_launches_the_venv_python(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

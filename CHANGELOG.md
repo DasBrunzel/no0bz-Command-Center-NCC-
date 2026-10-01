@@ -4,6 +4,13 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.5.0-beta.6] - 2026-10-01
+
+### Fixed
+
+- Linux-Agent-Installer kann mit `--replace-config` einen bewusst erneuerten
+  Agent-Token sicher in die bestehende Dienstkonfiguration übernehmen.
+
 ## [0.5.0-beta.5] - 2026-10-01
 
 ### Fixed

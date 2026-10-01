@@ -62,6 +62,17 @@ Journal und können mit `scripts/ncc_service_status.sh` gelesen werden.
 Ein erneuter Installer-Aufruf aktualisiert Programmdateien und Units, übernimmt aber
 vorhandene `.env`-Dateien unverändert. Datenbankmigrationen laufen vor dem Serverstart.
 
+Wenn ein Agent nach dem Widerruf einen neuen individuellen Token erhalten soll, muss seine
+gespeicherte Agent-Konfiguration ausdrücklich ersetzt werden. Unter Linux fragt dieser
+Aufruf URL und Token erneut ab und aktualisiert ausschließlich `agent.env`:
+
+```bash
+sudo ./scripts/install_ncc_agent_service.sh --tailscale --replace-config 100.92.199.35
+```
+
+Der neue Token muss der geheime Wert mit Präfix `ncc_agent_` sein, nicht der im Dashboard
+angezeigte Einladungsname.
+
 ```bash
 sudo ./scripts/uninstall_ncc_service.sh agent
 sudo ./scripts/uninstall_ncc_service.sh server

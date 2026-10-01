@@ -7,13 +7,20 @@ prefix=/opt/no0bz/ncc
 config_dir=/etc/ncc
 data_dir=/var/lib/ncc-agent
 tailscale=0
-if [ "${1:-}" = "--tailscale" ]; then tailscale=1; shift; fi
+replace_config=0
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --tailscale) tailscale=1; shift ;;
+    --replace-config) replace_config=1; shift ;;
+    *) break ;;
+  esac
+done
 
 python3 -m venv "$prefix/venv"
 "$prefix/venv/bin/python" -m pip install --upgrade "$root"
 install -d -m 0755 "$config_dir" "$data_dir"
 
-if [ ! -f "$config_dir/agent.env" ]; then
+if [ ! -f "$config_dir/agent.env" ] || [ "$replace_config" -eq 1 ]; then
   server_url=${NCC_INSTALL_SERVER_URL:-${1:-}}
   if [ -z "$server_url" ]; then printf "NCC Server-URL: "; read -r server_url; fi
   if [ "$tailscale" -eq 1 ] && ! printf '%s' "$server_url" | grep -q '://'; then
@@ -40,6 +47,7 @@ if [ ! -f "$config_dir/agent.env" ]; then
   } > "$config_dir/agent.env"
 else
   echo "[NCC] Vorhandene Agent-Konfiguration bleibt erhalten."
+  echo "[NCC] Für einen neuen Token erneut mit --replace-config starten."
 fi
 chmod 0600 "$config_dir/agent.env"
 
