@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ncc_server.config import ServerSettings
-from ncc_server.models import Node, TelemetryPoint, utc_now
+from ncc_server.models import AuditEvent, Node, TelemetryPoint, utc_now
 from ncc_server.node_service import is_online
 from ncc_server.schemas import FleetNodeResponse, FleetSummaryResponse, FleetTelemetryPoint
 
@@ -49,6 +51,27 @@ def fleet_summary(session: Session, settings: ServerSettings) -> FleetSummaryRes
         telemetry_points=points,
         server_time=utc_now(),
     )
+
+
+def forget_fleet_node(session: Session, node_id: str) -> bool:
+    """Remove a node and its bound credentials after an explicit dashboard action."""
+    node = session.get(Node, node_id)
+    if node is None:
+        return False
+    session.add(
+        AuditEvent(
+            actor_type="dashboard",
+            actor_id=node.id,
+            action="node.forgotten",
+            details=json.dumps(
+                {"machine_id": node.machine_id, "display_name": node.display_name},
+                separators=(",", ":"),
+            ),
+        )
+    )
+    session.delete(node)
+    session.commit()
+    return True
 
 
 def _node_response(

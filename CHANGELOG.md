@@ -4,6 +4,17 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.5.0-beta.4] - 2026-10-01
+
+### Fixed
+
+- Ein widerrufener Token wird nach dem Sperren aus der Dashboard-Liste entfernt.
+- Neue explizite Aktion **Gerät vergessen**: entfernt einen Node einschließlich seiner
+  Telemetrie und Agent-Token-Bindungen. Danach kann dieselbe Maschinen-ID mit einem
+  neuen Token wieder aufgenommen werden.
+- Der bisherige Schutz gegen die Übernahme einer bestehenden Maschinen-ID bleibt für
+  alle nicht ausdrücklich vergessenen Geräte unverändert aktiv.
+
 ## [0.5.0-beta.3] - 2026-10-01
 
 ### Added

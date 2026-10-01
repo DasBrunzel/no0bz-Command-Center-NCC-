@@ -5,7 +5,13 @@ from ncc.security import limited
 from sqlalchemy.orm import Session
 
 from ncc_server.auth import database_session, require_dashboard_access
-from ncc_server.fleet_service import fleet_node, fleet_summary, list_fleet_nodes, node_telemetry
+from ncc_server.fleet_service import (
+    fleet_node,
+    fleet_summary,
+    forget_fleet_node,
+    list_fleet_nodes,
+    node_telemetry,
+)
 from ncc_server.schemas import FleetNodeResponse, FleetSummaryResponse, FleetTelemetryPoint
 
 router = APIRouter(
@@ -37,6 +43,14 @@ async def node(
     if result is None:
         raise HTTPException(status_code=404, detail="node not found")
     return result
+
+
+@router.delete("/nodes/{node_id}", status_code=204)
+async def forget_node(
+    node_id: str, session: Session = Depends(database_session)
+) -> None:
+    if not forget_fleet_node(session, node_id):
+        raise HTTPException(status_code=404, detail="node not found")
 
 
 @router.get("/nodes/{node_id}/telemetry", response_model=list[FleetTelemetryPoint])

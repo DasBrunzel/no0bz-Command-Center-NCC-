@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from ncc_server.app import create_app
 from ncc_server.config import ServerSettings
 from ncc_server.database import Database
-from ncc_server.models import Base, Node, TelemetryPoint, utc_now
+from ncc_server.models import AgentToken, AuditEvent, Base, Node, TelemetryPoint, utc_now
 
 
 def make_database(path: Path) -> Database:
@@ -97,6 +97,16 @@ def test_fleet_api_is_protected_and_returns_latest_metrics(tmp_path: Path) -> No
         assert len(telemetry) == 1
         assert telemetry[0]["metrics"]["cpu"]["percent"] == 42.0
         assert client.get("/api/v1/fleet/nodes/missing", headers=headers).status_code == 404
+
+        forgotten = client.delete(f"/api/v1/fleet/nodes/{online_id}", headers=headers)
+        assert forgotten.status_code == 204
+        assert client.get(f"/api/v1/fleet/nodes/{online_id}", headers=headers).status_code == 404
+
+    with database.session() as session:
+        assert session.get(Node, online_id) is None
+        assert session.query(TelemetryPoint).count() == 0
+        assert session.query(AgentToken).count() == 0
+        assert session.query(AuditEvent).filter_by(action="node.forgotten").count() == 1
 
 
 def test_loopback_dashboard_access_can_be_enabled(tmp_path: Path) -> None:

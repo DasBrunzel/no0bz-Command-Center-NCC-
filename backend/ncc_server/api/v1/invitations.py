@@ -69,6 +69,23 @@ async def revoke_invitation(
     return _response(session, record)
 
 
+@router.delete("/{token_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_revoked_invitation(
+    token_id: str,
+    session: Session = Depends(database_session),
+) -> None:
+    record = session.get(AgentToken, token_id)
+    if record is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="agent invitation not found")
+    if record.revoked_at is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="revoke an invitation before removing it from the list",
+        )
+    session.delete(record)
+    session.commit()
+
+
 def _response(session: Session, record: AgentToken) -> AgentInvitationResponse:
     node = session.get(Node, record.node_id) if record.node_id else None
     if record.revoked_at is not None:

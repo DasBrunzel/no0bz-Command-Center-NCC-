@@ -48,17 +48,26 @@ def test_dashboard_can_issue_list_and_revoke_invitations(tmp_path: Path) -> None
         assert len(listed.json()) == 1
         assert "token" not in listed.json()[0]
 
+        with database.session() as session:
+            record = session.get(AgentToken, created["token_id"])
+            assert record is not None
+            assert record.token_hash == hash_agent_token(plaintext)
+            assert plaintext not in record.token_hash
+
         revoked = client.post(
             f"/api/v1/agent-invitations/{created['token_id']}/revoke", headers=headers
         )
         assert revoked.status_code == 200
         assert revoked.json()["status"] == "revoked"
+        removed = client.delete(
+            f"/api/v1/agent-invitations/{created['token_id']}", headers=headers
+        )
+        assert removed.status_code == 204
+        assert client.get("/api/v1/agent-invitations", headers=headers).json() == []
 
     with database.session() as session:
         record = session.get(AgentToken, created["token_id"])
-        assert record is not None
-        assert record.token_hash == hash_agent_token(plaintext)
-        assert plaintext not in record.token_hash
+        assert record is None
         audit_events = session.query(AuditEvent).all()
         assert [event.actor_type for event in audit_events] == ["dashboard", "dashboard"]
 
