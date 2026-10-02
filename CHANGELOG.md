@@ -10,6 +10,7 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 - Linux-Agenten können sich nun per browserbestätigtem Pairing aufnehmen lassen,
   ohne einen Agent-Token zu kopieren oder anzuzeigen.
+- Der Windows-Agent-Installer verwendet denselben browserbestätigten Ablauf.
 
 ### Added
 

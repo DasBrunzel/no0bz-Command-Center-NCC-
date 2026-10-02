@@ -63,8 +63,7 @@ if (-not (Test-Path $configPath) -or $ReplaceConfig) {
         } else {
             $serverUrl = if ($ServerUrl) { $ServerUrl } else { Read-Host "NCC Server-URL (HTTPS)" }
         }
-        $agentToken = Read-SecretText "Individueller Agent-Token"
-        if (-not $serverUrl -or -not $agentToken) { throw "Server-URL und Agent-Token sind erforderlich." }
+        if (-not $serverUrl) { throw "Eine Server-URL ist erforderlich." }
         $env:NCC_VALIDATE_URL = $serverUrl
         $env:NCC_VALIDATE_INSECURE = [int]$Tailscale.IsPresent
         try {
@@ -75,9 +74,12 @@ if (-not (Test-Path $configPath) -or $ReplaceConfig) {
         }
         $dataRoot = Join-Path $installRoot "agent-data"
         New-Item -ItemType Directory -Force -Path $dataRoot | Out-Null
+        $pairingId = & $venvPython -c "import secrets; print(secrets.token_urlsafe(18))"
+        $pairingSecret = & $venvPython -c "import secrets; print(secrets.token_urlsafe(32))"
         $lines = @(
             "NCC_AGENT_SERVER_URL=$(Quote-DotEnv $serverUrl)",
-            "NCC_AGENT_TOKEN=$(Quote-DotEnv $agentToken)",
+            "NCC_AGENT_PAIRING_ID=$(Quote-DotEnv $pairingId)",
+            "NCC_AGENT_PAIRING_SECRET=$(Quote-DotEnv $pairingSecret)",
             "NCC_AGENT_DATA_DIR=$(Quote-DotEnv $dataRoot)",
             "NCC_AGENT_ALLOW_INSECURE_HTTP=$([int]$Tailscale.IsPresent)"
         )
@@ -135,3 +137,4 @@ if ($serviceExists -and $serviceExists.Status -eq "Running") { Restart-Service -
 else { Start-Service -Name $serviceName }
 Write-Host "[NCC] $Component-Dienst läuft. Konfiguration: $configPath"
 Write-Host "[NCC] Logdatei: $(Join-Path $installRoot "logs\$name.log")"
+if ($Component -eq "Agent" -and $pairingId) { Write-Host "[NCC] Browser-Freigabe: $serverUrl/?pair=$pairingId" }
