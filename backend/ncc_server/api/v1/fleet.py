@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from ncc.security import limited
 from sqlalchemy.orm import Session
 
+from ncc_server.alert_service import get_alert_policy, update_alert_policy
 from ncc_server.auth import database_session, require_dashboard_access
 from ncc_server.fleet_service import (
     fleet_node,
@@ -15,6 +16,8 @@ from ncc_server.fleet_service import (
     rename_fleet_node,
 )
 from ncc_server.schemas import (
+    AlertPolicyResponse,
+    AlertPolicyUpdateRequest,
     FleetAlertResponse,
     FleetNodeRenameRequest,
     FleetNodeResponse,
@@ -48,6 +51,20 @@ async def alerts(
     limit: int = Query(default=100, ge=1, le=500), session: Session = Depends(database_session)
 ) -> list[FleetAlertResponse]:
     return list_fleet_alerts(session, limit)
+
+
+@router.get("/alert-policy", response_model=AlertPolicyResponse)
+async def alert_policy(session: Session = Depends(database_session)) -> AlertPolicyResponse:
+    policy = get_alert_policy(session)
+    return AlertPolicyResponse.model_validate(policy, from_attributes=True)
+
+
+@router.put("/alert-policy", response_model=AlertPolicyResponse)
+async def set_alert_policy(
+    payload: AlertPolicyUpdateRequest, session: Session = Depends(database_session)
+) -> AlertPolicyResponse:
+    policy = update_alert_policy(session, payload.model_dump())
+    return AlertPolicyResponse.model_validate(policy, from_attributes=True)
 
 
 @router.get("/nodes/{node_id}", response_model=FleetNodeResponse)

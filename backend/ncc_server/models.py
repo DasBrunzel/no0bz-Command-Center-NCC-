@@ -150,3 +150,14 @@ class AlertState(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_notified_state: Mapped[str | None] = mapped_column(String(16))
+
+
+class AlertPolicy(Base):
+    __tablename__ = "alert_policy"
+
+    id: Mapped[str] = mapped_column(String(16), primary_key=True, default="default")
+    cpu_threshold: Mapped[int] = mapped_column(nullable=False, default=90)
+    memory_threshold: Mapped[int] = mapped_column(nullable=False, default=90)
+    gpu_threshold: Mapped[int] = mapped_column(nullable=False, default=90)
+    disk_threshold: Mapped[int] = mapped_column(nullable=False, default=90)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)

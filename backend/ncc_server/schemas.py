@@ -120,6 +120,22 @@ class FleetAlertResponse(BaseModel):
     resolved_at: datetime | None
 
 
+class AlertPolicyResponse(BaseModel):
+    cpu_threshold: int
+    memory_threshold: int
+    gpu_threshold: int
+    disk_threshold: int
+
+
+class AlertPolicyUpdateRequest(AlertPolicyResponse):
+    @field_validator("cpu_threshold", "memory_threshold", "gpu_threshold", "disk_threshold")
+    @classmethod
+    def validate_threshold(cls, value: int) -> int:
+        if not 50 <= value <= 100:
+            raise ValueError("Grenzwerte müssen zwischen 50 und 100 liegen")
+        return value
+
+
 class FleetNodeRenameRequest(BaseModel):
     display_name: str = Field(min_length=1, max_length=128)
 
