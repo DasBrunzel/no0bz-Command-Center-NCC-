@@ -125,8 +125,6 @@ query NccUnraidArray {
   array {
     state
     capacity { kilobytes { total used free } }
-    disks { id device type name vendor size temperature isSpinning }
-    caches { id device type name vendor size temperature isSpinning }
   }
 }
 """
@@ -136,9 +134,9 @@ async def _query_with_fallback(
     client: httpx.AsyncClient, url: str, headers: dict[str, str]
 ) -> dict[str, Any]:
     try:
-        return await _query_json(client, url, headers, _LEGACY_QUERY)
-    except ValueError:
         return await _query_json(client, url, headers, _QUERY)
+    except ValueError:
+        return await _query_json(client, url, headers, _LEGACY_QUERY)
 
 
 async def _query_json(
@@ -179,6 +177,10 @@ def _bytes_to_gb(value: object) -> float:
     return _number(value) / 1024 / 1024 / 1024
 
 
+def _kb_to_gb(value: object) -> float:
+    return _number(value) / 1024 / 1024
+
+
 def _sum_number(rows: list[object], key: str) -> float:
     return sum(_number(row.get(key)) for row in rows if isinstance(row, dict))
 
@@ -204,6 +206,25 @@ def _disks(array: dict[str, Any]) -> list[dict[str, object]]:
                     "fstype": disk.get("fsType"),
                 }
             )
+    if rows:
+        return rows
+    capacity = _dict(array.get("capacity"))
+    kilobytes = _dict(capacity.get("kilobytes"))
+    total = _number(kilobytes.get("total"))
+    used = _number(kilobytes.get("used"))
+    if total > 0:
+        rows.append(
+            {
+                "name": "Unraid Array",
+                "mount": "Array",
+                "percent": used / total * 100,
+                "total_gb": _kb_to_gb(total),
+                "used_gb": _kb_to_gb(used),
+                "temperature_c": None,
+                "status": array.get("state"),
+                "fstype": "unraid",
+            }
+        )
     return rows
 
 
