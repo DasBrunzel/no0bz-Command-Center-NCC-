@@ -18,24 +18,27 @@ async def collect_unraid(database: Database, settings: ServerSettings) -> None:
     if not settings.unraid_url or not settings.unraid_api_key.get_secret_value():
         return
     async with httpx.AsyncClient(timeout=15) as client:
-        response = await client.post(
-            settings.unraid_url,
-            headers={"x-api-key": settings.unraid_api_key.get_secret_value()},
-            json={"query": _QUERY},
-        )
-    response.raise_for_status()
-    payload = response.json()
+        headers = {"x-api-key": settings.unraid_api_key.get_secret_value()}
+        response = await client.post(settings.unraid_url, headers=headers, json={"query": _QUERY})
+        response.raise_for_status()
+        payload = response.json()
+        if isinstance(payload, dict) and payload.get("errors"):
+            response = await client.post(
+                settings.unraid_url, headers=headers, json={"query": _LEGACY_QUERY}
+            )
+            response.raise_for_status()
+            payload = response.json()
     if isinstance(payload, dict) and payload.get("errors"):
         errors = payload["errors"]
-        raise ValueError(f"GraphQL query rejected: {errors!s:.500}")
+        raise ValueError(f"GraphQL queries rejected: {errors!s:.500}")
     if not isinstance(payload, dict) or not isinstance(payload.get("data"), dict):
         raise ValueError("Unraid API returned no GraphQL data")
     data = payload["data"]
     metrics = _dict(data.get("metrics"))
     info = _dict(data.get("info"))
     array = _dict(data.get("array"))
-    cpu = _dict(metrics.get("cpu"))
-    memory = _dict(metrics.get("memory"))
+    cpu = _dict(metrics.get("cpu")) or _dict(info.get("cpu"))
+    memory = _dict(metrics.get("memory")) or _dict(info.get("memory"))
     network = metrics.get("network")
     network_rows = network if isinstance(network, list) else [network] if isinstance(network, dict) else []
     info_cpu = _dict(info.get("cpu"))
@@ -102,6 +105,13 @@ query NccUnraidMetrics {
     network { id name operstate bytesReceived bytesSent packetsReceived packetsSent receiveErrors transmitErrors receiveDropped transmitDropped rxSec txSec utilizationPercent lastUpdated }
   }
   info { cpu { brand vendor threads cores } versions { unraid } }
+  array { state capacity { kilobytes { total used free } } parityCheckStatus { status progress speed errors running } disks { id name device status temp size fsSize fsUsed type numReads numWrites numErrors isSpinning fsType } caches { id name device status temp size fsSize fsUsed type numReads numWrites numErrors isSpinning fsType } }
+}
+"""
+
+_LEGACY_QUERY = """
+query NccUnraidLegacyMetrics {
+  info { cpu { brand vendor threads cores speed } memory { total used free available active buffcache } versions { unraid } }
   array { state capacity { kilobytes { total used free } } parityCheckStatus { status progress speed errors running } disks { id name device status temp size fsSize fsUsed type numReads numWrites numErrors isSpinning fsType } caches { id name device status temp size fsSize fsUsed type numReads numWrites numErrors isSpinning fsType } }
 }
 """
