@@ -18,8 +18,10 @@ foreach ($line in [IO.File]::ReadAllLines($configPath)) {
         $values[$parts[0]] = $parts[1].Trim().Trim('"').Replace('\"', '"').Replace('\\', '\')
     }
 }
-$url = $values["NCC_SERVER_UNRAID_URL"] ?? $values["NCC_UNRAID_URL"]
-$apiKey = $values["NCC_SERVER_UNRAID_API_KEY"] ?? $values["NCC_UNRAID_API_KEY"]
+$url = $values["NCC_SERVER_UNRAID_URL"]
+if (-not $url) { $url = $values["NCC_UNRAID_URL"] }
+$apiKey = $values["NCC_SERVER_UNRAID_API_KEY"]
+if (-not $apiKey) { $apiKey = $values["NCC_UNRAID_API_KEY"] }
 if (-not $url -or -not $apiKey) { throw "Die Unraid-Verbindung ist nicht vollständig eingerichtet." }
 
 $query = @'
