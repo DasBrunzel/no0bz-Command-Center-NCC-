@@ -407,7 +407,8 @@ function Fleet({
     { label: "PCS & LAPTOPS", nodes: filtered.filter((node) => node.metadata.source !== "unraid-api" && !/server|tower|android|ios|pixel|phone/i.test(`${node.display_name} ${node.machine_id}`)) },
     { label: "SERVER", nodes: filtered.filter((node) => node.metadata.source === "unraid-api" || /server|tower/i.test(node.display_name)) },
     { label: "MOBILE", nodes: filtered.filter((node) => /android|ios|pixel|phone/i.test(`${node.display_name} ${node.machine_id}`)) },
-  ].filter((group) => group.nodes.length).map((group) => ({ ...group, nodes: [...group.nodes].sort((left, right) => Number(right.online) - Number(left.online) || left.display_name.localeCompare(right.display_name, "de")) }));
+    { label: "FRIENDS", nodes: [] as Node[] },
+  ].map((group) => ({ ...group, nodes: [...group.nodes].sort((left, right) => Number(right.online) - Number(left.online) || left.display_name.localeCompare(right.display_name, "de")) }));
   return (
     <>
       <AlertPanel alerts={fleetAlerts} />
@@ -424,7 +425,6 @@ function Fleet({
         </header>
         <div className="navigator-groups">
           {groups.map((group) => <section className="navigator-group" key={group.label}><button className="node-group-toggle" onClick={() => setCollapsedGroups((current) => ({...current, [group.label]: !current[group.label]}))}><h3>{group.label}<span>{group.nodes.length} · {collapsedGroups[group.label] ? "+" : "–"}</span></h3></button>{!collapsedGroups[group.label] && <div>{group.nodes.map((node) => {
-              const m = node.latest?.metrics || {};
               return (
                 <button
                   key={node.node_id}
@@ -436,12 +436,12 @@ function Fleet({
                   </div>
                   <div className="node-copy">
                     <strong>{node.display_name}</strong>
-                    <span>{node.platform} · CPU {num(m.cpu?.percent).toFixed(0)}%</span>
+                    <span>{node.platform} · {node.agent_version || "Agent unbekannt"}</span>
                   </div>
                   <StatusDot online={node.online} />
                 </button>
               );
-            })}</div>}</section>)}
+            })}{!group.nodes.length && <span className="navigator-placeholder">Platz für weitere Geräte</span>}</div>}</section>)}
             {!filtered.length && (
               <div className="navigator-empty">
                 <Boxes size={30} />
@@ -1826,7 +1826,7 @@ function App() {
         <footer>
           <ShieldCheck size={14} />
           <span>GESICHERTE VERBINDUNG</span>
-          <b>v0.5.0-beta.33</b>
+          <b>v0.5.0-beta.34</b>
         </footer>
       </aside>
       <div className="mobile-scrim" onClick={() => setSidebar(false)} />

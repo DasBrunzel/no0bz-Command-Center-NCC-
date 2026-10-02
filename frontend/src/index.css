@@ -569,13 +569,14 @@ main {
 }
 .navigator-groups {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
   margin-top: 13px;
 }
 .navigator-group > div {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
 }
 .navigator-group h3 {
   color: var(--muted);
@@ -595,9 +596,9 @@ main {
   cursor: pointer;
   display: grid;
   gap: 8px;
-  grid-template-columns: 31px minmax(105px, 1fr) auto;
-  min-width: 214px;
-  padding: 8px;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  min-width: 0;
+  padding: 7px;
   text-align: left;
 }
 .navigator-node:hover { border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
@@ -608,13 +609,23 @@ main {
 }
 .navigator-node .device-icon {
   border-radius: 6px;
-  height: 31px;
-  width: 31px;
+  height: 28px;
+  width: 28px;
 }
 .navigator-node .node-copy { gap: 2px; }
 .navigator-node .node-copy strong { font-size: 10px; }
 .navigator-node .node-copy > span { font-size: 7px; }
 .navigator-node .status-dot { font-size: 6px; }
+.navigator-placeholder {
+  align-items: center;
+  border: 1px dashed color-mix(in srgb, var(--line) 90%, var(--muted));
+  border-radius: 8px;
+  color: var(--muted);
+  display: flex;
+  font: 600 8px JetBrains Mono;
+  min-height: 43px;
+  padding: 8px;
+}
 .navigator-empty {
   color: var(--muted);
   display: grid;
@@ -1712,6 +1723,7 @@ main {
     align-items: stretch;
     flex-direction: column;
   }
+  .navigator-groups { grid-template-columns: 1fr; }
   .fleet-navigator .search { max-width: none; }
   .node-browser {
     min-height: auto;
