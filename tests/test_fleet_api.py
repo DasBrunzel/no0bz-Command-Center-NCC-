@@ -94,6 +94,24 @@ def test_fleet_api_is_protected_and_returns_latest_metrics(tmp_path: Path) -> No
         assert online["online"] is True
         assert online["latest"]["metrics"]["cpu"]["percent"] == 42.0
 
+        groups = client.get("/api/v1/fleet/groups", headers=headers)
+        assert groups.status_code == 200
+        assert [item["name"] for item in groups.json()] == [
+            "PCS & LAPTOPS", "SERVER", "MOBILE", "FRIENDS"
+        ]
+        created_group = client.post(
+            "/api/v1/fleet/groups", headers=headers, json={"name": "Gaming"}
+        )
+        assert created_group.status_code == 201
+        layout = client.put(
+            "/api/v1/fleet/layout",
+            headers=headers,
+            json={"placements": [{"node_id": online_id, "group_id": created_group.json()["group_id"], "position": 0}]},
+        )
+        assert layout.status_code == 204
+        placed = client.get("/api/v1/fleet/nodes", headers=headers).json()
+        assert next(item for item in placed if item["node_id"] == online_id)["fleet_group_id"] == created_group.json()["group_id"]
+
         summary = client.get("/api/v1/fleet/summary", headers=headers).json()
         assert summary["total_nodes"] == 2
         assert summary["online_nodes"] == 1

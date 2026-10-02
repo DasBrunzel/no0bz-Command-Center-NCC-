@@ -567,6 +567,24 @@ main {
   max-width: 300px;
   width: 100%;
 }
+.fleet-navigator > header > div.navigator-actions {
+  display: flex;
+  gap: 7px;
+  margin-left: auto;
+}
+.navigator-actions button {
+  background: var(--surface2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: pointer;
+  font: 600 8px JetBrains Mono;
+  padding: 7px 9px;
+}
+.navigator-actions button:hover, .navigator-actions button.active {
+  border-color: color-mix(in srgb, var(--accent) 65%, var(--line));
+  color: var(--accent);
+}
 .navigator-groups {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -577,6 +595,11 @@ main {
   display: grid;
   gap: 8px;
   grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+}
+.navigator-group > div.editing {
+  border-radius: 8px;
+  outline: 1px dashed color-mix(in srgb, var(--accent) 55%, var(--line));
+  outline-offset: 3px;
 }
 .navigator-group h3 {
   color: var(--muted);
@@ -602,6 +625,8 @@ main {
   text-align: left;
 }
 .navigator-node:hover { border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
+.navigator-node[draggable="true"] { cursor: grab; }
+.navigator-node[draggable="true"]:active { cursor: grabbing; opacity: .65; }
 .navigator-node.selected {
   background: linear-gradient(90deg, rgba(var(--accent-rgb), .1), var(--surface2));
   border-color: rgba(var(--accent-rgb), .5);

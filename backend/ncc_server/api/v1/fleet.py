@@ -7,19 +7,25 @@ from sqlalchemy.orm import Session
 from ncc_server.alert_service import get_alert_policy, update_alert_policy
 from ncc_server.auth import database_session, require_dashboard_access
 from ncc_server.fleet_service import (
+    create_fleet_group,
     fleet_node,
     fleet_summary,
     forget_fleet_node,
     list_fleet_alerts,
+    list_fleet_groups,
     list_fleet_nodes,
     node_monthly_network_usage,
     node_telemetry,
     rename_fleet_node,
+    update_fleet_layout,
 )
 from ncc_server.schemas import (
     AlertPolicyResponse,
     AlertPolicyUpdateRequest,
     FleetAlertResponse,
+    FleetGroupCreateRequest,
+    FleetGroupResponse,
+    FleetLayoutUpdateRequest,
     FleetNodeRenameRequest,
     FleetNodeResponse,
     FleetSummaryResponse,
@@ -46,6 +52,26 @@ async def nodes(
     request: Request, session: Session = Depends(database_session)
 ) -> list[FleetNodeResponse]:
     return list_fleet_nodes(session, request.app.state.server_settings)
+
+
+@router.get("/groups", response_model=list[FleetGroupResponse])
+async def groups(session: Session = Depends(database_session)) -> list[FleetGroupResponse]:
+    return list_fleet_groups(session)
+
+
+@router.post("/groups", response_model=FleetGroupResponse, status_code=201)
+async def create_group(
+    payload: FleetGroupCreateRequest, session: Session = Depends(database_session)
+) -> FleetGroupResponse:
+    return create_fleet_group(session, payload.name)
+
+
+@router.put("/layout", status_code=204)
+async def set_layout(
+    payload: FleetLayoutUpdateRequest, session: Session = Depends(database_session)
+) -> None:
+    if not update_fleet_layout(session, payload.placements):
+        raise HTTPException(status_code=404, detail="node or group not found")
 
 
 @router.get("/alerts", response_model=list[FleetAlertResponse])

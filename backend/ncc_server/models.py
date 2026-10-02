@@ -3,7 +3,17 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, String, Text, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -32,12 +42,25 @@ class Node(Base):
         DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False
     )
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    fleet_group_id: Mapped[str | None] = mapped_column(ForeignKey("fleet_groups.id", ondelete="SET NULL"))
+    fleet_position: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    fleet_group: Mapped[FleetGroup | None] = relationship(back_populates="nodes")
     telemetry: Mapped[list[TelemetryPoint]] = relationship(
         back_populates="node", cascade="all, delete-orphan"
     )
     tokens: Mapped[list[AgentToken]] = relationship(
         back_populates="node", cascade="all, delete-orphan"
     )
+
+
+class FleetGroup(Base):
+    __tablename__ = "fleet_groups"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    name: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    position: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    nodes: Mapped[list[Node]] = relationship(back_populates="fleet_group")
 
 
 class TelemetryPoint(Base):

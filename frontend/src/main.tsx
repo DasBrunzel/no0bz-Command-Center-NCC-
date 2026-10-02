@@ -55,8 +55,12 @@ type Node = {
   metadata: Record<string, unknown>;
   created_at: string;
   last_seen_at: string | null;
+  fleet_group_id: string;
+  fleet_position: number;
   latest: Telemetry | null;
 };
+type FleetGroup = { group_id: string; name: string; position: number };
+type FleetPlacement = { node_id: string; group_id: string; position: number };
 type Summary = {
   total_nodes: number;
   online_nodes: number;
@@ -377,6 +381,7 @@ function AlertPanel({ alerts }: { alerts: FleetAlert[] }) {
 
 function Fleet({
   nodes,
+  groups,
   selected,
   points,
   monthlyNetwork,
@@ -384,8 +389,11 @@ function Fleet({
   query,
   onQuery,
   alerts,
+  onCreateGroup,
+  onLayout,
 }: {
   nodes: Node[];
+  groups: FleetGroup[];
   selected: Node | null;
   points: Telemetry[];
   monthlyNetwork: NetworkUsageSummary | null;
@@ -393,8 +401,12 @@ function Fleet({
   query: string;
   onQuery: (v: string) => void;
   alerts: AlertRecord[];
+  onCreateGroup: (name: string) => Promise<void>;
+  onLayout: (placements: FleetPlacement[]) => Promise<void>;
 }) {
-  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({}),
+    [editing, setEditing] = useState(false),
+    [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
   const fleetAlerts: FleetAlert[] = alerts.filter((alert) => alert.active).map((alert) => ({
     id: alert.alert_id, title: alert.message, detail: `${alert.display_name} · seit ${ago(alert.opened_at)}`, severity: alert.severity,
   }));
@@ -403,12 +415,25 @@ function Fleet({
       .toLowerCase()
       .includes(query.toLowerCase()),
   );
-  const groups = [
-    { label: "PCS & LAPTOPS", nodes: filtered.filter((node) => node.metadata.source !== "unraid-api" && !/server|tower|android|ios|pixel|phone/i.test(`${node.display_name} ${node.machine_id}`)) },
-    { label: "SERVER", nodes: filtered.filter((node) => node.metadata.source === "unraid-api" || /server|tower/i.test(node.display_name)) },
-    { label: "MOBILE", nodes: filtered.filter((node) => /android|ios|pixel|phone/i.test(`${node.display_name} ${node.machine_id}`)) },
-    { label: "FRIENDS", nodes: [] as Node[] },
-  ].map((group) => ({ ...group, nodes: [...group.nodes].sort((left, right) => Number(right.online) - Number(left.online) || left.display_name.localeCompare(right.display_name, "de")) }));
+  const grouped = groups.map((group) => ({
+    ...group,
+    nodes: filtered.filter((node) => node.fleet_group_id === group.group_id).sort((left, right) => left.fleet_position - right.fleet_position || left.display_name.localeCompare(right.display_name, "de")),
+  }));
+  const moveNode = async (targetGroupId: string, beforeNodeId?: string) => {
+    if (!draggedNodeId) return;
+    const source = grouped.find((group) => group.nodes.some((node) => node.node_id === draggedNodeId));
+    const target = grouped.find((group) => group.group_id === targetGroupId);
+    if (!source || !target) return;
+    const targetNodes = target.nodes.filter((node) => node.node_id !== draggedNodeId);
+    const index = beforeNodeId ? Math.max(0, targetNodes.findIndex((node) => node.node_id === beforeNodeId)) : targetNodes.length;
+    targetNodes.splice(index, 0, nodes.find((node) => node.node_id === draggedNodeId)!);
+    const placements = [...new Set([source.group_id, targetGroupId])].flatMap((groupId) => {
+      const groupNodes = groupId === targetGroupId ? targetNodes : source.nodes.filter((node) => node.node_id !== draggedNodeId);
+      return groupNodes.map((node, position) => ({ node_id: node.node_id, group_id: groupId, position }));
+    });
+    setDraggedNodeId(null);
+    await onLayout(placements);
+  };
   return (
     <>
       <AlertPanel alerts={fleetAlerts} />
@@ -418,18 +443,39 @@ function Fleet({
             <span className="eyebrow">FLEET NAVIGATOR</span>
             <strong>{nodes.filter((node) => node.online).length}/{nodes.length} SYSTEME AKTIV</strong>
           </div>
+          <div className="navigator-actions">
+            {editing && (
+              <button
+                type="button"
+                onClick={() => {
+                  const name = window.prompt("Name der neuen Gruppe");
+                  if (name?.trim()) void onCreateGroup(name.trim());
+                }}
+              >
+                + Gruppe
+              </button>
+            )}
+            <button type="button" className={editing ? "active" : ""} onClick={() => setEditing((current) => !current)}>
+              {editing ? "Fertig" : "Bearbeiten"}
+            </button>
+          </div>
           <label className="search">
             <Search size={15} />
             <input value={query} onChange={(event) => onQuery(event.target.value)} placeholder="Gerät suchen …" />
           </label>
         </header>
         <div className="navigator-groups">
-          {groups.map((group) => <section className="navigator-group" key={group.label}><button className="node-group-toggle" onClick={() => setCollapsedGroups((current) => ({...current, [group.label]: !current[group.label]}))}><h3>{group.label}<span>{group.nodes.length} · {collapsedGroups[group.label] ? "+" : "–"}</span></h3></button>{!collapsedGroups[group.label] && <div>{group.nodes.map((node) => {
+          {grouped.map((group) => <section className="navigator-group" key={group.group_id}><button className="node-group-toggle" onClick={() => setCollapsedGroups((current) => ({...current, [group.group_id]: !current[group.group_id]}))}><h3>{group.name}<span>{group.nodes.length} · {collapsedGroups[group.group_id] ? "+" : "–"}</span></h3></button>{!collapsedGroups[group.group_id] && <div className={editing ? "editing" : ""} onDragOver={(event) => { if (editing) event.preventDefault(); }} onDrop={(event) => { if (editing) { event.preventDefault(); void moveNode(group.group_id); } }}>{group.nodes.map((node) => {
               return (
                 <button
                   key={node.node_id}
                   className={`navigator-node ${selected?.node_id === node.node_id ? "selected" : ""}`}
-                  onClick={() => onSelect(node.node_id)}
+                  draggable={editing}
+                  onDragStart={() => setDraggedNodeId(node.node_id)}
+                  onDragEnd={() => setDraggedNodeId(null)}
+                  onDragOver={(event) => { if (editing) event.preventDefault(); }}
+                  onDrop={(event) => { if (editing) { event.preventDefault(); event.stopPropagation(); void moveNode(group.group_id, node.node_id); } }}
+                  onClick={() => { if (!editing) onSelect(node.node_id); }}
                 >
                   <div className={`device-icon ${node.online ? "online" : ""}`}>
                     <Server size={17} />
@@ -441,7 +487,7 @@ function Fleet({
                   <StatusDot online={node.online} />
                 </button>
               );
-            })}{!group.nodes.length && <span className="navigator-placeholder">Platz für weitere Geräte</span>}</div>}</section>)}
+            })}{!group.nodes.length && <span className="navigator-placeholder">{editing ? "Gerät hierher ziehen" : "Platz für weitere Geräte"}</span>}</div>}</section>)}
             {!filtered.length && (
               <div className="navigator-empty">
                 <Boxes size={30} />
@@ -1605,6 +1651,7 @@ function App() {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null),
     [authError, setAuthError] = useState(false);
   const [nodes, setNodes] = useState<Node[]>([]),
+    [groups, setGroups] = useState<FleetGroup[]>([]),
     [summary, setSummary] = useState<Summary | null>(null),
     [invitations, setInvitations] = useState<Invitation[]>([]),
     [alerts, setAlerts] = useState<AlertRecord[]>([]),
@@ -1626,18 +1673,21 @@ function App() {
       try {
         const [
           nextNodes,
+          nextGroups,
           nextSummary,
           nextInvitations,
           nextAlerts,
           nextPolicy,
         ] = await Promise.all([
           getJson<Node[]>("/api/v1/fleet/nodes", token),
+          getJson<FleetGroup[]>("/api/v1/fleet/groups", token),
           getJson<Summary>("/api/v1/fleet/summary", token),
           getJson<Invitation[]>("/api/v1/agent-invitations", token),
           getJson<AlertRecord[]>("/api/v1/fleet/alerts", token),
           getJson<AlertPolicy>("/api/v1/fleet/alert-policy", token),
         ]);
         setNodes(nextNodes);
+        setGroups(nextGroups);
         setSummary(nextSummary);
         setInvitations(nextInvitations);
         setAlerts(nextAlerts);
@@ -1736,6 +1786,23 @@ function App() {
     if (!response.ok) throw new Error("REQUEST");
     setPolicy((await response.json()) as AlertPolicy);
   };
+  const createFleetGroup = async (name: string) => {
+    const group = await postJson<FleetGroup>("/api/v1/fleet/groups", token, { name });
+    setGroups((current) => [...current, group].sort((left, right) => left.position - right.position || left.name.localeCompare(right.name, "de")));
+  };
+  const saveFleetLayout = async (placements: FleetPlacement[]) => {
+    const response = await fetch("/api/v1/fleet/layout", {
+      method: "PUT",
+      headers: { ...headers(token), "Content-Type": "application/json" },
+      body: JSON.stringify({ placements }),
+    });
+    if (!response.ok) throw new Error("REQUEST");
+    const byNode = new Map(placements.map((placement) => [placement.node_id, placement]));
+    setNodes((current) => current.map((node) => {
+      const placement = byNode.get(node.node_id);
+      return placement ? { ...node, fleet_group_id: placement.group_id, fleet_position: placement.position } : node;
+    }));
+  };
   const nav = useMemo(
     () => [
       {
@@ -1826,7 +1893,7 @@ function App() {
         <footer>
           <ShieldCheck size={14} />
           <span>GESICHERTE VERBINDUNG</span>
-          <b>v0.5.0-beta.34</b>
+          <b>v0.5.0-beta.35</b>
         </footer>
       </aside>
       <div className="mobile-scrim" onClick={() => setSidebar(false)} />
@@ -1871,6 +1938,7 @@ function App() {
           {page === "fleet" ? (
             <Fleet
               nodes={nodes}
+              groups={groups}
               selected={selected}
               onSelect={setSelectedId}
               points={points}
@@ -1878,6 +1946,8 @@ function App() {
               query={query}
               onQuery={setQuery}
               alerts={alerts}
+              onCreateGroup={createFleetGroup}
+              onLayout={saveFleetLayout}
             />
           ) : page === "statistics" ? (
             <StatisticsPage />

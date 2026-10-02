@@ -7,15 +7,64 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ncc_server.config import ServerSettings
-from ncc_server.models import AlertState, AuditEvent, Node, TelemetryPoint, utc_now
+from ncc_server.models import AlertState, AuditEvent, FleetGroup, Node, TelemetryPoint, utc_now
 from ncc_server.node_service import is_online
 from ncc_server.schemas import (
     FleetAlertResponse,
+    FleetGroupResponse,
+    FleetLayoutPlacement,
     FleetNodeResponse,
     FleetSummaryResponse,
     FleetTelemetryPoint,
     NetworkUsageSummary,
 )
+
+DEFAULT_FLEET_GROUPS = (
+    ("default-pcs-laptops", "PCS & LAPTOPS", 0),
+    ("default-servers", "SERVER", 1),
+    ("default-mobile", "MOBILE", 2),
+    ("default-friends", "FRIENDS", 3),
+)
+
+
+def list_fleet_groups(session: Session) -> list[FleetGroupResponse]:
+    _ensure_default_fleet_groups(session)
+    groups = session.scalars(select(FleetGroup).order_by(FleetGroup.position, FleetGroup.name)).all()
+    return [FleetGroupResponse(group_id=group.id, name=group.name, position=group.position) for group in groups]
+
+
+def create_fleet_group(session: Session, name: str) -> FleetGroupResponse:
+    _ensure_default_fleet_groups(session)
+    highest = session.scalar(select(func.max(FleetGroup.position)))
+    group = FleetGroup(name=name, position=(highest or 0) + 1)
+    session.add(group)
+    session.commit()
+    return FleetGroupResponse(group_id=group.id, name=group.name, position=group.position)
+
+
+def update_fleet_layout(session: Session, placements: list[FleetLayoutPlacement]) -> bool:
+    _ensure_default_fleet_groups(session)
+    group_ids = {placement.group_id for placement in placements}
+    valid_groups = set(session.scalars(select(FleetGroup.id).where(FleetGroup.id.in_(group_ids))).all())
+    node_ids = {placement.node_id for placement in placements}
+    nodes = {node.id: node for node in session.scalars(select(Node).where(Node.id.in_(node_ids))).all()}
+    if group_ids != valid_groups or node_ids != set(nodes):
+        return False
+    for placement in placements:
+        node = nodes[placement.node_id]
+        node.fleet_group_id = placement.group_id
+        node.fleet_position = placement.position
+        node.updated_at = utc_now()
+    session.commit()
+    return True
+
+
+def _ensure_default_fleet_groups(session: Session) -> None:
+    existing = set(session.scalars(select(FleetGroup.id)).all())
+    missing = [FleetGroup(id=group_id, name=name, position=position) for group_id, name, position in DEFAULT_FLEET_GROUPS if group_id not in existing]
+    if missing:
+        session.add_all(missing)
+        session.commit()
 
 
 def list_fleet_alerts(session: Session, limit: int) -> list[FleetAlertResponse]:
@@ -217,8 +266,19 @@ def _node_response(
         metadata=node.metadata_json,
         created_at=node.created_at,
         last_seen_at=node.last_seen_at,
+        fleet_group_id=node.fleet_group_id or _default_group_for(node),
+        fleet_position=node.fleet_position,
         latest=_telemetry_response(latest) if latest is not None else None,
     )
+
+
+def _default_group_for(node: Node) -> str:
+    identity = f"{node.display_name} {node.machine_id}".lower()
+    if node.metadata_json.get("source") == "unraid-api" or "server" in identity or "tower" in identity:
+        return "default-servers"
+    if any(word in identity for word in ("android", "ios", "pixel", "phone")):
+        return "default-mobile"
+    return "default-pcs-laptops"
 
 
 def _telemetry_response(point: TelemetryPoint) -> FleetTelemetryPoint:

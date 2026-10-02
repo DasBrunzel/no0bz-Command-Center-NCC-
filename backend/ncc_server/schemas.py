@@ -105,7 +105,37 @@ class FleetNodeResponse(BaseModel):
     metadata: dict[str, object]
     created_at: datetime
     last_seen_at: datetime | None
+    fleet_group_id: str
+    fleet_position: int
     latest: FleetTelemetryPoint | None
+
+
+class FleetGroupResponse(BaseModel):
+    group_id: str
+    name: str
+    position: int
+
+
+class FleetGroupCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=64)
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        if not normalized:
+            raise ValueError("name must not be blank")
+        return normalized
+
+
+class FleetLayoutPlacement(BaseModel):
+    node_id: str = Field(min_length=1, max_length=36)
+    group_id: str = Field(min_length=1, max_length=36)
+    position: int = Field(ge=0, le=10000)
+
+
+class FleetLayoutUpdateRequest(BaseModel):
+    placements: list[FleetLayoutPlacement] = Field(min_length=1, max_length=500)
 
 
 class FleetSummaryResponse(BaseModel):
