@@ -19,6 +19,11 @@ logger = logging.getLogger(__name__)
 async def collect_unraid(database: Database, settings: ServerSettings) -> None:
     """Collect read-only Unraid metrics and represent the host as a NCC node."""
     if not settings.unraid_url or not settings.unraid_api_key.get_secret_value():
+        logger.warning(
+            "Unraid collector disabled: url_configured=%s api_key_configured=%s",
+            bool(settings.unraid_url),
+            bool(settings.unraid_api_key.get_secret_value()),
+        )
         return
     async with httpx.AsyncClient(timeout=15) as client:
         headers = {"x-api-key": settings.unraid_api_key.get_secret_value()}
