@@ -545,6 +545,85 @@ main {
   grid-template-columns: 340px minmax(0, 1fr);
   gap: 17px;
 }
+.fleet-navigator {
+  margin-bottom: 17px;
+  padding: 15px 17px;
+}
+.fleet-navigator > header {
+  align-items: center;
+  display: flex;
+  gap: 15px;
+  justify-content: space-between;
+}
+.fleet-navigator > header > div {
+  display: grid;
+  gap: 4px;
+}
+.fleet-navigator > header strong {
+  font: 600 10px JetBrains Mono;
+}
+.fleet-navigator .search {
+  margin: 0;
+  max-width: 300px;
+  width: 100%;
+}
+.navigator-groups {
+  display: grid;
+  gap: 12px;
+  margin-top: 13px;
+}
+.navigator-group > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.navigator-group h3 {
+  color: var(--muted);
+  display: flex;
+  font: 600 8px JetBrains Mono;
+  justify-content: space-between;
+  letter-spacing: .12em;
+  margin: 0 3px 7px;
+}
+.navigator-group h3 span { color: var(--accent); }
+.navigator-node {
+  align-items: center;
+  background: color-mix(in srgb, var(--surface2) 74%, var(--surface));
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  cursor: pointer;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 31px minmax(105px, 1fr) auto;
+  min-width: 214px;
+  padding: 8px;
+  text-align: left;
+}
+.navigator-node:hover { border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
+.navigator-node.selected {
+  background: linear-gradient(90deg, rgba(var(--accent-rgb), .1), var(--surface2));
+  border-color: rgba(var(--accent-rgb), .5);
+  box-shadow: inset 2px 0 var(--accent);
+}
+.navigator-node .device-icon {
+  border-radius: 6px;
+  height: 31px;
+  width: 31px;
+}
+.navigator-node .node-copy { gap: 2px; }
+.navigator-node .node-copy strong { font-size: 10px; }
+.navigator-node .node-copy > span { font-size: 7px; }
+.navigator-node .status-dot { font-size: 6px; }
+.navigator-empty {
+  color: var(--muted);
+  display: grid;
+  font-size: 9px;
+  gap: 4px;
+  justify-items: center;
+  padding: 16px;
+}
+.fleet-stage { display: grid; }
 .node-browser {
   min-height: 600px;
   padding: 18px;
@@ -1629,6 +1708,11 @@ main {
   .fleet-layout {
     grid-template-columns: 1fr;
   }
+  .fleet-navigator > header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .fleet-navigator .search { max-width: none; }
   .node-browser {
     min-height: auto;
   }
@@ -1703,6 +1787,11 @@ main {
   .hero {
     align-items: flex-start;
     gap: 12px;
+  }
+  .fleet-navigator { padding: 13px; }
+  .navigator-node {
+    grid-template-columns: 30px minmax(0, 1fr) auto;
+    min-width: 100%;
   }
   .hero p {
     max-width: 200px;

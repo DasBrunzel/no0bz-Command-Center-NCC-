@@ -411,64 +411,47 @@ function Fleet({
   return (
     <>
       <AlertPanel alerts={fleetAlerts} />
-      <div className="fleet-layout">
-        <section className="surface node-browser">
-          <header className="section-head">
-            <div>
-              <span className="eyebrow">INFRASTRUKTUR</span>
-              <h2>Deine Geräte</h2>
-            </div>
-            <b>
-              {nodes.filter((n) => n.online).length}/{nodes.length} AKTIV
-            </b>
-          </header>
+      <section className="surface fleet-navigator">
+        <header>
+          <div>
+            <span className="eyebrow">FLEET NAVIGATOR</span>
+            <strong>{nodes.filter((node) => node.online).length}/{nodes.length} SYSTEME AKTIV</strong>
+          </div>
           <label className="search">
             <Search size={15} />
-            <input
-              value={query}
-              onChange={(e) => onQuery(e.target.value)}
-              placeholder="Gerät suchen …"
-            />
+            <input value={query} onChange={(event) => onQuery(event.target.value)} placeholder="Gerät suchen …" />
           </label>
-          <div className="node-stack">
-            {groups.map((group) => <section className="node-group" key={group.label}><button className="node-group-toggle" onClick={() => setCollapsedGroups((current) => ({...current, [group.label]: !current[group.label]}))}><h3>{group.label}<span>{group.nodes.length} · {collapsedGroups[group.label] ? "+" : "–"}</span></h3></button>{!collapsedGroups[group.label] && group.nodes.map((node) => {
+        </header>
+        <div className="navigator-groups">
+          {groups.map((group) => <section className="navigator-group" key={group.label}><button className="node-group-toggle" onClick={() => setCollapsedGroups((current) => ({...current, [group.label]: !current[group.label]}))}><h3>{group.label}<span>{group.nodes.length} · {collapsedGroups[group.label] ? "+" : "–"}</span></h3></button>{!collapsedGroups[group.label] && <div>{group.nodes.map((node) => {
               const m = node.latest?.metrics || {};
               return (
                 <button
                   key={node.node_id}
-                  className={
-                    selected?.node_id === node.node_id ? "selected" : ""
-                  }
+                  className={`navigator-node ${selected?.node_id === node.node_id ? "selected" : ""}`}
                   onClick={() => onSelect(node.node_id)}
                 >
                   <div className={`device-icon ${node.online ? "online" : ""}`}>
-                    <Server size={20} />
+                    <Server size={17} />
                   </div>
                   <div className="node-copy">
                     <strong>{node.display_name}</strong>
-                    <span>
-                      {node.platform} ·{" "}
-                      {node.agent_version || "Agent unbekannt"}
-                    </span>
-                    <div>
-                      <i style={{ width: `${num(m.cpu?.percent)}%` }} />
-                      <small>CPU {num(m.cpu?.percent).toFixed(0)}%</small>
-                    </div>
+                    <span>{node.platform} · CPU {num(m.cpu?.percent).toFixed(0)}%</span>
                   </div>
                   <StatusDot online={node.online} />
-                  <ChevronRight size={16} />
                 </button>
               );
-            })}</section>)}
+            })}</div>}</section>)}
             {!filtered.length && (
-              <div className="empty">
+              <div className="navigator-empty">
                 <Boxes size={30} />
                 <strong>Keine Geräte gefunden</strong>
                 <span>Starte einen NCC-Agenten oder ändere die Suche.</span>
               </div>
             )}
-          </div>
-        </section>
+        </div>
+      </section>
+      <div className="fleet-stage">
         <NodeOverview node={selected} points={points} monthlyNetwork={monthlyNetwork} />
       </div>
     </>
@@ -1832,6 +1815,8 @@ function App() {
           <dl>
             <dt>Nodes online</dt>
             <dd>{summary?.online_nodes || 0}</dd>
+            <dt>Nodes offline</dt>
+            <dd>{summary?.offline_nodes || 0}</dd>
             <dt>Messpunkte</dt>
             <dd>{summary?.telemetry_points.toLocaleString("de-DE") || 0}</dd>
             <dt>API</dt>
@@ -1841,7 +1826,7 @@ function App() {
         <footer>
           <ShieldCheck size={14} />
           <span>GESICHERTE VERBINDUNG</span>
-          <b>v0.5.0-beta.32</b>
+          <b>v0.5.0-beta.33</b>
         </footer>
       </aside>
       <div className="mobile-scrim" onClick={() => setSidebar(false)} />
@@ -1883,35 +1868,6 @@ function App() {
           </div>
         </header>
         <main>
-          <div className="summary-grid">
-            <StatCard
-              label="GESAMTE NODES"
-              value={summary?.total_nodes || 0}
-              detail="Registrierte Agenten"
-              icon={<Server size={20} />}
-            />
-            <StatCard
-              label="ONLINE"
-              value={summary?.online_nodes || 0}
-              detail="Aktiv verbunden"
-              icon={<Wifi size={20} />}
-              tone="green"
-            />
-            <StatCard
-              label="OFFLINE"
-              value={summary?.offline_nodes || 0}
-              detail="Verbindung getrennt"
-              icon={<WifiOff size={20} />}
-              tone="muted"
-            />
-            <StatCard
-              label="MESSPUNKTE"
-              value={(summary?.telemetry_points || 0).toLocaleString("de-DE")}
-              detail="In der Datenbank"
-              icon={<Activity size={20} />}
-              tone="blue"
-            />
-          </div>
           {page === "fleet" ? (
             <Fleet
               nodes={nodes}
