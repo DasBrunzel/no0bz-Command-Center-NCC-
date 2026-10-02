@@ -1,21 +1,22 @@
 # no0bz Command Center (NCC)
 
-![Version](https://img.shields.io/badge/version-0.5.0--beta.3-ff334f)
+![Version](https://img.shields.io/badge/version-0.5.0--beta.38-ff334f)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776ab)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 Real-Time System Monitor & Local Sync Hub (Python/FastAPI + React).
 
-> **NCC 0.5 befindet sich im Neuaufbau.** `0.5.0-beta.3` ergänzt Server, Agent und
-> Fleet-Weboberfläche um echte Windows-Dienste, Linux-systemd-Units, sichere Installer
-> und eine gemeinsame Verbindungsdiagnose. Das vorhandene
-> lokale Dashboard bleibt vorübergehend als NCC-0.4-Kompatibilitätsschicht erhalten.
+> **NCC 0.5 befindet sich im Beta-Test.** Die aktuelle Version `0.5.0-beta.38` besteht
+> aus einem dauerhaft laufenden Server, GUI-losen Agenten und einer gemeinsamen
+> Fleet-Weboberfläche. Bestehende NCC-0.4-Starter bleiben als Kompatibilitätsschicht
+> erhalten.
 
 ## NCC-0.5-Server und Fleet-Dashboard (Beta)
 
-Der neue Server ist eine separate Anwendung. Er sammelt keine lokale Hardware, stellt
-aber die Fleet-Weboberfläche und die Messwerte aller verbundenen Agenten bereit. Mit
-Docker Compose werden PostgreSQL, Migrationen und der Server gemeinsam gestartet:
+Der neue Server ist eine separate, GUI-lose Anwendung. Er sammelt seine eigenen
+Serverdaten, nimmt Telemetrie von Windows-, Linux- und mobilen Systemen entgegen und
+stellt das Dashboard zentral bereit. PostgreSQL, Migrationen und Server können mit
+Docker Compose gemeinsam gestartet werden:
 
 ```powershell
 $env:NCC_POSTGRES_PASSWORD = "ein-langes-eigenes-passwort"
@@ -43,20 +44,32 @@ zeigt dabei den Status **Wartet**, **Freigegeben** oder **Verbunden**.
 
 Der interne Agent-Zugang bleibt ausschließlich zwischen Agent und Server. Wird ein
 Gerät später neu gekoppelt, bleibt seine Maschinen-ID erhalten und der alte Zugang
-wird widerrufen.
+wird widerrufen. Der Installer zeigt nach der Einrichtung den persönlichen
+Browser-Link für genau dieses Gerät an.
+
+### Commander und Beta-Tester
+
+Bestehende Dashboard-Zugänge bleiben **Commander**. Beim Erstellen eines neuen
+achtstelligen Admin-Codes kann der Schalter **Beta-Tester** aktiviert werden. Dieser
+Zugang erhält im Dashboard ein Badge und darf Daten ansehen, aber keine neuen Codes
+erstellen sowie keine Geräte, Einladungen oder Zugänge löschen oder widerrufen.
+
+Admin-Codes werden nur einmal angezeigt, als Hash gespeichert und erzeugen eine
+HttpOnly-Browsersitzung. Ein Widerruf beendet die zugehörige Sitzung.
 
 ### Neuer Windows-/Linux-Agent
 
-Der Agent benötigt kein Browserfenster und keinen lokalen Webserver:
+Der Agent benötigt kein Browserfenster und keinen lokalen Webserver. Für eine
+Tailscale-Verbindung auf Windows (PowerShell als Administrator):
 
 ```powershell
-scripts\start_ncc_agent.bat
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install_ncc_service.ps1 -Component Agent -Tailscale -ServerUrl 100.64.0.10 -AgentMode Task
 ```
 
 Unter Linux:
 
 ```bash
-./scripts/start_ncc_agent.sh
+sudo ./scripts/install_ncc_agent_service.sh --tailscale 100.64.0.10
 ```
 
 Für Tailscale existieren `start_ncc_agent_tailscale.bat` und
@@ -82,7 +95,7 @@ sudo ./scripts/install_ncc_server_tailscale_service.sh
 sudo ./scripts/install_ncc_agent_tailscale_service.sh SERVER-NAME-ODER-IP
 ```
 
-Die Installer bewahren vorhandene Konfigurationen und Tokens bei Updates. Normales
+Die Installer bewahren vorhandene Konfigurationen und Pairing-Zugänge bei Updates. Normales
 Deinstallieren entfernt nur den Dienst; `-Purge` unter Windows beziehungsweise
 `--purge` unter Linux löscht auf ausdrücklichen Wunsch auch Konfiguration oder
 Agent-Puffer. Status und Logs zeigt `ncc_service_status.bat` beziehungsweise
@@ -205,13 +218,18 @@ Eine Rotation macht den bisherigen Token sofort ungültig. Danach müssen die ne
 
 ## Funktionen
 
+- Zentraler Server für eigene Serverdaten, Windows-/Linux-Agenten und Unraid-API
 - Echtzeit-CPU-, RAM-, Datenträger-, Netzwerk-, Akku-, GPU- und Prozessdaten
+- Fleet Navigator mit Gruppen, Drag-&-Drop-Sortierung und benutzerdefinierten Gruppen
+- Monatsverkehr und dauerhafte Rohdatenbasis für spätere Statistiken
+- Browser-Pairing ohne kopierbare Agent-Tokens
+- Commander-/Beta-Tester-Rollen mit sichtbaren Badges und serverseitigem Schutz
 - Provider-Erkennung, Capability-Report, Timeouts, Cache und exponentieller Backoff
 - WebSocket-Livestream und gebündelte lokale DuckDB-Historie mit Memory-Fallback
 - Standalone-, Server- und Client-Modus mit Offline-Erkennung
 - abgesicherter Prozess-Kill mit Schutzliste und Audit-Log
 - lokaler Chat-/Prompt-/Datei-Hub mit Upload-Härtung
-- responsive React-Oberfläche mit SVG-Gauges und Canvas-Netzwerkgraph
+- responsive React-Oberfläche mit SVG-Gauges, Netzwerkverläufen und einklappbarer Navigation
 - neun zentral definierte Themes: CachyOS Cyan, Cyber Neon, Dark Matter OLED,
   Clean Light, Matrix Hacker, Dracula, Nordic Frost, Retro Amber, Nightmare Red
 

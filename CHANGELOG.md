@@ -4,6 +4,42 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.5.0-beta.38] - 2026-10-03
+
+### Added
+
+- Einfaches Dashboard-Rollenmodell mit **Commander**- und **Beta-Tester**-Zugängen.
+- Admin-Code-Erstellung mit optionalem Beta-Tester-Schalter und sichtbarem Badge.
+- Beta-Tester können das Dashboard ansehen, aber keine neuen Codes erstellen oder
+  Geräte, Einladungen und Zugänge löschen bzw. widerrufen.
+- Persistente Fleet-Gruppen und Gerätepositionen mit Bearbeiten-Modus, Drag & Drop
+  und frei erstellbaren Gruppen.
+
+### Changed
+
+- Fleet-Karten behalten auch in kleinen Gruppen eine einheitliche Breite.
+- Die Browser-Freigabe zeigt die Rolle des neuen Zugangs sichtbar an.
+- Datenbankmigration `20261003_0009` ergänzt die Admin-Code-Rollen.
+
+### Verified
+
+- NCC Server auf HorstServer aktualisiert; Readiness und Versions-API liefern HTTP 200.
+- 74 automatisierte Tests und der Frontend-Produktionsbuild erfolgreich.
+
+## [0.5.0-beta.35] - 2026-10-03
+
+### Added
+
+- Persistente Fleet-Navigator-Gruppen mit Drag-&-Drop-Sortierung und eigenen Gruppen.
+- Migration `20261003_0008` für Gerätepositionen und Fleet-Gruppen.
+
+## [0.5.0-beta.34] - 2026-10-02
+
+### Changed
+
+- Fleet Navigator zeigt NCC-Versionen, gruppiert PCs/Laptops und Server zweispaltig
+  und enthält Platzhalter für Mobile und Friends.
+
 ## [0.5.0-beta.9] - 2026-10-02
 
 ### Added
