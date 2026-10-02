@@ -15,6 +15,7 @@ def child_python_executable() -> str:
     if executable.name.lower() != "pythonservice.exe":
         return sys.executable
     candidates = (
+        Path(sys.prefix) / "Scripts" / "python.exe",
         executable.parent / "Scripts" / "python.exe",
         executable.with_name("python.exe"),
     )
