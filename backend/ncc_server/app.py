@@ -95,12 +95,14 @@ async def _alert_loop(database: Database, settings: ServerSettings) -> None:
                     with database.session() as session:
                         mark_notified(session, notification.alert_id, notification.state)
         except Exception as exc:
-            logger.warning("Unraid collector failed: %s", exc)
+            logger.warning("Alert loop failed: %s", exc)
         await asyncio.sleep(30)
 
 
 async def _unraid_loop(database: Database, settings: ServerSettings) -> None:
     while True:
-        with suppress(Exception):
+        try:
             await collect_unraid(database, settings)
+        except Exception as exc:
+            logger.warning("Unraid collector failed: %s", exc)
         await asyncio.sleep(30)

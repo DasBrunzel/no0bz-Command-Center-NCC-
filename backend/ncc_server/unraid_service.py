@@ -19,28 +19,21 @@ async def collect_unraid(database: Database, settings: ServerSettings) -> None:
         return
     async with httpx.AsyncClient(timeout=15) as client:
         headers = {"x-api-key": settings.unraid_api_key.get_secret_value()}
-        # Unraid 7.0 exposes system values under info.*; try that stable
-        # projection first and fall back to the newer metrics.* projection.
-        response = await client.post(
-            settings.unraid_url, headers=headers, json={"query": _LEGACY_QUERY}
-        )
-        response.raise_for_status()
-        payload = response.json()
-        if isinstance(payload, dict) and payload.get("errors"):
-            response = await client.post(
-                settings.unraid_url, headers=headers, json={"query": _QUERY}
+        # Keep system and storage projections separate. One unsupported array
+        # field must not hide CPU/RAM telemetry on older Unraid API schemas.
+        payload = await _query_with_fallback(client, settings.unraid_url, headers)
+        try:
+            array_payload = await _query_json(
+                client, settings.unraid_url, headers, _ARRAY_QUERY
             )
-            response.raise_for_status()
-            payload = response.json()
-    if isinstance(payload, dict) and payload.get("errors"):
-        errors = payload["errors"]
-        raise ValueError(f"GraphQL queries rejected: {errors!s:.500}")
-    if not isinstance(payload, dict) or not isinstance(payload.get("data"), dict):
+        except ValueError:
+            array_payload = {}
+    if not isinstance(payload.get("data"), dict):
         raise ValueError("Unraid API returned no GraphQL data")
     data = payload["data"]
     metrics = _dict(data.get("metrics"))
     info = _dict(data.get("info"))
-    array = _dict(data.get("array"))
+    array = _dict(_dict(array_payload.get("data")).get("array"))
     cpu = _dict(metrics.get("cpu")) or _dict(info.get("cpu"))
     memory = _dict(metrics.get("memory")) or _dict(info.get("memory"))
     network = metrics.get("network")
@@ -55,9 +48,9 @@ async def collect_unraid(database: Database, settings: ServerSettings) -> None:
         },
         "memory": {
             "percent": _number(memory.get("percentTotal")),
-            "total_gb": _kb_to_gb(memory.get("total")),
-            "used_gb": _kb_to_gb(memory.get("used")),
-            "free_gb": _kb_to_gb(memory.get("free")),
+            "total_gb": _bytes_to_gb(memory.get("total")),
+            "used_gb": _bytes_to_gb(memory.get("used")),
+            "free_gb": _bytes_to_gb(memory.get("free")),
         },
         "network": {
             "download_mbps": _sum_number(network_rows, "rxSec") * 8 / 1_000_000,
@@ -104,21 +97,52 @@ async def collect_unraid(database: Database, settings: ServerSettings) -> None:
 _QUERY = """
 query NccUnraidMetrics {
   metrics {
-    cpu { id percentTotal cpus { percentTotal percentUser percentSystem percentNice percentIdle percentIrq percentGuest percentSteal } }
-    memory { id total used free available active buffcache percentTotal swapTotal swapUsed swapFree percentSwapTotal }
-    network { id name operstate bytesReceived bytesSent packetsReceived packetsSent receiveErrors transmitErrors receiveDropped transmitDropped rxSec txSec utilizationPercent lastUpdated }
+    cpu { percentTotal }
+    memory { total used free available percentTotal }
+    network { name rxSec txSec }
   }
   info { cpu { brand vendor threads cores } versions { unraid } }
-  array { state capacity { kilobytes { total used free } } parityCheckStatus { status progress speed errors running } disks { id name device status temp size fsSize fsUsed type numReads numWrites numErrors isSpinning fsType } caches { id name device status temp size fsSize fsUsed type numReads numWrites numErrors isSpinning fsType } }
 }
 """
 
 _LEGACY_QUERY = """
 query NccUnraidLegacyMetrics {
   info { cpu { brand vendor threads cores speed } memory { total used free available active buffcache } versions { unraid } }
-  array { state capacity { kilobytes { total used free } } parityCheckStatus { status progress speed errors running } disks { id name device status temp size fsSize fsUsed type numReads numWrites numErrors isSpinning fsType } caches { id name device status temp size fsSize fsUsed type numReads numWrites numErrors isSpinning fsType } }
 }
 """
+
+_ARRAY_QUERY = """
+query NccUnraidArray {
+  array {
+    state
+    capacity { kilobytes { total used free } }
+    disks { id device type name vendor size temperature isSpinning }
+    caches { id device type name vendor size temperature isSpinning }
+  }
+}
+"""
+
+
+async def _query_with_fallback(
+    client: httpx.AsyncClient, url: str, headers: dict[str, str]
+) -> dict[str, Any]:
+    try:
+        return await _query_json(client, url, headers, _LEGACY_QUERY)
+    except ValueError:
+        return await _query_json(client, url, headers, _QUERY)
+
+
+async def _query_json(
+    client: httpx.AsyncClient, url: str, headers: dict[str, str], query: str
+) -> dict[str, Any]:
+    response = await client.post(url, headers=headers, json={"query": query})
+    response.raise_for_status()
+    payload = response.json()
+    if isinstance(payload, dict) and payload.get("errors"):
+        raise ValueError(f"GraphQL query rejected: {payload['errors']!s:.500}")
+    if not isinstance(payload, dict):
+        raise ValueError("Unraid API returned an invalid response")
+    return payload
 
 
 def _number(value: object) -> float:
@@ -132,8 +156,8 @@ def _dict(value: object) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
-def _kb_to_gb(value: object) -> float:
-    return _number(value) / 1024 / 1024
+def _bytes_to_gb(value: object) -> float:
+    return _number(value) / 1024 / 1024 / 1024
 
 
 def _sum_number(rows: list[object], key: str) -> float:
@@ -154,9 +178,9 @@ def _disks(array: dict[str, Any]) -> list[dict[str, object]]:
                     "name": disk.get("name") or disk.get("device") or "disk",
                     "mount": disk.get("device") or "",
                     "percent": _disk_percent(disk),
-                    "total_gb": _kb_to_gb(disk.get("size")),
-                    "used_gb": _kb_to_gb(disk.get("fsUsed")),
-                    "temperature_c": disk.get("temp"),
+                    "total_gb": _bytes_to_gb(disk.get("size")),
+                    "used_gb": _bytes_to_gb(disk.get("fsUsed")),
+                    "temperature_c": disk.get("temperature") or disk.get("temp"),
                     "status": disk.get("status"),
                     "fstype": disk.get("fsType"),
                 }
