@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from ncc_server.agent_tokens import issue_agent_token
 from ncc_server.auth import database_session, require_dashboard_access
-from ncc_server.models import AgentPairing, AuditEvent, utc_now
+from ncc_server.models import AgentPairing, AgentToken, AuditEvent, Node, utc_now
 from ncc_server.schemas import (
     AgentPairingClaimRequest,
     AgentPairingClaimResponse,
@@ -124,6 +124,25 @@ async def claim(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="pairing was already claimed")
     record.claimed_at = utc_now()
     issued = issue_agent_token(session, record.display_name, None, actor_type="agent-pairing")
+    existing_node = session.scalar(select(Node).where(Node.machine_id == record.machine_id))
+    if existing_node is not None:
+        issued.record.node_id = existing_node.id
+        for prior_token in session.scalars(
+            select(AgentToken).where(
+                AgentToken.node_id == existing_node.id,
+                AgentToken.id != issued.record.id,
+                AgentToken.revoked_at.is_(None),
+            )
+        ):
+            prior_token.revoked_at = utc_now()
+        session.add(
+            AuditEvent(
+                actor_type="agent-pairing",
+                actor_id=record.id,
+                action="agent-pairing.rebound",
+                details=json.dumps({"node_id": existing_node.id}, separators=(",", ":")),
+            )
+        )
     session.add(
         AuditEvent(
             actor_type="agent-pairing",

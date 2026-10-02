@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from ncc_server.app import create_app
 from ncc_server.config import ServerSettings
 from ncc_server.database import Database
-from ncc_server.models import Base
+from ncc_server.models import AgentToken, Base, Node
 
 
 def make_database(path: Path) -> Database:
@@ -77,3 +77,44 @@ def test_pairing_never_exposes_its_secret_to_dashboard(tmp_path: Path) -> None:
     assert listed.status_code == 200
     assert "pairing_secret" not in listed.text
     assert "secret_hash" not in listed.text
+
+
+def test_pairing_rebinds_an_existing_machine_and_revokes_its_old_credential(tmp_path: Path) -> None:
+    database = make_database(tmp_path / "pairing-rebind.db")
+    app = create_app(
+        ServerSettings(database_url="sqlite+pysqlite://", dashboard_token="dashboard-secret"),
+        database,
+    )
+    dashboard = {"X-NCC-Dashboard-Token": "dashboard-secret"}
+    payload = pairing_payload()
+    with database.session() as session:
+        node = Node(
+            machine_id=str(payload["machine_id"]),
+            display_name="Existing Laptop",
+            platform="linux",
+            approved=True,
+        )
+        session.add(node)
+        session.flush()
+        old_token = AgentToken(name="old credential", token_hash="old-token-hash", node_id=node.id)
+        session.add(old_token)
+        session.commit()
+        old_token_id = old_token.id
+        node_id = node.id
+
+    with TestClient(app) as client:
+        assert client.post("/api/v1/agent-pairings/register", json=payload).status_code == 201
+        assert client.post(
+            f"/api/v1/agent-pairings/{payload['pairing_id']}/approve", headers=dashboard
+        ).status_code == 200
+        claimed = client.post(
+            f"/api/v1/agent-pairings/{payload['pairing_id']}/claim",
+            json={"pairing_secret": payload["pairing_secret"]},
+        )
+        assert claimed.status_code == 200
+
+    with database.session() as session:
+        old_token = session.get(AgentToken, old_token_id)
+        rebound = session.query(AgentToken).filter(AgentToken.token_hash != "old-token-hash").one()
+        assert old_token is not None and old_token.revoked_at is not None
+        assert rebound.node_id == node_id
