@@ -33,22 +33,17 @@ Nach der lokalen Installation kann ein sicherer Dashboard-Token mit
 `ncc-dashboard-token` erzeugt werden. Das Werkzeug zeigt ihn genau zur Übernahme in
 die Serverumgebung an und speichert ihn nicht selbst.
 
-### Agent-Token und Geräteaufnahme
+### Geräteaufnahme per Browser-Pairing
 
-Im Dashboard unter **Gerät hinzufügen** kann der Administrator für jeden Rechner eine
-individuelle Einladung erzeugen, einmalig kopieren, den Status sehen und sie bei Bedarf
-widerrufen. Der Klartext wird nur direkt nach der Erstellung angezeigt. Für automatisierte
-oder lokale Notfallabläufe bleibt das Kommandozeilenwerkzeug verfügbar:
+Neue Windows- und Linux-Agenten benötigen keinen kopierbaren Token. Der Installer
+erzeugt lokal eine geheime, 15 Minuten gültige Pairing-Anfrage und zeigt einen
+Browser-Link an. Auf dem Zielgerät diesen Link öffnen, mit einem achtstelligen
+Admin-Code anmelden und die Verbindung wird automatisch hergestellt. Das Dashboard
+zeigt dabei den Status **Wartet**, **Freigegeben** oder **Verbunden**.
 
-```powershell
-ncc-agent-token create --name "Gaming-PC"
-ncc-agent-token list
-ncc-agent-token revoke TOKEN-ID
-```
-
-Der Agent bindet diesen Token über `/api/v1/nodes/enroll` dauerhaft an seine
-Maschinen-ID und sendet danach `/api/v1/nodes/heartbeat`. Details stehen im
-[Phase-7-Bericht](docs/phase-7-dashboard-onboarding.md).
+Der interne Agent-Zugang bleibt ausschließlich zwischen Agent und Server. Wird ein
+Gerät später neu gekoppelt, bleibt seine Maschinen-ID erhalten und der alte Zugang
+wird widerrufen.
 
 ### Neuer Windows-/Linux-Agent
 

@@ -1,28 +1,21 @@
-# Phase 7 – Dashboard-Geräteaufnahme
+# Phase 7 – Browser-Pairing für Geräte
 
-Ab `0.5.0-beta.3` erstellt ein Administrator Agent-Einladungen im Fleet-Dashboard:
+Ab `0.5.0-beta.9` erfolgt die gewöhnliche Geräteaufnahme ohne sichtbaren Agent-Token:
 
-1. Dashboard öffnen und **Gerät hinzufügen** wählen.
-2. Einen eindeutigen Gerätenamen und eine Laufzeit wählen.
-3. Das Zielsystem (Windows oder Linux) auswählen und den einmalig angezeigten Token kopieren.
-4. Den im Dashboard erzeugten Installationsbefehl auf dem Zielsystem ausführen.
-   Die Server-Adresse wird vorausgefüllt; der Agent-Token wird anschließend verdeckt
-   abgefragt und erscheint nicht im Befehlsverlauf.
+1. Agent unter Windows oder Linux installieren.
+2. Den ausgegebenen Pairing-Link auf dem Zielgerät im Browser öffnen.
+3. Einen achtstelligen Admin-Code eingeben.
+4. Der Agent ruft seinen internen Zugang einmalig ab und verbindet sich mit der Fleet.
 
-Der Server speichert nur den Hash des Tokens. Der Klartext kann nach dem Schließen der
-Anzeige nicht wiederhergestellt werden. Die Übersicht zeigt ausschließlich Namen,
-Status und Zeitstempel. Eine noch aktive Einladung kann jederzeit widerrufen werden.
+Pairing-Anfragen laufen nach 15 Minuten ab. Der Server speichert nur den Prüfwert des
+lokalen Pairing-Geheimnisses. Bei einer erneuten Aufnahme derselben Maschinen-ID wird
+der bestehende Node beibehalten und der frühere Agent-Zugang widerrufen.
 
 ## API
 
-Alle Endpunkte benötigen den Dashboard-Token in `X-NCC-Dashboard-Token`.
-
 | Methode | Pfad | Zweck |
 | --- | --- | --- |
-| `GET` | `/api/v1/agent-invitations` | Status aller Einladungen abrufen |
-| `POST` | `/api/v1/agent-invitations` | Einladung erzeugen, Klartext nur einmal zurückgeben |
-| `POST` | `/api/v1/agent-invitations/{token_id}/revoke` | Einladung widerrufen |
-
-Für automatisierte oder Notfallabläufe bleibt das lokale Werkzeug
-`ncc-agent-token` verfügbar. Für die gewöhnliche Aufnahme eines Geräts ist der
-Dashboard-Weg vorgesehen.
+| `POST` | `/api/v1/agent-pairings/register` | Lokale Pairing-Anfrage anlegen |
+| `POST` | `/api/v1/agent-pairings/{id}/approve` | Anfrage nach Browser-Adminzugang freigeben |
+| `POST` | `/api/v1/agent-pairings/{id}/claim` | Internen Agent-Zugang einmalig abrufen |
+| `GET` | `/api/v1/agent-pairings` | Pairing-Status im Dashboard anzeigen |
