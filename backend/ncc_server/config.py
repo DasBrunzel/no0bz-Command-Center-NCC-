@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 
 from ncc.config import ENV_FILE
-from pydantic import Field, SecretStr
+from pydantic import AliasChoices, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -25,6 +25,17 @@ class ServerSettings(BaseSettings):
     telegram_enabled: bool = False
     telegram_bot_token: SecretStr = SecretStr("")
     telegram_chat_id: str = ""
+    unraid_url: str = Field(
+        default="", validation_alias=AliasChoices("NCC_SERVER_UNRAID_URL", "NCC_UNRAID_URL")
+    )
+    unraid_api_key: SecretStr = Field(
+        default=SecretStr(""),
+        validation_alias=AliasChoices("NCC_SERVER_UNRAID_API_KEY", "NCC_UNRAID_API_KEY"),
+    )
+    unraid_display_name: str = Field(
+        default="horsttower",
+        validation_alias=AliasChoices("NCC_SERVER_UNRAID_DISPLAY_NAME", "NCC_UNRAID_DISPLAY_NAME"),
+    )
 
 
 @lru_cache

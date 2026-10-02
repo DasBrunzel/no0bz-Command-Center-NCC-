@@ -33,11 +33,11 @@ try {
     if (-not $response.data) { throw "Unraid hat keine gültige GraphQL-Antwort geliefert." }
 
     $lines = [IO.File]::ReadAllLines($configPath) | Where-Object {
-        $_ -notmatch '^NCC_UNRAID_(URL|API_KEY|DISPLAY_NAME)='
+        $_ -notmatch '^NCC(_SERVER)?_UNRAID_(URL|API_KEY|DISPLAY_NAME)='
     }
-    $lines += "NCC_UNRAID_URL=$(Quote-DotEnv $ServerUrl)"
-    $lines += "NCC_UNRAID_API_KEY=$(Quote-DotEnv $apiKey)"
-    $lines += "NCC_UNRAID_DISPLAY_NAME=$(Quote-DotEnv $DisplayName)"
+    $lines += "NCC_SERVER_UNRAID_URL=$(Quote-DotEnv $ServerUrl)"
+    $lines += "NCC_SERVER_UNRAID_API_KEY=$(Quote-DotEnv $apiKey)"
+    $lines += "NCC_SERVER_UNRAID_DISPLAY_NAME=$(Quote-DotEnv $DisplayName)"
     [IO.File]::WriteAllLines($configPath, $lines, [Text.UTF8Encoding]::new($false))
     & icacls.exe $configPath /inheritance:r /grant:r '*S-1-5-18:F' '*S-1-5-32-544:F' | Out-Null
 } finally {

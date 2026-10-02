@@ -16,6 +16,7 @@ from ncc_server.api.v1 import router as v1_router
 from ncc_server.config import ServerSettings, get_server_settings
 from ncc_server.database import Database
 from ncc_server.telegram import send_telegram_alert
+from ncc_server.unraid_service import collect_unraid
 
 STATIC_DIR = Path(__file__).with_name("static")
 
@@ -32,12 +33,16 @@ def create_app(
         if active_settings.database_check_on_start:
             active_database.ping()
         alert_task = asyncio.create_task(_alert_loop(active_database, active_settings))
+        unraid_task = asyncio.create_task(_unraid_loop(active_database, active_settings))
         try:
             yield
         finally:
             alert_task.cancel()
+            unraid_task.cancel()
             with suppress(asyncio.CancelledError):
                 await alert_task
+            with suppress(asyncio.CancelledError):
+                await unraid_task
             active_database.dispose()
 
     application = FastAPI(
@@ -89,4 +94,11 @@ async def _alert_loop(database: Database, settings: ServerSettings) -> None:
                         mark_notified(session, notification.alert_id, notification.state)
         except Exception:
             pass
+        await asyncio.sleep(30)
+
+
+async def _unraid_loop(database: Database, settings: ServerSettings) -> None:
+    while True:
+        with suppress(Exception):
+            await collect_unraid(database, settings)
         await asyncio.sleep(30)

@@ -6,6 +6,7 @@ from pathlib import Path
 
 import httpx
 import pytest
+from ncc_server.config import ServerSettings
 from ncc_service.doctor import main as doctor_main
 from ncc_service.doctor import run_checks, validate_url
 from ncc_service.environment import load_environment_file
@@ -156,8 +157,18 @@ def test_unraid_configuration_reads_key_without_printing_it() -> None:
     setup = (root / "scripts/configure_ncc_unraid.ps1").read_text(encoding="utf-8")
     assert "Read-Host \"Unraid API-Key" in setup
     assert '"x-api-key" = $apiKey' in setup
-    assert "NCC_UNRAID_API_KEY" in setup
+    assert "NCC_SERVER_UNRAID_API_KEY" in setup
     assert "Write-Host $apiKey" not in setup
+
+
+def test_unraid_settings_support_legacy_setup_key_names() -> None:
+    settings = ServerSettings(
+        NCC_UNRAID_URL="http://100.88.247.35/graphql",
+        NCC_UNRAID_API_KEY="secret",
+        NCC_UNRAID_DISPLAY_NAME="horsttower",
+    )
+    assert settings.unraid_url == "http://100.88.247.35/graphql"
+    assert settings.unraid_api_key.get_secret_value() == "secret"
 
 
 def test_service_host_launches_the_venv_python(
