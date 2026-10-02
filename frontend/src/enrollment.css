@@ -2,3 +2,6 @@
 @media(max-width:840px){.enrollment-grid{grid-template-columns:1fr}}
 @media(max-width:620px){.enrollment-intro{align-items:flex-start}.invitation-rows article{grid-template-columns:minmax(0,1fr) auto}.invitation-rows button{grid-column:2}.token-reveal code{font-size:8px}}
 .setup-step{margin:15px 0}.setup-step>span{display:block;margin-bottom:7px;color:var(--muted);font:600 8px JetBrains Mono}.setup-step>div{margin:0}.setup-step code{white-space:normal;line-height:1.55}.setup-guide{margin:14px 0;padding-left:18px;color:var(--muted)}.setup-guide li{margin:6px 0}.setup-guide code{color:var(--text);font:600 9px JetBrains Mono}
+
+/* Agent-Tokens bleiben nur für bereits verbundene Altgeräte intern verfügbar. */
+.enrollment-grid,.enrollment-page > .invitation-list:last-child{display:none}
