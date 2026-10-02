@@ -51,6 +51,11 @@ def _drive_key(device: str) -> str:
     return device.rstrip("\\/").split("\\")[-1].lower()
 
 
+def normalize_process_cpu(percent: float, logical_cores: int) -> float:
+    """Translate psutil's multi-core process usage to a 0–100 system scale."""
+    return max(0.0, min(100.0, percent / max(1, logical_cores)))
+
+
 class PsutilProvider(SensorProvider):
     name = "psutil"
     priority = 50
@@ -98,19 +103,24 @@ class PsutilProvider(SensorProvider):
                 )
                 self._disk[counter_key] = (counter.read_bytes, counter.write_bytes)
                 self._disk_rates[counter_key] = (read_rate, write_rate)
-            disks.append({"name": partition.device, "mount": partition.mountpoint, "percent": usage.percent, "used_gb": round(usage.used / 1024**3, 2), "total_gb": round(usage.total / 1024**3, 2), "read_mbps": read_rate, "write_mbps": write_rate})
+            disks.append({"name": partition.device, "mount": partition.mountpoint, "filesystem": partition.fstype, "percent": usage.percent, "used_gb": round(usage.used / 1024**3, 2), "total_gb": round(usage.total / 1024**3, 2), "read_mbps": read_rate, "write_mbps": write_rate})
         self._sample_time = now
         battery = psutil.sensors_battery()
         processes: list[dict[str, Any]] = []
+        logical_cores = max(1, psutil.cpu_count(logical=True) or 1)
         for process in psutil.process_iter(["pid", "name", "cpu_percent", "memory_percent"]):
             try:
                 info = process.info
-                processes.append({"pid": info["pid"], "name": info["name"] or "unknown", "cpu": round(float(info["cpu_percent"] or 0), 1), "memory": round(float(info["memory_percent"] or 0), 1)})
+                # psutil reports a process' use across all logical CPUs.  A process
+                # can therefore exceed 100% on a multi-core machine; normalize it
+                # to the same 0–100 scale used by the dashboard's system CPU gauge.
+                process_cpu = normalize_process_cpu(float(info["cpu_percent"] or 0), logical_cores)
+                processes.append({"pid": info["pid"], "name": info["name"] or "unknown", "cpu": round(process_cpu, 1), "memory": round(float(info["memory_percent"] or 0), 1)})
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
         processes.sort(key=lambda item: item["cpu"] + item["memory"], reverse=True)
         return {
-            "cpu": {"percent": psutil.cpu_percent(percpu=False), "per_core": psutil.cpu_percent(percpu=True), "frequency_mhz": _frequency(), "physical_cores": psutil.cpu_count(logical=False), "logical_cores": psutil.cpu_count(logical=True), "model": cpu_model_name()},
+            "cpu": {"percent": psutil.cpu_percent(percpu=False), "per_core": psutil.cpu_percent(percpu=True), "frequency_mhz": _frequency(), "physical_cores": psutil.cpu_count(logical=False), "logical_cores": logical_cores, "model": cpu_model_name()},
             "memory": {"percent": memory.percent, "used_gb": round(memory.used / 1024**3, 2), "available_gb": round(memory.available / 1024**3, 2), "total_gb": round(memory.total / 1024**3, 2)},
             "swap": {"percent": swap.percent, "used_gb": round(swap.used / 1024**3, 2), "total_gb": round(swap.total / 1024**3, 2)},
             "disks": disks,
@@ -336,7 +346,8 @@ class WindowsGpuProvider(SensorProvider):
                     "source": self.name,
                 }
                 for index, item in enumerate(adapters)
-            ]
+            ],
+            "process_gpu": self._process_gpu_percent(),
         }
 
     def _gpu_percent(self) -> float:
@@ -352,6 +363,24 @@ class WindowsGpuProvider(SensorProvider):
         except (OSError, subprocess.SubprocessError, json.JSONDecodeError, TypeError, ValueError):
             pass
         return self._last_percent
+
+    def _process_gpu_percent(self) -> dict[str, float]:
+        """Read Windows GPU Engine counters grouped by PID when available."""
+        try:
+            command = "(Get-Counter '\\GPU Engine(*)\\Utilization Percentage' -ErrorAction Stop).CounterSamples | Select-Object InstanceName,CookedValue | ConvertTo-Json -Compress"
+            result = subprocess.run(["powershell", "-NoProfile", "-Command", command], capture_output=True, text=True, timeout=5, shell=False, check=False)
+            rows = json.loads(result.stdout or "[]")
+            if isinstance(rows, dict):
+                rows = [rows]
+            usage: dict[str, float] = {}
+            for row in rows:
+                match = re.search(r"pid_(\\d+)", str(row.get("InstanceName") or ""), re.IGNORECASE)
+                if match:
+                    pid = match.group(1)
+                    usage[pid] = min(100.0, usage.get(pid, 0.0) + max(0.0, float(row.get("CookedValue") or 0)))
+            return {pid: round(value, 1) for pid, value in usage.items()}
+        except (OSError, subprocess.SubprocessError, json.JSONDecodeError, TypeError, ValueError):
+            return {}
 
 
 class LinuxAmdGpuProvider(SensorProvider):

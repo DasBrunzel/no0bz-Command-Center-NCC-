@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from ncc.collectors.registry import ProviderRegistry, merge_metrics
-from ncc.collectors.system import DemoProvider, PsutilProvider, parse_lhm_tree
+from ncc.collectors.system import DemoProvider, PsutilProvider, normalize_process_cpu, parse_lhm_tree
 from ncc.config import Settings
 
 
@@ -34,6 +34,11 @@ def test_rate_pair_converts_disk_bytes_to_mib() -> None:
     read, write = PsutilProvider._rate_pair((2 * 1024**2, 1024**2), (0, 0), 1.0, (0.0, 0.0), bits=False)
     assert read == 0.9
     assert write == 0.45
+
+
+def test_process_cpu_is_normalized_to_system_percent() -> None:
+    assert normalize_process_cpu(800.0, 8) == 100.0
+    assert normalize_process_cpu(400.0, 8) == 50.0
 
 
 def test_sensor_provider_extends_cpu_metrics_without_losing_psutil_data() -> None:

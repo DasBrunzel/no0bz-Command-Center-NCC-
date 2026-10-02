@@ -3,6 +3,8 @@ import { createRoot } from "react-dom/client";
 import {
   Activity,
   AlertTriangle,
+  ArrowDownToLine,
+  ArrowUpToLine,
   Ban,
   Bell,
   Boxes,
@@ -244,12 +246,14 @@ function Gauge({
   tone = "accent",
   detail,
   footer,
+  children,
 }: {
   label: string;
   value: number;
   tone?: string;
   detail: string;
   footer?: string;
+  children?: React.ReactNode;
 }) {
   const safe = Math.max(0, Math.min(100, value));
   return (
@@ -276,6 +280,7 @@ function Gauge({
         </div>
       </div>
       {footer && <footer className="gauge-footer">{footer}</footer>}
+      {children}
     </article>
   );
 }
@@ -366,6 +371,7 @@ function AlertPanel({ alerts }: { alerts: FleetAlert[] }) {
 function Fleet({
   nodes,
   selected,
+  points,
   onSelect,
   query,
   onQuery,
@@ -373,6 +379,7 @@ function Fleet({
 }: {
   nodes: Node[];
   selected: Node | null;
+  points: Telemetry[];
   onSelect: (id: string) => void;
   query: string;
   onQuery: (v: string) => void;
@@ -453,7 +460,7 @@ function Fleet({
             )}
           </div>
         </section>
-        <NodeOverview node={selected} />
+        <NodeOverview node={selected} points={points} />
       </div>
     </>
   );
@@ -545,7 +552,13 @@ function UnraidWorkloadCard({
   );
 }
 
-function NodeOverview({ node }: { node: Node | null }) {
+function NodeOverview({
+  node,
+  points,
+}: {
+  node: Node | null;
+  points: Telemetry[];
+}) {
   const [forgetting, setForgetting] = useState(false),
     [renaming, setRenaming] = useState(false);
   if (!node)
@@ -635,11 +648,12 @@ function NodeOverview({ node }: { node: Node | null }) {
       </div>
       <div className={`gauge-grid ${isUnraid ? "unraid-gauge-grid" : ""}`}>
         <Gauge
-          label="CPU"
+          label="CPU AUSLASTUNG"
           value={num(cpu.percent)}
-          detail={cpu.model || "Processor"}
-          footer={cpuTemperature}
-        />
+          detail={typeof cpu.frequency_mhz === "number" ? `${metric(cpu.frequency_mhz, 0)} MHz` : "CPU"}
+        >
+          {Array.isArray(cpu.per_core) && cpu.per_core.length > 0 && <div className="cpu-threads"><div><span>CORE THREADS ({num(cpu.logical_cores) || cpu.per_core.length})</span><b>AVG: {num(cpu.percent).toFixed(0)}%</b></div><section>{cpu.per_core.map((value: unknown, index: number) => { const load = Math.max(0, Math.min(100, num(value))); return <i key={index} title={`Kern ${index + 1}: ${load.toFixed(1)}%`} style={{ height: `${Math.max(12, load)}%`, backgroundColor: `hsl(${145 - load * 1.45} 88% 55%)` }} />; })}</section></div>}
+        </Gauge>
         <Gauge
           label="ARBEITSSPEICHER"
           value={num(memory.percent)}
@@ -666,20 +680,28 @@ function NodeOverview({ node }: { node: Node | null }) {
             <Network size={16} />
             <span>NETZWERK</span>
           </header>
-          <div className="rate-pair">
+          <div className="network-graphs" aria-label="Netzwerkverlauf">
             <div>
-              <small>DOWNLOAD</small>
-              <strong>{num(network.download_mbps).toFixed(1)}</strong>
-              <span>Mbps</span>
+              <small>DOWNLOAD-VERLAUF <b>↓ {num(network.download_mbps).toFixed(1)} Mbps</b></small>
+              <Sparkline
+                points={points}
+                metric={(point) => num(point.network?.download_mbps)}
+                maxValue={Math.max(10, ...points.map((point) => num(point.metrics.network?.download_mbps)))}
+                color="var(--blue)"
+              />
             </div>
             <div>
-              <small>UPLOAD</small>
-              <strong>{num(network.upload_mbps).toFixed(1)}</strong>
-              <span>Mbps</span>
+              <small>UPLOAD-VERLAUF <b>↑ {num(network.upload_mbps).toFixed(1)} Mbps</b></small>
+              <Sparkline
+                points={points}
+                metric={(point) => num(point.network?.upload_mbps)}
+                maxValue={Math.max(10, ...points.map((point) => num(point.metrics.network?.upload_mbps)))}
+                color="var(--purple)"
+              />
             </div>
           </div>
           <footer>
-            {network.interface || "Automatische Schnittstelle"} · Gesamt ↓ {metric(network.total_recv_gb, 2)} GB · ↑ {metric(network.total_sent_gb, 2)} GB
+            {network.interface || "Automatische Schnittstelle"} · Gesamt ↓ {metric(num(network.total_recv_gb) || num(network.bytes_recv) / 1024 ** 3, 2)} GB · ↑ {metric(num(network.total_sent_gb) || num(network.bytes_sent) / 1024 ** 3, 2)} GB
             {(num(network.errors) > 0 || num(network.drops) > 0) && ` · Fehler ${num(network.errors)} · Drops ${num(network.drops)}`}
           </footer>
         </article>
@@ -695,18 +717,21 @@ function NodeOverview({ node }: { node: Node | null }) {
               {(m.disks || [])
                 .slice(0, 3)
                 .map((disk: Metrics, index: number) => (
-                  <div key={`${disk.mount}-${index}`}>
-                    <span className="disk-name">
-                      {disk.mount || disk.name || `Disk ${index + 1}`}
-                    </span>
-                    <div>
-                      <i style={{ width: `${num(disk.percent)}%` }} />
+                  <article className="drive-card" key={`${disk.mount}-${index}`}>
+                    <header>
+                      <span><HardDrive size={15} />{disk.mount || disk.name || `Disk ${index + 1}`}</span>
+                      <b>{Math.min(100, num(disk.percent)).toFixed(0)}%</b>
+                    </header>
+                    <small>{disk.name || disk.mount || `Disk ${index + 1}`} · {disk.filesystem || "Lokales Laufwerk"}</small>
+                    <div className="drive-bar">
+                      <i style={{ width: `${Math.min(100, num(disk.percent))}%` }} />
                     </div>
-                    <b>{num(disk.percent).toFixed(0)}%</b>
-                    <small>
-                      ↓ {metric(disk.read_mbps)} · ↑ {metric(disk.write_mbps)} MiB/s
-                    </small>
-                  </div>
+                    <div className="drive-capacity"><span>{metric(disk.used_gb, 0)} GB belegt</span><span>{Math.max(0, num(disk.total_gb) - num(disk.used_gb)).toFixed(0)} GB frei</span></div>
+                    <div className="drive-rates">
+                      <div><ArrowDownToLine size={14} /><span>LESEN</span><b>{metric(disk.read_mbps)} <small>MiB/s</small></b></div>
+                      <div><ArrowUpToLine size={14} /><span>SCHREIBEN</span><b>{metric(disk.write_mbps)} <small>MiB/s</small></b></div>
+                    </div>
+                  </article>
                 ))}
               {!(m.disks || []).length && <p>Keine Laufwerksdaten</p>}
             </div>
@@ -731,40 +756,10 @@ function NodeOverview({ node }: { node: Node | null }) {
       )}
       {!isUnraid && (
         <div className="system-insights-grid">
-          <article className="surface system-insight cpu-insight">
-            <header><Cpu size={16} /><span>CPU-DETAILS</span></header>
-            <dl>
-              <dt>Takt</dt><dd>{typeof cpu.frequency_mhz === "number" ? `${metric(cpu.frequency_mhz / 1000, 2)} GHz` : "Nicht verfügbar"}</dd>
-              <dt>Kerne / Threads</dt><dd>{metric(cpu.physical_cores, 0)} / {metric(cpu.logical_cores, 0)}</dd>
-              <dt>Temperatur</dt><dd>{typeof cpu.temperature_c === "number" ? `${metric(cpu.temperature_c, 0)} °C` : "Kein nativer Sensorwert"}</dd>
-            </dl>
-            {Array.isArray(cpu.per_core) && cpu.per_core.length > 0 && (
-              <div className="core-grid" aria-label="Auslastung je CPU-Kern">
-                {cpu.per_core.map((value: unknown, index: number) => <span key={index} title={`Kern ${index + 1}: ${metric(value)}%`}><i style={{ height: `${Math.max(4, Math.min(100, num(value)))}%` }} />K{index + 1}</span>)}
-              </div>
-            )}
-          </article>
-          <article className="surface system-insight">
-            <header><MemoryStick size={16} /><span>RAM & PAGEFILE</span></header>
-            <dl>
-              <dt>Belegt</dt><dd>{metric(memory.used_gb)} / {metric(memory.total_gb)} GB</dd>
-              <dt>Verfügbar</dt><dd>{metric(memory.available_gb)} GB</dd>
-              <dt>Auslagerungsdatei</dt><dd>{metric(m.swap?.used_gb)} / {metric(m.swap?.total_gb)} GB ({metric(m.swap?.percent, 0)}%)</dd>
-            </dl>
-          </article>
-          <article className="surface system-insight">
-            <header><MonitorCog size={16} /><span>GPU-DETAILS</span></header>
-            <dl>
-              <dt>Modell</dt><dd title={gpu.name || ""}>{gpu.name || "Nicht erkannt"}</dd>
-              <dt>VRAM</dt><dd>{typeof gpu.vram_total_gb === "number" ? `${metric(gpu.vram_used_gb)} / ${metric(gpu.vram_total_gb)} GB` : "Treiber liefert keinen Wert"}</dd>
-              <dt>Temperatur</dt><dd>{typeof gpu.temperature_c === "number" ? `${metric(gpu.temperature_c, 0)} °C` : "Nicht verfügbar"}</dd>
-              <dt>Leistung</dt><dd>{typeof gpu.power_w === "number" ? `${metric(gpu.power_w)} W` : "Nicht verfügbar"}</dd>
-            </dl>
-          </article>
           <article className="surface system-insight process-insight">
             <header><Activity size={16} /><span>AKTIVSTE PROZESSE</span></header>
             <div className="process-list">
-              {processes.slice(0, 6).map((process: Metrics) => <div key={process.pid}><span title={process.name}>{process.name || "Unbekannt"}</span><b>CPU {metric(process.cpu)}%</b><small>RAM {metric(process.memory)}%</small></div>)}
+              {processes.slice(0, 6).map((process: Metrics) => <div key={process.pid}><span title={process.name}>{process.name || "Unbekannt"}</span><b>CPU {Math.min(100, num(process.cpu)).toFixed(1)}%</b><small>RAM {metric(process.memory)}%</small><small>GPU {typeof m.process_gpu?.[String(process.pid)] === "number" ? `${Math.min(100, num(m.process_gpu[String(process.pid)])).toFixed(1)}%` : "—"}</small></div>)}
               {!processes.length && <p>Keine Prozessdaten verfügbar.</p>}
             </div>
           </article>
@@ -1881,6 +1876,7 @@ function App() {
               nodes={nodes}
               selected={selected}
               onSelect={setSelectedId}
+              points={points}
               query={query}
               onQuery={setQuery}
               alerts={alerts}

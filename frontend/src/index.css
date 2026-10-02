@@ -855,6 +855,28 @@ main {
 .compact > header span {
   color: var(--text);
 }
+.network-graphs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 12px 0 10px;
+}
+.network-graphs > div {
+  border: 1px solid color-mix(in srgb, var(--line) 75%, transparent);
+  border-radius: 5px;
+  padding: 6px 8px 4px;
+}
+.network-graphs small {
+  color: var(--muted);
+  display: block;
+  font: 600 6px JetBrains Mono;
+  margin-bottom: 3px;
+}
+.network-graphs small b { color: var(--blue); float: right; }
+.network-graphs > div:last-child small b { color: var(--purple); }
+.network-graphs .sparkline {
+  height: 22px;
+}
 .rate-pair {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -886,48 +908,76 @@ main {
 }
 .disk-list {
   display: grid;
-  gap: 13px;
+  gap: 10px;
   margin-top: 18px;
 }
-.disk-list > div {
+.drive-card {
+  border: 1px solid var(--line);
+  border-radius: 7px;
   display: grid;
-  grid-template-columns: 55px 1fr 28px;
-  gap: 8px;
+  gap: 9px;
+  padding: 12px;
+}
+.drive-card header,
+.drive-capacity,
+.drive-rates {
   align-items: center;
-  font: 600 8px JetBrains Mono;
+  display: flex;
+  justify-content: space-between;
 }
-.disk-list .disk-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.drive-card header > span {
+  align-items: center;
+  display: flex;
+  gap: 7px;
 }
-.disk-list > div > div {
-  height: 4px;
+.drive-card header b { font-size: 11px; }
+.drive-card > small { color: var(--muted); font-size: 7px; }
+.drive-bar {
   background: var(--line);
   border-radius: 5px;
+  height: 7px;
+  overflow: hidden;
 }
-.disk-list i {
+.drive-bar i {
   display: block;
   height: 100%;
   background: var(--blue);
   border-radius: 5px;
 }
-.disk-list b {
-  text-align: right;
-}
-.disk-list small {
-  grid-column: 2 / 4;
+.drive-capacity {
   color: var(--muted);
   font: 600 7px JetBrains Mono;
-  margin-top: -5px;
 }
-.disk-list p {
+.drive-rates {
+  border-top: 1px solid color-mix(in srgb, var(--line) 75%, transparent);
+  gap: 9px;
+  padding-top: 10px;
+}
+.drive-rates > div {
+  align-items: center;
+  background: color-mix(in srgb, var(--line) 42%, transparent);
+  border: 1px solid color-mix(in srgb, var(--blue) 35%, var(--line));
+  border-radius: 5px;
+  color: var(--blue);
+  display: grid;
+  flex: 1;
+  grid-template-columns: 15px 1fr;
+  padding: 7px;
+}
+.drive-rates > div:last-child {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+  color: var(--accent);
+}
+.drive-rates span { color: var(--muted); font-size: 6px; }
+.drive-rates b { font-size: 11px; grid-column: 2; }
+.drive-rates b small { color: var(--muted); font-size: 6px; }
+.disk-list > p {
   color: var(--muted);
   font-size: 9px;
 }
 .system-insights-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 13px;
 }
 .system-insight {
@@ -1011,7 +1061,7 @@ main {
   display: grid;
   font: 600 7px JetBrains Mono;
   gap: 7px;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   padding-bottom: 5px;
 }
 .process-list span {
@@ -1022,6 +1072,10 @@ main {
 .process-list b { color: var(--accent); }
 .process-list small { color: var(--muted); }
 .process-list p { color: var(--muted); font-size: 9px; }
+.cpu-threads { border-top: 1px solid var(--line); margin-top: 12px; padding-top: 11px; }
+.cpu-threads > div { color: var(--muted); display: flex; font: 600 7px JetBrains Mono; justify-content: space-between; }
+.cpu-threads b { color: var(--accent); }.cpu-threads section { align-items: end; background: color-mix(in srgb,var(--line) 50%,transparent); border-radius: 5px; display: flex; gap: 4px; height: 31px; margin-top: 8px; padding: 4px; }
+.cpu-threads i { border-radius: 2px; flex: 1; min-width: 3px; }
 .empty {
   min-height: 250px;
   display: grid;
