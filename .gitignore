@@ -16,6 +16,7 @@ ncc_system_cache.json
 ncc-token-transfer*.txt
 ncc_audit.log
 ncc_profile.json
+backups/
 backend/*.egg-info/
 *.tsbuildinfo
 dist/

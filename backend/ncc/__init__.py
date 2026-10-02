@@ -1,4 +1,4 @@
 """no0bz Command Center backend."""
 
-__version__ = "0.5.0-beta.6"
+__version__ = "0.5.0-beta.10"
 

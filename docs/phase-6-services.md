@@ -21,6 +21,7 @@ Tailscale-Installation voraus; sie installieren oder konfigurieren kein VPN selb
 | Status und Logs | `scripts\ncc_service_status.bat` |
 | Agent deinstallieren | `scripts\uninstall_ncc_agent_service.bat` |
 | Server deinstallieren | `scripts\uninstall_ncc_server_service.bat` |
+| Tägliche PostgreSQL-Backups einrichten | `scripts\install_ncc_backup_task.bat` |
 
 Der Installer fordert selbst eine UAC-Freigabe an, erstellt eine eigene virtuelle
 Python-Umgebung unter `%ProgramData%\no0bz\NCC`, installiert oder aktualisiert NCC und
@@ -34,7 +35,13 @@ Konfiguration und Logs:
 %ProgramData%\no0bz\NCC\config\server.env
 %ProgramData%\no0bz\NCC\logs\agent.log
 %ProgramData%\no0bz\NCC\logs\server.log
+%ProgramData%\no0bz\NCC\backups\ncc-YYYYMMDD-HHMMSS.dump
 ```
+
+Der Backup-Task läuft täglich um 03:30 Uhr als lokales Systemkonto. Er legt ein
+PostgreSQL-Custom-Dump an, protokolliert Erfolg oder Fehler in `logs\backup.log` und
+entfernt Sicherungen nach 14 Tagen. Ein Backup kann bei Bedarf manuell mit
+`scripts\backup_ncc_postgres.ps1` ausgelöst werden.
 
 ## Linux
 
