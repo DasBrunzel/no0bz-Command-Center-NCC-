@@ -4,6 +4,12 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+### Added
+
+- Grundlage für eine browserbestätigte Agent-Aufnahme: zeitlich begrenzte,
+  geheimnisgeschützte Pairing-Anfragen, die erst nach Dashboard-Freigabe einen
+  internen Agent-Zugang erhalten.
+
 ## [0.5.0-beta.8] - 2026-10-02
 
 ### Added

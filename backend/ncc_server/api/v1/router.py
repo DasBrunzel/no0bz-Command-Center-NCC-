@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 
 from ncc_server import __version__
 from ncc_server.api.v1.admin_codes import router as admin_codes_router
+from ncc_server.api.v1.agent_pairings import router as agent_pairings_router
 from ncc_server.api.v1.fleet import router as fleet_router
 from ncc_server.api.v1.invitations import router as invitations_router
 from ncc_server.api.v1.nodes import router as nodes_router
@@ -13,6 +14,7 @@ router.include_router(nodes_router)
 router.include_router(fleet_router)
 router.include_router(invitations_router)
 router.include_router(admin_codes_router)
+router.include_router(agent_pairings_router)
 
 
 @router.get("/status/live", tags=["status"])

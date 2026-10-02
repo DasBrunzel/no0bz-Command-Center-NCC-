@@ -166,3 +166,25 @@ class AdminCodeResponse(BaseModel):
 
 class AdminCodeRedeemRequest(BaseModel):
     code: str = Field(pattern=r"^[A-Z0-9]{8}$")
+
+
+class AgentPairingRegisterRequest(NodeEnrollmentRequest):
+    pairing_id: str = Field(min_length=16, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
+    pairing_secret: str = Field(min_length=32, max_length=128)
+
+
+class AgentPairingClaimRequest(BaseModel):
+    pairing_secret: str = Field(min_length=32, max_length=128)
+
+
+class AgentPairingResponse(BaseModel):
+    pairing_id: str
+    display_name: str
+    platform: str
+    status: Literal["waiting", "approved", "claimed", "expired", "cancelled"]
+    created_at: datetime
+    expires_at: datetime
+
+
+class AgentPairingClaimResponse(BaseModel):
+    token: str

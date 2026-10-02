@@ -117,3 +117,20 @@ class DashboardSession(Base):
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class AgentPairing(Base):
+    __tablename__ = "agent_pairings"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    secret_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    display_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    machine_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    platform: Mapped[str] = mapped_column(String(32), nullable=False)
+    agent_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    metadata_json: Mapped[dict[str, object]] = mapped_column("metadata", JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
