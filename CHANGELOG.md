@@ -4,6 +4,22 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.5.0-beta.8] - 2026-10-02
+
+### Added
+
+- Achtstellige, einmalige Admin-Codes für vollständigen Browserzugang zum Dashboard.
+- Admin-Code-Verwaltung im Bereich **Gerät hinzufügen**: erstellen, Status sehen und
+  Zugang widerrufen.
+
+### Security
+
+- Codes werden nur als SHA-256-Prüfwert gespeichert und nie erneut angezeigt.
+- Ein eingelöster Code erzeugt eine HttpOnly-Browsersitzung; ein Widerruf beendet alle
+  mit diesem Code ausgestellten Sitzungen.
+- Der bisherige Dashboard-Token bleibt nur während der Umstellung als Rückfallzugang
+  verfügbar und wird nicht mehr als regulärer Login beworben.
+
 ## [0.5.0-beta.6] - 2026-10-01
 
 ### Fixed

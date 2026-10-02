@@ -134,3 +134,35 @@ class AgentInvitationResponse(BaseModel):
 
 class AgentInvitationCreatedResponse(AgentInvitationResponse):
     token: str
+
+
+class AdminCodeCreateRequest(BaseModel):
+    label: str = Field(min_length=1, max_length=128)
+    expires_minutes: int = Field(default=15, ge=1, le=60)
+
+    @field_validator("label")
+    @classmethod
+    def normalize_label(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        if not normalized:
+            raise ValueError("label must not be blank")
+        return normalized
+
+
+class AdminCodeCreatedResponse(BaseModel):
+    code: str
+    expires_at: datetime
+
+
+class AdminCodeResponse(BaseModel):
+    code_id: str
+    label: str
+    status: Literal["ready", "used", "expired", "revoked"]
+    created_at: datetime
+    expires_at: datetime
+    used_at: datetime | None
+    revoked_at: datetime | None
+
+
+class AdminCodeRedeemRequest(BaseModel):
+    code: str = Field(pattern=r"^[A-Z0-9]{8}$")

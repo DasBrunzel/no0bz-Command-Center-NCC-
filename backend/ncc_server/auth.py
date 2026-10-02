@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+import hashlib
 import hmac
 import ipaddress
 from collections.abc import Iterator
 
 from fastapi import Depends, Header, HTTPException, Request, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ncc_server.agent_tokens import find_valid_agent_token
-from ncc_server.models import AgentToken
+from ncc_server.models import AdminCode, AgentToken, DashboardSession, utc_now
 
 
 def database_session(request: Request) -> Iterator[Session]:
@@ -36,6 +38,22 @@ def require_dashboard_access(
     authorization: str | None = Header(default=None),
     x_ncc_dashboard_token: str | None = Header(default=None),
 ) -> None:
+    session_token = request.cookies.get("ncc_dashboard_session", "")
+    if session_token:
+        with request.app.state.database.session() as session:
+            record = session.scalar(
+                select(DashboardSession)
+                .join(AdminCode, DashboardSession.code_id == AdminCode.id)
+                .where(
+                    DashboardSession.token_hash
+                    == hashlib.sha256(session_token.encode()).hexdigest()
+                )
+                .where(DashboardSession.revoked_at.is_(None))
+                .where(DashboardSession.expires_at > utc_now())
+                .where(AdminCode.revoked_at.is_(None))
+            )
+            if record is not None:
+                return
     settings = request.app.state.server_settings
     configured = settings.dashboard_token.get_secret_value()
     supplied = x_ncc_dashboard_token or _bearer_token(authorization) or ""
