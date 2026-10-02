@@ -51,7 +51,7 @@ def test_service_migration_uses_external_environment_file(
     engine = create_engine(f"sqlite+pysqlite:///{database_path.as_posix()}")
     with engine.connect() as connection:
         revision = connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-        assert revision == "20261002_0005"
+        assert revision == "20261002_0006"
         assert connection.execute(text("SELECT COUNT(*) FROM nodes")).scalar_one() == 0
     engine.dispose()
 

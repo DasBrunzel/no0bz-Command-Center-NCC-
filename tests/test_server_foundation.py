@@ -44,6 +44,7 @@ def test_server_has_versioned_api_and_fleet_browser_gui() -> None:
 
 def test_foundation_metadata_contains_persistent_entities() -> None:
     assert set(Base.metadata.tables) == {
+        "alert_states",
         "admin_codes",
         "agent_pairings",
         "agent_tokens",

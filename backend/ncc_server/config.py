@@ -22,6 +22,9 @@ class ServerSettings(BaseSettings):
     node_offline_after_seconds: int = Field(default=30, ge=10, le=3600)
     dashboard_token: SecretStr = SecretStr("")
     dashboard_allow_loopback_without_token: bool = True
+    telegram_enabled: bool = False
+    telegram_bot_token: SecretStr = SecretStr("")
+    telegram_chat_id: str = ""
 
 
 @lru_cache

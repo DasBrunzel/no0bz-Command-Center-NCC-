@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -10,9 +11,11 @@ from fastapi.staticfiles import StaticFiles
 from ncc.security import SECURITY_HEADERS
 
 from ncc_server import __version__
+from ncc_server.alert_service import evaluate_alerts, mark_notified
 from ncc_server.api.v1 import router as v1_router
 from ncc_server.config import ServerSettings, get_server_settings
 from ncc_server.database import Database
+from ncc_server.telegram import send_telegram_alert
 
 STATIC_DIR = Path(__file__).with_name("static")
 
@@ -28,9 +31,13 @@ def create_app(
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         if active_settings.database_check_on_start:
             active_database.ping()
+        alert_task = asyncio.create_task(_alert_loop(active_database, active_settings))
         try:
             yield
         finally:
+            alert_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await alert_task
             active_database.dispose()
 
     application = FastAPI(
@@ -69,3 +76,17 @@ def create_app(
 
 
 app = create_app()
+
+
+async def _alert_loop(database: Database, settings: ServerSettings) -> None:
+    while True:
+        try:
+            with database.session() as session:
+                notifications = evaluate_alerts(session, settings)
+            for notification in notifications:
+                if await send_telegram_alert(settings, notification.message):
+                    with database.session() as session:
+                        mark_notified(session, notification.alert_id, notification.state)
+        except Exception:
+            pass
+        await asyncio.sleep(30)
