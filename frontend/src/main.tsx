@@ -419,10 +419,14 @@ function Fleet({
     ...group,
     nodes: filtered.filter((node) => node.fleet_group_id === group.group_id).sort((left, right) => left.fleet_position - right.fleet_position || left.display_name.localeCompare(right.display_name, "de")),
   }));
+  const fullGrouped = groups.map((group) => ({
+    ...group,
+    nodes: nodes.filter((node) => node.fleet_group_id === group.group_id).sort((left, right) => left.fleet_position - right.fleet_position || left.display_name.localeCompare(right.display_name, "de")),
+  }));
   const moveNode = async (targetGroupId: string, beforeNodeId?: string) => {
     if (!draggedNodeId) return;
-    const source = grouped.find((group) => group.nodes.some((node) => node.node_id === draggedNodeId));
-    const target = grouped.find((group) => group.group_id === targetGroupId);
+    const source = fullGrouped.find((group) => group.nodes.some((node) => node.node_id === draggedNodeId));
+    const target = fullGrouped.find((group) => group.group_id === targetGroupId);
     if (!source || !target) return;
     const targetNodes = target.nodes.filter((node) => node.node_id !== draggedNodeId);
     const index = beforeNodeId ? Math.max(0, targetNodes.findIndex((node) => node.node_id === beforeNodeId)) : targetNodes.length;
@@ -1893,7 +1897,7 @@ function App() {
         <footer>
           <ShieldCheck size={14} />
           <span>GESICHERTE VERBINDUNG</span>
-          <b>v0.5.0-beta.35</b>
+          <b>v0.5.0-beta.36</b>
         </footer>
       </aside>
       <div className="mobile-scrim" onClick={() => setSidebar(false)} />
