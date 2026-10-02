@@ -12,6 +12,7 @@ from ncc_server.fleet_service import (
     forget_fleet_node,
     list_fleet_alerts,
     list_fleet_nodes,
+    node_monthly_network_usage,
     node_telemetry,
     rename_fleet_node,
 )
@@ -23,6 +24,7 @@ from ncc_server.schemas import (
     FleetNodeResponse,
     FleetSummaryResponse,
     FleetTelemetryPoint,
+    NetworkUsageSummary,
 )
 
 router = APIRouter(
@@ -108,6 +110,16 @@ async def telemetry(
     session: Session = Depends(database_session),
 ) -> list[FleetTelemetryPoint]:
     result = node_telemetry(session, node_id, limit)
+    if result is None:
+        raise HTTPException(status_code=404, detail="node not found")
+    return result
+
+
+@router.get("/nodes/{node_id}/network/month", response_model=NetworkUsageSummary)
+async def monthly_network_usage(
+    node_id: str, session: Session = Depends(database_session)
+) -> NetworkUsageSummary:
+    result = node_monthly_network_usage(session, node_id)
     if result is None:
         raise HTTPException(status_code=404, detail="node not found")
     return result

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -13,6 +14,7 @@ from ncc_server.schemas import (
     FleetNodeResponse,
     FleetSummaryResponse,
     FleetTelemetryPoint,
+    NetworkUsageSummary,
 )
 
 
@@ -65,6 +67,79 @@ def node_telemetry(
         .limit(limit)
     ).all()
     return [_telemetry_response(point) for point in reversed(points)]
+
+
+def node_monthly_network_usage(
+    session: Session, node_id: str, now: datetime | None = None
+) -> NetworkUsageSummary | None:
+    """Calculate monthly traffic from counter deltas without deleting raw data.
+
+    Agents report the operating system's cumulative byte counters.  A counter
+    reset (for example after a reboot) starts a new counter generation; its
+    current value is therefore counted instead of treating the delta as
+    negative.
+    """
+    if session.get(Node, node_id) is None:
+        return None
+    current = now or utc_now()
+    local_now = current.astimezone()
+    period_start = local_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    period_start_utc = period_start.astimezone(timezone.utc)
+    previous = session.scalar(
+        select(TelemetryPoint)
+        .where(TelemetryPoint.node_id == node_id, TelemetryPoint.recorded_at < period_start_utc)
+        .order_by(TelemetryPoint.recorded_at.desc())
+        .limit(1)
+    )
+    points = session.scalars(
+        select(TelemetryPoint)
+        .where(TelemetryPoint.node_id == node_id, TelemetryPoint.recorded_at >= period_start_utc)
+        .order_by(TelemetryPoint.recorded_at)
+    ).all()
+    previous_pair = _network_counters(previous.payload) if previous is not None else None
+    received = sent = 0
+    samples = 0
+    for point in points:
+        current_pair = _network_counters(point.payload)
+        if current_pair is None:
+            continue
+        samples += 1
+        if previous_pair is not None:
+            received += _counter_delta(previous_pair[0], current_pair[0])
+            sent += _counter_delta(previous_pair[1], current_pair[1])
+        previous_pair = current_pair
+    return NetworkUsageSummary(
+        period_start=period_start_utc,
+        received_bytes=received,
+        sent_bytes=sent,
+        samples=samples,
+        available=samples > 0,
+    )
+
+
+def _network_counters(payload: dict[str, object]) -> tuple[int, int] | None:
+    network = payload.get("network")
+    if not isinstance(network, dict):
+        return None
+    received = _number(network.get("bytes_recv"))
+    sent = _number(network.get("bytes_sent"))
+    if received is None:
+        received_gb = _number(network.get("total_recv_gb"))
+        received = int(received_gb * 1024**3) if received_gb is not None else None
+    if sent is None:
+        sent_gb = _number(network.get("total_sent_gb"))
+        sent = int(sent_gb * 1024**3) if sent_gb is not None else None
+    if received is None or sent is None:
+        return None
+    return max(0, int(received)), max(0, int(sent))
+
+
+def _number(value: object) -> float | None:
+    return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+
+def _counter_delta(previous: int, current: int) -> int:
+    return current - previous if current >= previous else current
 
 
 def fleet_summary(session: Session, settings: ServerSettings) -> FleetSummaryResponse:

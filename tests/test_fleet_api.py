@@ -158,6 +158,50 @@ def test_loopback_dashboard_access_can_be_enabled(tmp_path: Path) -> None:
         assert response.json()["total_nodes"] == 0
 
 
+def test_monthly_network_usage_uses_counter_deltas_and_handles_resets(tmp_path: Path) -> None:
+    database = make_database(tmp_path / "network.db")
+    online_id, _ = seed(database)
+    now = utc_now()
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    with database.session() as session:
+        session.add_all(
+            [
+                TelemetryPoint(
+                    node_id=online_id,
+                    sample_id="33333333-3333-4333-8333-333333333333",
+                    recorded_at=month_start - timedelta(hours=3),
+                    payload={"network": {"bytes_recv": 1000, "bytes_sent": 2000}},
+                ),
+                TelemetryPoint(
+                    node_id=online_id,
+                    sample_id="44444444-4444-4444-8444-444444444444",
+                    recorded_at=month_start + timedelta(seconds=5),
+                    payload={"network": {"bytes_recv": 1300, "bytes_sent": 2400}},
+                ),
+                TelemetryPoint(
+                    node_id=online_id,
+                    sample_id="55555555-5555-4555-8555-555555555555",
+                    recorded_at=month_start + timedelta(seconds=10),
+                    payload={"network": {"bytes_recv": 1500, "bytes_sent": 100}},
+                ),
+            ]
+        )
+        session.commit()
+    app = create_app(
+        ServerSettings(database_url="sqlite+pysqlite://", dashboard_token="dashboard-secret"),
+        database,
+    )
+    with TestClient(app) as client:
+        response = client.get(
+            f"/api/v1/fleet/nodes/{online_id}/network/month",
+            headers={"X-NCC-Dashboard-Token": "dashboard-secret"},
+        )
+    assert response.status_code == 200
+    assert response.json()["received_bytes"] == 500
+    assert response.json()["sent_bytes"] == 500
+    assert response.json()["samples"] == 2
+
+
 def test_unraid_polling_uses_a_grace_period() -> None:
     node = Node(
         machine_id="unraid:horsttower",

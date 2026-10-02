@@ -5,12 +5,12 @@ import {
   AlertTriangle,
   ArrowDownToLine,
   ArrowUpToLine,
+  BarChart3,
   Ban,
   Bell,
   Boxes,
   Check,
   ChevronRight,
-  CircleGauge,
   Clock3,
   Copy,
   Cpu,
@@ -64,6 +64,13 @@ type Summary = {
   pending_nodes: number;
   telemetry_points: number;
   server_time: string;
+};
+type NetworkUsageSummary = {
+  period_start: string;
+  received_bytes: number;
+  sent_bytes: number;
+  samples: number;
+  available: boolean;
 };
 type Theme =
   | "nightmare"
@@ -129,7 +136,7 @@ type AlertPolicy = {
   gpu_threshold: number;
   disk_threshold: number;
 };
-type Page = "fleet" | "telemetry" | "alerts" | "onboarding" | "settings";
+type Page = "fleet" | "statistics" | "alerts" | "onboarding" | "settings";
 
 const THEMES: { id: Theme; name: string; color: string }[] = [
   { id: "nightmare", name: "Nightmare Red", color: "#ff334f" },
@@ -372,6 +379,7 @@ function Fleet({
   nodes,
   selected,
   points,
+  monthlyNetwork,
   onSelect,
   query,
   onQuery,
@@ -380,6 +388,7 @@ function Fleet({
   nodes: Node[];
   selected: Node | null;
   points: Telemetry[];
+  monthlyNetwork: NetworkUsageSummary | null;
   onSelect: (id: string) => void;
   query: string;
   onQuery: (v: string) => void;
@@ -460,7 +469,7 @@ function Fleet({
             )}
           </div>
         </section>
-        <NodeOverview node={selected} points={points} />
+        <NodeOverview node={selected} points={points} monthlyNetwork={monthlyNetwork} />
       </div>
     </>
   );
@@ -555,9 +564,11 @@ function UnraidWorkloadCard({
 function NodeOverview({
   node,
   points,
+  monthlyNetwork,
 }: {
   node: Node | null;
   points: Telemetry[];
+  monthlyNetwork: NetworkUsageSummary | null;
 }) {
   const [forgetting, setForgetting] = useState(false),
     [renaming, setRenaming] = useState(false);
@@ -701,7 +712,9 @@ function NodeOverview({
             </div>
           </div>
           <footer>
-            {network.interface || "Automatische Schnittstelle"} · Gesamt ↓ {metric(num(network.total_recv_gb) || num(network.bytes_recv) / 1024 ** 3, 2)} GB · ↑ {metric(num(network.total_sent_gb) || num(network.bytes_sent) / 1024 ** 3, 2)} GB
+            {network.interface || "Automatische Schnittstelle"} · {monthlyNetwork?.available
+              ? `Monat ${new Date(monthlyNetwork.period_start).toLocaleDateString("de-DE", { month: "short" })}: ↓ ${metric(monthlyNetwork.received_bytes / 1024 ** 3, 2)} GB · ↑ ${metric(monthlyNetwork.sent_bytes / 1024 ** 3, 2)} GB`
+              : "Monatsverkehr wird mit den nächsten Agent-Messungen erfasst"}
             {(num(network.errors) > 0 || num(network.drops) > 0) && ` · Fehler ${num(network.errors)} · Drops ${num(network.drops)}`}
           </footer>
         </article>
@@ -781,6 +794,24 @@ function NodeOverview({
           <Trash2 size={15} />
           {forgetting ? "Gerät wird entfernt …" : "Gerät vergessen"}
         </button>
+      </div>
+    </section>
+  );
+}
+
+function StatisticsPage() {
+  return (
+    <section className="surface statistics-placeholder">
+      <BarChart3 size={42} />
+      <span className="eyebrow">NCC STATISTIKEN</span>
+      <h1>Deine Daten bekommen ein Zuhause.</h1>
+      <p>
+        Monatsverkehr wird bereits dauerhaft aus den Rohdaten berechnet. Als
+        Nächstes entstehen hier Zeiträume, Vergleiche und Langzeitverläufe für
+        deine gesamte Fleet.
+      </p>
+      <div>
+        <span>NETZWERK</span><span>RESSOURCEN</span><span>VERFÜGBARKEIT</span>
       </div>
     </section>
   );
@@ -1596,7 +1627,8 @@ function App() {
     [alerts, setAlerts] = useState<AlertRecord[]>([]),
     [policy, setPolicy] = useState<AlertPolicy | null>(null),
     [selectedId, setSelectedId] = useState(""),
-    [points, setPoints] = useState<Telemetry[]>([]);
+    [points, setPoints] = useState<Telemetry[]>([]),
+    [monthlyNetwork, setMonthlyNetwork] = useState<NetworkUsageSummary | null>(null);
   const [page, setPage] = useState<Page>("fleet"),
     [query, setQuery] = useState(""),
     [loading, setLoading] = useState(true),
@@ -1669,6 +1701,15 @@ function App() {
       .catch(() => setPoints([]));
   }, [selected?.node_id, selected?.latest?.recorded_at, token]);
   useEffect(() => {
+    if (!selected) return;
+    getJson<NetworkUsageSummary>(
+      `/api/v1/fleet/nodes/${selected.node_id}/network/month`,
+      token,
+    )
+      .then(setMonthlyNetwork)
+      .catch(() => setMonthlyNetwork(null));
+  }, [selected?.node_id, selected?.latest?.recorded_at, token]);
+  useEffect(() => {
     const pairingId = new URLSearchParams(window.location.search).get("pair");
     if (authenticated !== true || !pairingId) return;
     postJson(
@@ -1720,9 +1761,9 @@ function App() {
         icon: <LayoutDashboard size={17} />,
       },
       {
-        id: "telemetry" as Page,
-        label: "Telemetrie",
-        icon: <CircleGauge size={17} />,
+        id: "statistics" as Page,
+        label: "Statistiken",
+        icon: <BarChart3 size={17} />,
       },
       { id: "alerts" as Page, label: "Warnungen", icon: <Bell size={17} /> },
       {
@@ -1745,8 +1786,8 @@ function App() {
   const title =
     page === "fleet"
       ? "Fleet Command"
-      : page === "telemetry"
-        ? "Telemetry Center"
+      : page === "statistics"
+        ? "Statistiken"
         : page === "alerts"
           ? "Warnungszentrum"
           : page === "onboarding"
@@ -1800,7 +1841,7 @@ function App() {
         <footer>
           <ShieldCheck size={14} />
           <span>GESICHERTE VERBINDUNG</span>
-          <b>v0.5.0-beta.31</b>
+          <b>v0.5.0-beta.32</b>
         </footer>
       </aside>
       <div className="mobile-scrim" onClick={() => setSidebar(false)} />
@@ -1877,12 +1918,13 @@ function App() {
               selected={selected}
               onSelect={setSelectedId}
               points={points}
+              monthlyNetwork={monthlyNetwork}
               query={query}
               onQuery={setQuery}
               alerts={alerts}
             />
-          ) : page === "telemetry" ? (
-            <TelemetryPage node={selected} points={points} />
+          ) : page === "statistics" ? (
+            <StatisticsPage />
           ) : page === "alerts" ? (
             <AlertsPage alerts={alerts} />
           ) : page === "onboarding" ? (

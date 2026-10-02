@@ -84,6 +84,16 @@ class FleetTelemetryPoint(BaseModel):
     metrics: dict[str, object]
 
 
+class NetworkUsageSummary(BaseModel):
+    """Traffic derived from raw telemetry for the current calendar month."""
+
+    period_start: datetime
+    received_bytes: int
+    sent_bytes: int
+    samples: int
+    available: bool
+
+
 class FleetNodeResponse(BaseModel):
     node_id: str
     machine_id: str

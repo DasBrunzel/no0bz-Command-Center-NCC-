@@ -1208,6 +1208,44 @@ main {
 .metadata dd {
   font: 500 9px JetBrains Mono;
 }
+.statistics-placeholder {
+  align-content: center;
+  justify-items: center;
+  min-height: 480px;
+  padding: 40px;
+  text-align: center;
+  display: grid;
+}
+.statistics-placeholder > svg {
+  color: var(--accent);
+  filter: drop-shadow(0 0 18px rgba(var(--accent-rgb), .35));
+  margin-bottom: 15px;
+}
+.statistics-placeholder h1 {
+  font-size: 24px;
+  margin: 7px 0;
+}
+.statistics-placeholder p {
+  color: var(--muted);
+  line-height: 1.7;
+  margin: 0;
+  max-width: 470px;
+}
+.statistics-placeholder > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 25px;
+}
+.statistics-placeholder > div span {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--line));
+  border-radius: 5px;
+  color: var(--accent);
+  font: 600 8px JetBrains Mono;
+  padding: 7px 9px;
+}
 .settings-page {
   grid-template-columns: 1.4fr 1fr;
 }
