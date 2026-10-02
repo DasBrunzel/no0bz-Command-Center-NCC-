@@ -19,12 +19,16 @@ async def collect_unraid(database: Database, settings: ServerSettings) -> None:
         return
     async with httpx.AsyncClient(timeout=15) as client:
         headers = {"x-api-key": settings.unraid_api_key.get_secret_value()}
-        response = await client.post(settings.unraid_url, headers=headers, json={"query": _QUERY})
+        # Unraid 7.0 exposes system values under info.*; try that stable
+        # projection first and fall back to the newer metrics.* projection.
+        response = await client.post(
+            settings.unraid_url, headers=headers, json={"query": _LEGACY_QUERY}
+        )
         response.raise_for_status()
         payload = response.json()
         if isinstance(payload, dict) and payload.get("errors"):
             response = await client.post(
-                settings.unraid_url, headers=headers, json={"query": _LEGACY_QUERY}
+                settings.unraid_url, headers=headers, json={"query": _QUERY}
             )
             response.raise_for_status()
             payload = response.json()
