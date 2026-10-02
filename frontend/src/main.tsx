@@ -280,13 +280,15 @@ function Sparkline({
   points,
   metric,
   color = "var(--accent)",
+  maxValue = 100,
 }: {
   points: Telemetry[];
   metric: (m: Metrics) => number;
   color?: string;
+  maxValue?: number;
 }) {
   const values = points.map((point) =>
-    Math.max(0, Math.min(100, metric(point.metrics))),
+    Math.max(0, Math.min(100, (metric(point.metrics) / Math.max(1, maxValue)) * 100)),
   );
   const line =
     values.length > 1
@@ -363,68 +365,31 @@ function Fleet({
   onSelect,
   query,
   onQuery,
+  alerts,
 }: {
   nodes: Node[];
   selected: Node | null;
   onSelect: (id: string) => void;
   query: string;
   onQuery: (v: string) => void;
+  alerts: AlertRecord[];
 }) {
-  const alerts = nodes.flatMap((node) => {
-    const m = node.latest?.metrics || {},
-      cpu = num(m.cpu?.percent),
-      memory = num(m.memory?.percent),
-      gpu = num(m.gpus?.[0]?.percent),
-      disk = Math.max(
-        0,
-        ...(m.disks || []).map((item: Metrics) => num(item.percent)),
-      ),
-      items: FleetAlert[] = [];
-    if (!node.online)
-      items.push({
-        id: `${node.node_id}-offline`,
-        title: `${node.display_name} ist offline`,
-        detail: `Letzter Kontakt: ${ago(node.last_seen_at)}`,
-        severity: "critical",
-      });
-    if (cpu >= 90)
-      items.push({
-        id: `${node.node_id}-cpu`,
-        title: `${node.display_name}: hohe CPU-Last`,
-        detail: `${cpu.toFixed(0)} % Auslastung`,
-        severity: cpu >= 95 ? "critical" : "warning",
-      });
-    if (memory >= 90)
-      items.push({
-        id: `${node.node_id}-memory`,
-        title: `${node.display_name}: hoher RAM-Verbrauch`,
-        detail: `${memory.toFixed(0)} % Auslastung`,
-        severity: memory >= 95 ? "critical" : "warning",
-      });
-    if (gpu >= 90)
-      items.push({
-        id: `${node.node_id}-gpu`,
-        title: `${node.display_name}: hohe GPU-Last`,
-        detail: `${gpu.toFixed(0)} % Auslastung`,
-        severity: gpu >= 95 ? "critical" : "warning",
-      });
-    if (disk >= 90)
-      items.push({
-        id: `${node.node_id}-disk`,
-        title: `${node.display_name}: Laufwerk fast voll`,
-        detail: `${disk.toFixed(0)} % belegt`,
-        severity: disk >= 95 ? "critical" : "warning",
-      });
-    return items;
-  });
+  const fleetAlerts: FleetAlert[] = alerts.filter((alert) => alert.active).map((alert) => ({
+    id: alert.alert_id, title: alert.message, detail: `${alert.display_name} · seit ${ago(alert.opened_at)}`, severity: alert.severity,
+  }));
   const filtered = nodes.filter((node) =>
     `${node.display_name} ${node.platform} ${node.machine_id}`
       .toLowerCase()
       .includes(query.toLowerCase()),
   );
+  const groups = [
+    { label: "SERVER", nodes: filtered.filter((node) => node.metadata.source === "unraid-api" || /server|tower/i.test(node.display_name)) },
+    { label: "MOBILE", nodes: filtered.filter((node) => /android|ios|pixel|phone/i.test(`${node.display_name} ${node.machine_id}`)) },
+    { label: "PCS & LAPTOPS", nodes: filtered.filter((node) => node.metadata.source !== "unraid-api" && !/server|tower|android|ios|pixel|phone/i.test(`${node.display_name} ${node.machine_id}`)) },
+  ].filter((group) => group.nodes.length).map((group) => ({ ...group, nodes: [...group.nodes].sort((left, right) => Number(right.online) - Number(left.online) || left.display_name.localeCompare(right.display_name, "de")) }));
   return (
     <>
-      <AlertPanel alerts={alerts} />
+      <AlertPanel alerts={fleetAlerts} />
       <div className="fleet-layout">
         <section className="surface node-browser">
           <header className="section-head">
@@ -445,7 +410,7 @@ function Fleet({
             />
           </label>
           <div className="node-stack">
-            {filtered.map((node) => {
+            {groups.map((group) => <section className="node-group" key={group.label}><h3>{group.label}<span>{group.nodes.length}</span></h3>{group.nodes.map((node) => {
               const m = node.latest?.metrics || {};
               return (
                 <button
@@ -473,7 +438,7 @@ function Fleet({
                   <ChevronRight size={16} />
                 </button>
               );
-            })}
+            })}</section>)}
             {!filtered.length && (
               <div className="empty">
                 <Boxes size={30} />
@@ -785,7 +750,9 @@ function TelemetryPage({
   const latest = node.latest?.metrics || {},
     cpu = latest.cpu || {},
     memory = latest.memory || {},
-    gpu = latest.gpus?.[0] || {};
+    gpu = latest.gpus?.[0] || {},
+    network = latest.network || {},
+    diskUse = Math.max(0, ...(latest.disks || []).map((disk: Metrics) => num(disk.percent)));
   return (
     <div className="telemetry-page">
       <div className="surface telemetry-title">
@@ -825,6 +792,22 @@ function TelemetryPage({
             color="var(--blue)"
           />
         </article>
+        <article className="surface chart-card">
+          <header><div className="chart-icon blue"><Network size={17} /></div><div><span>NETZWERK · DOWNLOAD</span><strong>{num(network.download_mbps).toFixed(1)} Mbps</strong></div></header>
+          <Sparkline points={points} metric={(m) => num(m.network?.download_mbps)} maxValue={Math.max(10, ...points.map((point) => num(point.metrics.network?.download_mbps)))} color="var(--blue)" />
+        </article>
+        <article className="surface chart-card">
+          <header><div className="chart-icon purple"><Network size={17} /></div><div><span>NETZWERK · UPLOAD</span><strong>{num(network.upload_mbps).toFixed(1)} Mbps</strong></div></header>
+          <Sparkline points={points} metric={(m) => num(m.network?.upload_mbps)} maxValue={Math.max(10, ...points.map((point) => num(point.metrics.network?.upload_mbps)))} color="var(--purple)" />
+        </article>
+        <article className="surface chart-card">
+          <header><div className="chart-icon blue"><HardDrive size={17} /></div><div><span>HÖCHSTE LAUFWERKBELEGUNG</span><strong>{diskUse.toFixed(1)}%</strong></div></header>
+          <Sparkline points={points} metric={(m) => Math.max(0, ...(m.disks || []).map((disk: Metrics) => num(disk.percent)))} color="var(--blue)" />
+        </article>
+        {typeof cpu.temperature_c === "number" && <article className="surface chart-card">
+          <header><div className="chart-icon red"><Cpu size={17} /></div><div><span>CPU-TEMPERATUR</span><strong>{num(cpu.temperature_c).toFixed(0)} °C</strong></div></header>
+          <Sparkline points={points} metric={(m) => num(m.cpu?.temperature_c)} color="var(--amber)" />
+        </article>}
         <article className="surface chart-card">
           <header>
             <div className="chart-icon purple">
@@ -1759,7 +1742,7 @@ function App() {
         <footer>
           <ShieldCheck size={14} />
           <span>GESICHERTE VERBINDUNG</span>
-          <b>v0.5.0-beta.28</b>
+          <b>v0.5.0-beta.29</b>
         </footer>
       </aside>
       <div className="mobile-scrim" onClick={() => setSidebar(false)} />
@@ -1837,6 +1820,7 @@ function App() {
               onSelect={setSelectedId}
               query={query}
               onQuery={setQuery}
+              alerts={alerts}
             />
           ) : page === "telemetry" ? (
             <TelemetryPage node={selected} points={points} />

@@ -104,7 +104,53 @@ def _active_alerts(
         if value >= threshold:
             severity = "critical" if value >= min(100, threshold + 5) else "warning"
             alerts.append((kind, severity, f"{name}: {label}-Auslastung bei {value:.0f} % ({severity})."))
+    _unraid_alerts(node, metrics, alerts)
     return alerts
+
+
+def _unraid_alerts(
+    node: Node, metrics: dict[str, object], alerts: list[tuple[str, str, str]]
+) -> None:
+    """Add actionable Unraid-only warnings without waking sleeping disks."""
+    if node.metadata_json.get("source") != "unraid-api":
+        return
+    name = node.display_name
+    unraid = _dict(metrics.get("unraid"))
+    array_state = str(unraid.get("array_state") or "").upper()
+    if array_state and array_state not in {"STARTED", "STARTING"}:
+        alerts.append(("unraid-array", "critical", f"{name}: Unraid-Array ist {array_state}."))
+    cpu_temperature = _number(_nested(metrics, "cpu", "temperature_c"))
+    if cpu_temperature >= 85:
+        severity = "critical" if cpu_temperature >= 90 else "warning"
+        alerts.append(("cpu-temperature", severity, f"{name}: CPU-Temperatur bei {cpu_temperature:.0f} °C ({severity})."))
+    disks = metrics.get("disks")
+    if isinstance(disks, list):
+        for disk in disks:
+            if not isinstance(disk, dict):
+                continue
+            temperature = _number(disk.get("temperature_c"))
+            if temperature < 50:
+                continue
+            severity = "critical" if temperature >= 55 else "warning"
+            label = str(disk.get("name") or disk.get("mount") or "Laufwerk")
+            alerts.append((f"disk-temperature-{label.casefold()}", severity, f"{name}: {label} bei {temperature:.0f} °C ({severity})."))
+    _workload_alerts(name, metrics.get("vms"), "vm", {"CRASHED", "ERROR", "FAILED"}, alerts)
+    _workload_alerts(name, metrics.get("containers"), "container", {"DEAD", "RESTARTING", "ERROR"}, alerts)
+
+
+def _workload_alerts(
+    node_name: str, workloads: object, kind: str, unhealthy: set[str], alerts: list[tuple[str, str, str]]
+) -> None:
+    if not isinstance(workloads, list):
+        return
+    for workload in workloads:
+        if not isinstance(workload, dict):
+            continue
+        state = str(workload.get("state") or "").upper()
+        if state not in unhealthy:
+            continue
+        name = str(workload.get("name") or kind)
+        alerts.append((f"{kind}-{name.casefold()}", "critical", f"{node_name}: {kind.upper()} „{name}“ meldet {state}."))
 
 
 def _nested(value: dict[str, object], *path: str | int) -> object:
@@ -121,3 +167,7 @@ def _nested(value: dict[str, object], *path: str | int) -> object:
 
 def _number(value: object) -> float:
     return float(value) if isinstance(value, int | float) else 0.0
+
+
+def _dict(value: object) -> dict[str, object]:
+    return value if isinstance(value, dict) else {}

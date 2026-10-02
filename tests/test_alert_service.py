@@ -54,3 +54,19 @@ def test_alerts_notify_once_then_send_a_resolution(tmp_path: Path) -> None:
         assert len(notifications) == 1
         assert notifications[0].state == "resolved"
         assert session.query(AlertState).one().active is False
+
+
+def test_unraid_temperature_and_array_alerts_are_actionable(tmp_path: Path) -> None:
+    database = Database(f"sqlite+pysqlite:///{(tmp_path / 'unraid-alerts.db').as_posix()}")
+    Base.metadata.create_all(database.engine)
+    settings = ServerSettings(database_url="sqlite+pysqlite://")
+    with database.session() as session:
+        node = Node(machine_id="unraid:test", display_name="Tower", platform="linux", approved=True, last_seen_at=utc_now(), metadata_json={"source": "unraid-api"})
+        session.add(node)
+        session.flush()
+        session.add(TelemetryPoint(node_id=node.id, recorded_at=utc_now(), payload={"cpu": {"temperature_c": 91}, "unraid": {"array_state": "STOPPED"}, "disks": [{"name": "Disk 1", "temperature_c": 56}], "vms": [{"name": "Home Assistant", "state": "CRASHED"}], "containers": [{"name": "Plex", "state": "restarting"}]}))
+        session.commit()
+    with database.session() as session:
+        evaluate_alerts(session, settings)
+        kinds = {alert.kind for alert in session.query(AlertState).all()}
+    assert {"unraid-array", "cpu-temperature", "disk-temperature-disk 1", "vm-home assistant", "container-plex"} <= kinds
