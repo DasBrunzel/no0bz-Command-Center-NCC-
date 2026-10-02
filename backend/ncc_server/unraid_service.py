@@ -136,7 +136,17 @@ async def _query_json(
     client: httpx.AsyncClient, url: str, headers: dict[str, str], query: str
 ) -> dict[str, Any]:
     response = await client.post(url, headers=headers, json={"query": query})
-    response.raise_for_status()
+    try:
+        response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        # Unraid commonly returns GraphQL validation details in a HTTP 400
+        # body. Preserve that detail for the fallback and service log without
+        # ever including request headers or the API key.
+        try:
+            body = response.json()
+        except ValueError:
+            body = response.text[:500]
+        raise ValueError(f"Unraid HTTP {response.status_code}: {body!s:.500}") from exc
     payload = response.json()
     if isinstance(payload, dict) and payload.get("errors"):
         raise ValueError(f"GraphQL query rejected: {payload['errors']!s:.500}")
