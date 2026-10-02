@@ -101,13 +101,13 @@ query NccUnraidMetrics {
     memory { total used free available percentTotal }
     network { name rxSec txSec }
   }
-  info { cpu { brand vendor threads cores } versions { unraid } }
+  info { cpu { brand vendor threads cores } }
 }
 """
 
 _LEGACY_QUERY = """
 query NccUnraidLegacyMetrics {
-  info { cpu { brand vendor threads cores speed } memory { total used free available active buffcache } versions { unraid } }
+  info { cpu { brand vendor threads cores speed } memory { total used free available active buffcache } }
 }
 """
 
