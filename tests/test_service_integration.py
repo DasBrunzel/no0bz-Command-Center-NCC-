@@ -147,6 +147,7 @@ def test_windows_agent_installer_supports_task_scheduler_fallback() -> None:
     runner = (root / "backend/ncc_service/task_runner.py").read_text(encoding="utf-8")
     assert '[string]$AgentMode = "Service"' in installer
     assert "ncc_service.task_runner agent" in installer
+    assert "Browser-Freigabe: $configuredServerUrl/?pair=$pairingId" in installer
     assert "NCC Agent started through Windows Task Scheduler" in runner
 
 

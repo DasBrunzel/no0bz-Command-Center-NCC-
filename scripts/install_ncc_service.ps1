@@ -125,6 +125,14 @@ if (-not (Test-Path $configPath) -or $ReplaceConfig) {
 }
 & icacls.exe $configPath /inheritance:r /grant:r '*S-1-5-18:F' '*S-1-5-32-544:F' | Out-Null
 
+if ($Component -eq "Agent") {
+    $pairingId = & $venvPython -c "from pathlib import Path; from ncc_service.environment import load_environment_file; e=load_environment_file(Path(r'$configPath')); print(e['NCC_AGENT_PAIRING_ID'])"
+    $configuredServerUrl = & $venvPython -c "from pathlib import Path; from ncc_service.environment import load_environment_file; e=load_environment_file(Path(r'$configPath')); print(e['NCC_AGENT_SERVER_URL'])"
+    if ($LASTEXITCODE -ne 0 -or -not $pairingId -or -not $configuredServerUrl) {
+        throw "Die vorhandene Agent-Konfiguration konnte nicht für das Browser-Pairing gelesen werden."
+    }
+}
+
 if ($Component -eq "Server") {
     & $venvPython -m ncc_service.migrate --config $configPath --alembic (Join-Path $installRoot "alembic.ini")
     if ($LASTEXITCODE -ne 0) { throw "Die Datenbankmigration ist fehlgeschlagen." }
@@ -150,6 +158,7 @@ if ($Component -eq "Agent" -and $AgentMode -eq "Task") {
     Write-Host "[NCC] Agent läuft als Systemaufgabe und startet automatisch mit Windows."
     Write-Host "[NCC] Konfiguration: $configPath"
     Write-Host "[NCC] Logdatei: $(Join-Path $installRoot 'logs\agent.log')"
+    Write-Host "[NCC] Browser-Freigabe: $configuredServerUrl/?pair=$pairingId"
     exit
 }
 
