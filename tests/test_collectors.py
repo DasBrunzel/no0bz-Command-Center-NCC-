@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ncc.collectors.registry import ProviderRegistry
+from ncc.collectors.registry import ProviderRegistry, merge_metrics
 from ncc.collectors.system import DemoProvider, PsutilProvider, parse_lhm_tree
 from ncc.config import Settings
 
@@ -34,4 +34,10 @@ def test_rate_pair_converts_disk_bytes_to_mib() -> None:
     read, write = PsutilProvider._rate_pair((2 * 1024**2, 1024**2), (0, 0), 1.0, (0.0, 0.0), bits=False)
     assert read == 0.9
     assert write == 0.45
+
+
+def test_sensor_provider_extends_cpu_metrics_without_losing_psutil_data() -> None:
+    metrics = {"cpu": {"percent": 42.0, "logical_cores": 16}}
+    merge_metrics(metrics, {"cpu": {"temperature_c": 61.5}})
+    assert metrics == {"cpu": {"percent": 42.0, "logical_cores": 16, "temperature_c": 61.5}}
 

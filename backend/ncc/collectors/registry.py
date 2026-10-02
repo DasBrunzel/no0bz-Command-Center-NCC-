@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import threading
 import time
+from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from pathlib import Path
 from typing import Any, cast
@@ -22,6 +23,21 @@ from ncc.config import ROOT, Settings
 
 PROVIDER_TIMEOUT_SECONDS = 5.0
 MAX_BACKOFF_SECONDS = 300.0
+
+
+def merge_metrics(target: dict[str, Any], values: Mapping[str, Any]) -> None:
+    """Merge independent providers without discarding sibling metric fields.
+
+    A platform sensor may only add a temperature to psutil's CPU object, for
+    example.  A shallow update would otherwise replace CPU load, model and core
+    counts with that single sensor value.
+    """
+    for key, value in values.items():
+        existing = target.get(key)
+        if isinstance(existing, dict) and isinstance(value, Mapping):
+            merge_metrics(existing, value)
+        else:
+            target[key] = value
 
 
 class ProviderRegistry:
@@ -53,7 +69,7 @@ class ProviderRegistry:
                 continue
             try:
                 values = self._pool.submit(provider.collect).result(timeout=PROVIDER_TIMEOUT_SECONDS)
-                merged.update(values)
+                merge_metrics(merged, values)
                 self._failures[provider.name] = 0
             except (Exception, TimeoutError):
                 count = self._failures.get(provider.name, 0) + 1

@@ -114,7 +114,17 @@ class PsutilProvider(SensorProvider):
             "memory": {"percent": memory.percent, "used_gb": round(memory.used / 1024**3, 2), "available_gb": round(memory.available / 1024**3, 2), "total_gb": round(memory.total / 1024**3, 2)},
             "swap": {"percent": swap.percent, "used_gb": round(swap.used / 1024**3, 2), "total_gb": round(swap.total / 1024**3, 2)},
             "disks": disks,
-            "network": {"bytes_sent": net.bytes_sent, "bytes_recv": net.bytes_recv, "download_mbps": download, "upload_mbps": upload, "interface": interface, "errors": net.errin + net.errout, "drops": net.dropin + net.dropout},
+            "network": {
+                "bytes_sent": net.bytes_sent,
+                "bytes_recv": net.bytes_recv,
+                "total_sent_gb": round(net.bytes_sent / 1024**3, 2),
+                "total_recv_gb": round(net.bytes_recv / 1024**3, 2),
+                "download_mbps": download,
+                "upload_mbps": upload,
+                "interface": interface,
+                "errors": net.errin + net.errout,
+                "drops": net.dropin + net.dropout,
+            },
             "battery": None if battery is None else {"percent": battery.percent, "plugged": battery.power_plugged, "seconds_left": battery.secsleft},
             "processes": processes[:30],
             "system": {"hostname": socket.gethostname(), "platform": platform.platform(), "boot_time": psutil.boot_time()},
@@ -223,7 +233,31 @@ class NvidiaProvider(SensorProvider):
             handle = pynvml.nvmlDeviceGetHandleByIndex(index)
             memory = pynvml.nvmlDeviceGetMemoryInfo(handle)
             utilization = pynvml.nvmlDeviceGetUtilizationRates(handle)
-            gpus.append({"index": index, "name": pynvml.nvmlDeviceGetName(handle), "percent": utilization.gpu, "vram_percent": round(memory.used / memory.total * 100, 1), "temperature_c": pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU)})
+            name = pynvml.nvmlDeviceGetName(handle)
+            if isinstance(name, bytes):
+                name = name.decode("utf-8", errors="replace")
+            try:
+                power_w = round(pynvml.nvmlDeviceGetPowerUsage(handle) / 1000, 1)
+            except Exception:
+                power_w = None
+            try:
+                fan_percent = pynvml.nvmlDeviceGetFanSpeed(handle)
+            except Exception:
+                fan_percent = None
+            gpus.append(
+                {
+                    "index": index,
+                    "name": name,
+                    "percent": utilization.gpu,
+                    "vram_percent": round(memory.used / memory.total * 100, 1),
+                    "vram_used_gb": round(memory.used / 1024**3, 2),
+                    "vram_total_gb": round(memory.total / 1024**3, 2),
+                    "temperature_c": pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU),
+                    "power_w": power_w,
+                    "fan_percent": fan_percent,
+                    "source": self.name,
+                }
+            )
         return {"gpus": gpus}
 
 
@@ -288,7 +322,22 @@ class WindowsGpuProvider(SensorProvider):
     def collect(self) -> dict[str, Any]:
         percent = self._gpu_percent()
         adapters = self._adapter_info()
-        return {"gpus": [{"index": index, "name": item["name"], "percent": percent, "vram_percent": 0.0, "temperature_c": None, "source": self.name} for index, item in enumerate(adapters)]}
+        return {
+            "gpus": [
+                {
+                    "index": index,
+                    "name": item["name"],
+                    "percent": percent,
+                    "vram_percent": 0.0,
+                    "vram_used_gb": None,
+                    "vram_total_gb": None,
+                    "temperature_c": None,
+                    "power_w": None,
+                    "source": self.name,
+                }
+                for index, item in enumerate(adapters)
+            ]
+        }
 
     def _gpu_percent(self) -> float:
         try:
@@ -339,7 +388,30 @@ class LinuxAmdGpuProvider(SensorProvider):
         for index, card in enumerate(self._cards()):
             device = card / "device"
             used, total = self._number(device / "mem_info_vram_used"), self._number(device / "mem_info_vram_total")
-            temperature = next((self._number(path) for path in device.glob("hwmon/hwmon*/temp1_input") if self._number(path) is not None), None)
+            temperature = next(
+                (
+                    value
+                    for path in device.glob("hwmon/hwmon*/temp1_input")
+                    if (value := self._number(path)) is not None
+                ),
+                None,
+            )
+            power = next(
+                (
+                    value
+                    for path in device.glob("hwmon/hwmon*/power1_average")
+                    if (value := self._number(path)) is not None
+                ),
+                None,
+            )
+            fan = next(
+                (
+                    value
+                    for path in device.glob("hwmon/hwmon*/fan1_input")
+                    if (value := self._number(path)) is not None
+                ),
+                None,
+            )
             name = "AMD Radeon GPU"
             try:
                 slot = device.resolve().name
@@ -348,7 +420,20 @@ class LinuxAmdGpuProvider(SensorProvider):
                     name = result.stdout.partition(": ")[2].strip() or name
             except (OSError, subprocess.SubprocessError):
                 pass
-            gpus.append({"index": index, "name": name, "percent": self._number(device / "gpu_busy_percent") or 0.0, "vram_percent": round(used / total * 100, 1) if used is not None and total else 0.0, "temperature_c": round(temperature / 1000, 1) if temperature is not None else None, "source": self.name})
+            gpus.append(
+                {
+                    "index": index,
+                    "name": name,
+                    "percent": self._number(device / "gpu_busy_percent") or 0.0,
+                    "vram_percent": round(used / total * 100, 1) if used is not None and total else 0.0,
+                    "vram_used_gb": round(used / 1024**3, 2) if used is not None else None,
+                    "vram_total_gb": round(total / 1024**3, 2) if total is not None else None,
+                    "temperature_c": round(temperature / 1000, 1) if temperature is not None else None,
+                    "power_w": round(power / 1_000_000, 1) if power is not None else None,
+                    "fan_rpm": round(fan) if fan is not None else None,
+                    "source": self.name,
+                }
+            )
         return {"gpus": gpus}
 
 
@@ -382,13 +467,47 @@ class LinuxHwmonProvider(SensorProvider):
         return Capabilities(self.name, available, ["temperatures", "fans", "gpu", "power"] if available else [], None if available else "Linux hwmon nicht verfügbar")
 
     def collect(self) -> dict[str, Any]:
-        temperatures = []
-        for path in Path("/sys/class/hwmon").glob("hwmon*/temp*_input"):
+        temperatures: list[dict[str, Any]] = []
+        fans: list[dict[str, Any]] = []
+        powers: list[dict[str, Any]] = []
+        cpu_temperature: float | None = None
+        for directory in Path("/sys/class/hwmon").glob("hwmon*"):
             try:
-                temperatures.append({"sensor": str(path), "celsius": round(float(path.read_text().strip()) / 1000, 1)})
-            except (OSError, ValueError):
-                continue
-        return {"temperatures": temperatures}
+                chip = directory.joinpath("name").read_text().strip()
+            except OSError:
+                chip = directory.name
+            for path in directory.glob("temp*_input"):
+                try:
+                    sensor_id = path.name.removesuffix("_input")
+                    label_path = directory / f"{sensor_id}_label"
+                    label = label_path.read_text().strip() if label_path.exists() else sensor_id
+                    celsius = round(float(path.read_text().strip()) / 1000, 1)
+                    entry = {"chip": chip, "label": label, "celsius": celsius}
+                    temperatures.append(entry)
+                    if cpu_temperature is None and chip.lower() in {"coretemp", "k10temp", "zenpower", "peci_cputemp"}:
+                        cpu_temperature = celsius
+                except (OSError, ValueError):
+                    continue
+            for path in directory.glob("fan*_input"):
+                try:
+                    sensor_id = path.name.removesuffix("_input")
+                    label_path = directory / f"{sensor_id}_label"
+                    label = label_path.read_text().strip() if label_path.exists() else sensor_id
+                    fans.append({"chip": chip, "label": label, "rpm": round(float(path.read_text().strip()))})
+                except (OSError, ValueError):
+                    continue
+            for path in directory.glob("power*_average"):
+                try:
+                    sensor_id = path.name.removesuffix("_average")
+                    label_path = directory / f"{sensor_id}_label"
+                    label = label_path.read_text().strip() if label_path.exists() else sensor_id
+                    powers.append({"chip": chip, "label": label, "watts": round(float(path.read_text().strip()) / 1_000_000, 1)})
+                except (OSError, ValueError):
+                    continue
+        payload: dict[str, Any] = {"hardware": {"temperatures": temperatures, "fans": fans, "powers": powers}}
+        if cpu_temperature is not None:
+            payload["cpu"] = {"temperature_c": cpu_temperature}
+        return payload
 
 
 def parse_lhm_tree(

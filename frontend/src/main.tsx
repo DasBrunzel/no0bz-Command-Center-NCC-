@@ -142,6 +142,10 @@ const THEMES: { id: Theme; name: string; color: string }[] = [
 ];
 const num = (value: unknown) =>
   typeof value === "number" && Number.isFinite(value) ? value : 0;
+const metric = (value: unknown, digits = 1) =>
+  typeof value === "number" && Number.isFinite(value)
+    ? value.toFixed(digits)
+    : "—";
 const ago = (value: string | null) => {
   if (!value) return "Noch nie";
   const seconds = Math.max(
@@ -560,6 +564,7 @@ function NodeOverview({ node }: { node: Node | null }) {
     memory = m.memory || {},
     gpu = m.gpus?.[0] || {},
     network = m.network || {},
+    processes = m.processes || [],
     isUnraid = node.metadata.source === "unraid-api";
   const forget = async () => {
     if (
@@ -647,6 +652,11 @@ function NodeOverview({ node }: { node: Node | null }) {
             value={num(gpu.percent)}
             tone="purple"
             detail={gpu.name || "Nicht erkannt"}
+            footer={
+              typeof gpu.temperature_c === "number"
+                ? `${metric(gpu.temperature_c, 0)} °C GPU-Temperatur`
+                : undefined
+            }
           />
         )}
       </div>
@@ -668,7 +678,10 @@ function NodeOverview({ node }: { node: Node | null }) {
               <span>Mbps</span>
             </div>
           </div>
-          <footer>{network.interface || "Automatische Schnittstelle"}</footer>
+          <footer>
+            {network.interface || "Automatische Schnittstelle"} · Gesamt ↓ {metric(network.total_recv_gb, 2)} GB · ↑ {metric(network.total_sent_gb, 2)} GB
+            {(num(network.errors) > 0 || num(network.drops) > 0) && ` · Fehler ${num(network.errors)} · Drops ${num(network.drops)}`}
+          </footer>
         </article>
         {isUnraid ? (
           <UnraidStorageCard metrics={m} />
@@ -683,13 +696,16 @@ function NodeOverview({ node }: { node: Node | null }) {
                 .slice(0, 3)
                 .map((disk: Metrics, index: number) => (
                   <div key={`${disk.mount}-${index}`}>
-                    <span>
+                    <span className="disk-name">
                       {disk.mount || disk.name || `Disk ${index + 1}`}
                     </span>
                     <div>
                       <i style={{ width: `${num(disk.percent)}%` }} />
                     </div>
                     <b>{num(disk.percent).toFixed(0)}%</b>
+                    <small>
+                      ↓ {metric(disk.read_mbps)} · ↑ {metric(disk.write_mbps)} MiB/s
+                    </small>
                   </div>
                 ))}
               {!(m.disks || []).length && <p>Keine Laufwerksdaten</p>}
@@ -711,6 +727,47 @@ function NodeOverview({ node }: { node: Node | null }) {
             items={m.containers || []}
             kind="container"
           />
+        </div>
+      )}
+      {!isUnraid && (
+        <div className="system-insights-grid">
+          <article className="surface system-insight cpu-insight">
+            <header><Cpu size={16} /><span>CPU-DETAILS</span></header>
+            <dl>
+              <dt>Takt</dt><dd>{typeof cpu.frequency_mhz === "number" ? `${metric(cpu.frequency_mhz / 1000, 2)} GHz` : "Nicht verfügbar"}</dd>
+              <dt>Kerne / Threads</dt><dd>{metric(cpu.physical_cores, 0)} / {metric(cpu.logical_cores, 0)}</dd>
+              <dt>Temperatur</dt><dd>{typeof cpu.temperature_c === "number" ? `${metric(cpu.temperature_c, 0)} °C` : "Kein nativer Sensorwert"}</dd>
+            </dl>
+            {Array.isArray(cpu.per_core) && cpu.per_core.length > 0 && (
+              <div className="core-grid" aria-label="Auslastung je CPU-Kern">
+                {cpu.per_core.map((value: unknown, index: number) => <span key={index} title={`Kern ${index + 1}: ${metric(value)}%`}><i style={{ height: `${Math.max(4, Math.min(100, num(value)))}%` }} />K{index + 1}</span>)}
+              </div>
+            )}
+          </article>
+          <article className="surface system-insight">
+            <header><MemoryStick size={16} /><span>RAM & PAGEFILE</span></header>
+            <dl>
+              <dt>Belegt</dt><dd>{metric(memory.used_gb)} / {metric(memory.total_gb)} GB</dd>
+              <dt>Verfügbar</dt><dd>{metric(memory.available_gb)} GB</dd>
+              <dt>Auslagerungsdatei</dt><dd>{metric(m.swap?.used_gb)} / {metric(m.swap?.total_gb)} GB ({metric(m.swap?.percent, 0)}%)</dd>
+            </dl>
+          </article>
+          <article className="surface system-insight">
+            <header><MonitorCog size={16} /><span>GPU-DETAILS</span></header>
+            <dl>
+              <dt>Modell</dt><dd title={gpu.name || ""}>{gpu.name || "Nicht erkannt"}</dd>
+              <dt>VRAM</dt><dd>{typeof gpu.vram_total_gb === "number" ? `${metric(gpu.vram_used_gb)} / ${metric(gpu.vram_total_gb)} GB` : "Treiber liefert keinen Wert"}</dd>
+              <dt>Temperatur</dt><dd>{typeof gpu.temperature_c === "number" ? `${metric(gpu.temperature_c, 0)} °C` : "Nicht verfügbar"}</dd>
+              <dt>Leistung</dt><dd>{typeof gpu.power_w === "number" ? `${metric(gpu.power_w)} W` : "Nicht verfügbar"}</dd>
+            </dl>
+          </article>
+          <article className="surface system-insight process-insight">
+            <header><Activity size={16} /><span>AKTIVSTE PROZESSE</span></header>
+            <div className="process-list">
+              {processes.slice(0, 6).map((process: Metrics) => <div key={process.pid}><span title={process.name}>{process.name || "Unbekannt"}</span><b>CPU {metric(process.cpu)}%</b><small>RAM {metric(process.memory)}%</small></div>)}
+              {!processes.length && <p>Keine Prozessdaten verfügbar.</p>}
+            </div>
+          </article>
         </div>
       )}
       <div className="node-actions">
@@ -1748,7 +1805,7 @@ function App() {
         <footer>
           <ShieldCheck size={14} />
           <span>GESICHERTE VERBINDUNG</span>
-          <b>v0.5.0-beta.30</b>
+          <b>v0.5.0-beta.31</b>
         </footer>
       </aside>
       <div className="mobile-scrim" onClick={() => setSidebar(false)} />

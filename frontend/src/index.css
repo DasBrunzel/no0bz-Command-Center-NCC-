@@ -896,6 +896,11 @@ main {
   align-items: center;
   font: 600 8px JetBrains Mono;
 }
+.disk-list .disk-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .disk-list > div > div {
   height: 4px;
   background: var(--line);
@@ -910,10 +915,113 @@ main {
 .disk-list b {
   text-align: right;
 }
+.disk-list small {
+  grid-column: 2 / 4;
+  color: var(--muted);
+  font: 600 7px JetBrains Mono;
+  margin-top: -5px;
+}
 .disk-list p {
   color: var(--muted);
   font-size: 9px;
 }
+.system-insights-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+}
+.system-insight {
+  min-height: 185px;
+  padding: 15px 17px;
+}
+.system-insight > header {
+  align-items: center;
+  color: var(--accent);
+  display: flex;
+  font: 600 8px JetBrains Mono;
+  gap: 8px;
+}
+.system-insight > header span {
+  color: var(--text);
+}
+.system-insight dl {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 12px;
+  margin: 16px 0 0;
+}
+.system-insight dt,
+.system-insight dd {
+  font: 600 8px JetBrains Mono;
+  margin: 0;
+}
+.system-insight dt {
+  color: var(--muted);
+}
+.system-insight dd {
+  max-width: 220px;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.core-grid {
+  align-items: end;
+  display: grid;
+  gap: 4px;
+  grid-template-columns: repeat(auto-fit, minmax(19px, 1fr));
+  height: 42px;
+  margin-top: 12px;
+}
+.core-grid span {
+  align-items: center;
+  background: color-mix(in srgb, var(--line) 65%, transparent);
+  color: var(--muted);
+  display: flex;
+  font: 600 6px JetBrains Mono;
+  height: 100%;
+  justify-content: end;
+  overflow: hidden;
+  padding-bottom: 3px;
+  position: relative;
+  text-align: center;
+}
+.core-grid i {
+  background: var(--accent);
+  bottom: 0;
+  left: 0;
+  opacity: .9;
+  position: absolute;
+  right: 0;
+  transition: height .35s ease;
+}
+.core-grid span::after {
+  content: "";
+  inset: auto 0 0;
+  position: absolute;
+}
+.process-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 14px;
+}
+.process-list > div {
+  align-items: center;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  display: grid;
+  font: 600 7px JetBrains Mono;
+  gap: 7px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  padding-bottom: 5px;
+}
+.process-list span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.process-list b { color: var(--accent); }
+.process-list small { color: var(--muted); }
+.process-list p { color: var(--muted); font-size: 9px; }
 .empty {
   min-height: 250px;
   display: grid;
@@ -1362,6 +1470,9 @@ main {
   }
   .gauge-grid,
   .chart-grid {
+    grid-template-columns: 1fr;
+  }
+  .system-insights-grid {
     grid-template-columns: 1fr;
   }
   .gauge-card {
