@@ -25,6 +25,9 @@ async def collect_unraid(database: Database, settings: ServerSettings) -> None:
         )
     response.raise_for_status()
     payload = response.json()
+    if isinstance(payload, dict) and payload.get("errors"):
+        errors = payload["errors"]
+        raise ValueError(f"GraphQL query rejected: {errors!s:.500}")
     if not isinstance(payload, dict) or not isinstance(payload.get("data"), dict):
         raise ValueError("Unraid API returned no GraphQL data")
     data = payload["data"]
@@ -97,7 +100,6 @@ query NccUnraidMetrics {
     cpu { id percentTotal cpus { percentTotal percentUser percentSystem percentNice percentIdle percentIrq percentGuest percentSteal } }
     memory { id total used free available active buffcache percentTotal swapTotal swapUsed swapFree percentSwapTotal }
     network { id name operstate bytesReceived bytesSent packetsReceived packetsSent receiveErrors transmitErrors receiveDropped transmitDropped rxSec txSec utilizationPercent lastUpdated }
-    temperature { id sensors { id name type location warning critical current { value unit timestamp status } } summary { average warningCount criticalCount } }
   }
   info { cpu { brand vendor threads cores } versions { unraid } }
   array { state capacity { kilobytes { total used free } } parityCheckStatus { status progress speed errors running } disks { id name device status temp size fsSize fsUsed type numReads numWrites numErrors isSpinning fsType } caches { id name device status temp size fsSize fsUsed type numReads numWrites numErrors isSpinning fsType } }

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
@@ -19,6 +20,7 @@ from ncc_server.telegram import send_telegram_alert
 from ncc_server.unraid_service import collect_unraid
 
 STATIC_DIR = Path(__file__).with_name("static")
+logger = logging.getLogger(__name__)
 
 
 def create_app(
@@ -92,8 +94,8 @@ async def _alert_loop(database: Database, settings: ServerSettings) -> None:
                 if await send_telegram_alert(settings, notification.message):
                     with database.session() as session:
                         mark_notified(session, notification.alert_id, notification.state)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("Unraid collector failed: %s", exc)
         await asyncio.sleep(30)
 
 
