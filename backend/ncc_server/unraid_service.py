@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+import logging
 from typing import Any
 
 import httpx
@@ -11,6 +12,8 @@ from sqlalchemy import select
 from ncc_server.config import ServerSettings
 from ncc_server.database import Database
 from ncc_server.models import Node, TelemetryPoint, utc_now
+
+logger = logging.getLogger(__name__)
 
 
 async def collect_unraid(database: Database, settings: ServerSettings) -> None:
@@ -92,6 +95,7 @@ async def collect_unraid(database: Database, settings: ServerSettings) -> None:
             )
         )
         session.commit()
+    logger.info("Unraid collector succeeded for %s", settings.unraid_display_name)
 
 
 _QUERY = """
