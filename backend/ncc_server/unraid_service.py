@@ -30,18 +30,28 @@ async def collect_unraid(database: Database, settings: ServerSettings) -> None:
         # Keep system and storage projections separate. One unsupported array
         # field must not hide CPU/RAM telemetry on older Unraid API schemas.
         payload = await _query_with_fallback(client, settings.unraid_url, headers)
-        try:
-            array_payload = await _query_json(
-                client, settings.unraid_url, headers, _ARRAY_QUERY
-            )
-        except ValueError:
-            array_payload = {}
+        array_payload = await _query_optional(
+            client, settings.unraid_url, headers, _ARRAY_QUERY
+        )
+        cpu_payload = await _query_optional(
+            client, settings.unraid_url, headers, _CPU_DETAILS_QUERY
+        )
+        vm_payload = await _query_optional(
+            client, settings.unraid_url, headers, _VMS_QUERY
+        )
+        docker_payload = await _query_optional(
+            client, settings.unraid_url, headers, _DOCKER_QUERY
+        )
     if not isinstance(payload.get("data"), dict):
         raise ValueError("Unraid API returned no GraphQL data")
     data = payload["data"]
     metrics = _dict(data.get("metrics"))
     info = _dict(data.get("info"))
     array = _dict(_dict(array_payload.get("data")).get("array"))
+    cpu_details = _dict(_dict(cpu_payload.get("data")).get("info")).get("cpu")
+    cpu_details = _dict(cpu_details)
+    vms = _dict(_dict(vm_payload.get("data")).get("vms"))
+    docker = _dict(_dict(docker_payload.get("data")).get("docker"))
     cpu = _dict(metrics.get("cpu")) or _dict(info.get("cpu"))
     memory = _dict(metrics.get("memory")) or _dict(info.get("memory"))
     network = metrics.get("network")
@@ -53,6 +63,7 @@ async def collect_unraid(database: Database, settings: ServerSettings) -> None:
             "percent": _number(cpu.get("percentTotal")),
             "model": info_cpu.get("brand") or info_cpu.get("vendor") or "Unraid CPU",
             "logical_cores": info_cpu.get("threads") or info_cpu.get("cores") or 0,
+            "temperature_c": _cpu_temperature(cpu_details),
         },
         "memory": {
             "percent": _number(memory.get("percentTotal")),
@@ -66,6 +77,8 @@ async def collect_unraid(database: Database, settings: ServerSettings) -> None:
             "interface": ", ".join(str(row.get("name")) for row in network_rows if row.get("name")),
         },
         "disks": _disks(array),
+        "vms": _vms(vms),
+        "containers": _containers(docker),
         "unraid": {
             "api_connected": True,
             "version": versions.get("unraid") or "unknown",
@@ -124,8 +137,33 @@ _ARRAY_QUERY = """
 query NccUnraidArray {
   array {
     state
-    capacity { kilobytes { total used free } }
+    disks {
+      id idx name device size status type temp
+      fsSize fsUsed fsFree fsType isSpinning
+    }
+    caches {
+      id idx name device size status type temp
+      fsSize fsUsed fsFree fsType isSpinning
+    }
   }
+}
+"""
+
+_CPU_DETAILS_QUERY = """
+query NccUnraidCpuDetails {
+  info { cpu { packages { temp } } }
+}
+"""
+
+_VMS_QUERY = """
+query NccUnraidVms {
+  vms { domains { id name state } }
+}
+"""
+
+_DOCKER_QUERY = """
+query NccUnraidDocker {
+  docker { containers { id names state status autoStart } }
 }
 """
 
@@ -162,6 +200,17 @@ async def _query_json(
     return payload
 
 
+async def _query_optional(
+    client: httpx.AsyncClient, url: str, headers: dict[str, str], query: str
+) -> dict[str, Any]:
+    """Run an optional view without letting version differences hide core telemetry."""
+    try:
+        return await _query_json(client, url, headers, query)
+    except (ValueError, httpx.HTTPError) as exc:
+        logger.info("Optional Unraid dashboard view unavailable: %s", exc)
+        return {}
+
+
 def _number(value: object) -> float:
     try:
         return float(str(value)) if value is not None else 0.0
@@ -178,6 +227,7 @@ def _bytes_to_gb(value: object) -> float:
 
 
 def _kb_to_gb(value: object) -> float:
+    """Unraid's array filesystem figures are reported in KiB."""
     return _number(value) / 1024 / 1024
 
 
@@ -187,7 +237,7 @@ def _sum_number(rows: list[object], key: str) -> float:
 
 def _disks(array: dict[str, Any]) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
-    for group in ("disks", "caches"):
+    for group in ("caches", "disks"):
         entries = array.get(group)
         if not isinstance(entries, list):
             continue
@@ -196,35 +246,17 @@ def _disks(array: dict[str, Any]) -> list[dict[str, object]]:
                 continue
             rows.append(
                 {
-                    "name": disk.get("name") or disk.get("device") or "disk",
+                    "name": _disk_name(disk, group),
                     "mount": disk.get("device") or "",
                     "percent": _disk_percent(disk),
-                    "total_gb": _bytes_to_gb(disk.get("size")),
-                    "used_gb": _bytes_to_gb(disk.get("fsUsed")),
-                    "temperature_c": disk.get("temperature") or disk.get("temp"),
+                    "total_gb": _kb_to_gb(disk.get("fsSize") or disk.get("size")),
+                    "used_gb": _kb_to_gb(disk.get("fsUsed")),
+                    "temperature_c": _disk_temperature(disk),
                     "status": disk.get("status"),
+                    "spinning": disk.get("isSpinning"),
                     "fstype": disk.get("fsType"),
                 }
             )
-    if rows:
-        return rows
-    capacity = _dict(array.get("capacity"))
-    kilobytes = _dict(capacity.get("kilobytes"))
-    total = _number(kilobytes.get("total"))
-    used = _number(kilobytes.get("used"))
-    if total > 0:
-        rows.append(
-            {
-                "name": "Unraid Array",
-                "mount": "Array",
-                "percent": used / total * 100,
-                "total_gb": _kb_to_gb(total),
-                "used_gb": _kb_to_gb(used),
-                "temperature_c": None,
-                "status": array.get("state"),
-                "fstype": "unraid",
-            }
-        )
     return rows
 
 
@@ -232,3 +264,62 @@ def _disk_percent(disk: dict[str, object]) -> float:
     total = _number(disk.get("fsSize"))
     used = _number(disk.get("fsUsed"))
     return used / total * 100 if total > 0 else 0.0
+
+
+def _disk_name(disk: dict[str, object], group: str) -> str:
+    if group == "caches":
+        name = str(disk.get("name") or "")
+        return "Cache" if not name or name.casefold() == "cache" else name
+    index = disk.get("idx")
+    return f"Disk {index}" if index not in (None, "") else str(
+        disk.get("name") or disk.get("device") or "Disk"
+    )
+
+
+def _disk_temperature(disk: dict[str, object]) -> float | None:
+    if disk.get("isSpinning") is False:
+        return None
+    temperature = _number(disk.get("temp") or disk.get("temperature"))
+    return temperature if temperature > 0 else None
+
+
+def _cpu_temperature(cpu: dict[str, object]) -> float | None:
+    packages = cpu.get("packages")
+    rows = packages if isinstance(packages, list) else [packages]
+    temperatures = [
+        _number(row.get("temp")) for row in rows if isinstance(row, dict)
+    ]
+    valid = [temperature for temperature in temperatures if temperature > 0]
+    return max(valid) if valid else None
+
+
+def _vms(vms: dict[str, Any]) -> list[dict[str, object]]:
+    domains = vms.get("domains")
+    if not isinstance(domains, list):
+        return []
+    return [
+        {"name": domain.get("name") or "Unbenannte VM", "state": domain.get("state") or "unknown"}
+        for domain in domains
+        if isinstance(domain, dict)
+    ]
+
+
+def _containers(docker: dict[str, Any]) -> list[dict[str, object]]:
+    containers = docker.get("containers")
+    if not isinstance(containers, list):
+        return []
+    result: list[dict[str, object]] = []
+    for container in containers:
+        if not isinstance(container, dict):
+            continue
+        names = container.get("names")
+        name = names[0] if isinstance(names, list) and names else container.get("id")
+        result.append(
+            {
+                "name": str(name or "Unbenannter Container").lstrip("/"),
+                "state": container.get("state") or "unknown",
+                "status": container.get("status") or "",
+                "auto_start": bool(container.get("autoStart")),
+            }
+        )
+    return result
