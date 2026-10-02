@@ -16,6 +16,7 @@ from ncc_server.models import (
     TelemetryPoint,
     utc_now,
 )
+from ncc_server.node_service import is_online
 
 
 def make_database(path: Path) -> Database:
@@ -155,3 +156,14 @@ def test_loopback_dashboard_access_can_be_enabled(tmp_path: Path) -> None:
         response = client.get("/api/v1/fleet/summary")
         assert response.status_code == 200
         assert response.json()["total_nodes"] == 0
+
+
+def test_unraid_polling_uses_a_grace_period() -> None:
+    node = Node(
+        machine_id="unraid:horsttower",
+        display_name="horsttower",
+        platform="linux",
+        metadata_json={"source": "unraid-api"},
+        last_seen_at=utc_now() - timedelta(seconds=45),
+    )
+    assert is_online(node, 30) is True

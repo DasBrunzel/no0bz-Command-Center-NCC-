@@ -158,7 +158,18 @@ def is_online(node: Node, offline_after_seconds: int) -> bool:
     last_seen = node.last_seen_at
     if last_seen.tzinfo is None:
         last_seen = last_seen.replace(tzinfo=timezone.utc)
-    return (utc_now() - last_seen).total_seconds() <= offline_after_seconds
+    return (utc_now() - last_seen).total_seconds() <= _offline_timeout(node, offline_after_seconds)
+
+
+def _offline_timeout(node: Node, default_seconds: int) -> int:
+    """Return a source-appropriate grace period for a node health check."""
+    metadata = node.metadata_json if isinstance(node.metadata_json, dict) else {}
+    # Unraid is polled by NCC, rather than sending its own heartbeat. Its
+    # 30-second polling cadence needs room for a slow API response and a
+    # database write, otherwise it briefly oscillates between online/offline.
+    if metadata.get("source") == "unraid-api":
+        return max(default_seconds, 90)
+    return default_seconds
 
 
 def _bound_node(session: Session, token: AgentToken) -> Node:
