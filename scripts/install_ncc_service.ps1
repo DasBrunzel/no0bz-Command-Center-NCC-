@@ -53,18 +53,18 @@ $name = $Component.ToLowerInvariant()
 $configPath = Join-Path $configRoot "$name.env"
 if (-not (Test-Path $configPath) -or $ReplaceConfig) {
     if ($Component -eq "Agent") {
-        $serverUrl = ""
+        $configuredServerUrl = ""
         if ($Tailscale) {
             $target = $ServerUrl
             if (-not $target) { $target = Read-Host "Tailscale-IP oder MagicDNS-Name des NCC-Servers" }
             if ($target -notmatch '^[A-Za-z0-9.:-]+$') { throw "Ungültige Tailscale-Adresse." }
-            if ($target.Contains(":")) { $serverUrl = "http://[${target}]:8350" }
-            else { $serverUrl = "http://${target}:8350" }
+            if ($target.Contains(":")) { $configuredServerUrl = "http://[${target}]:8350" }
+            else { $configuredServerUrl = "http://${target}:8350" }
         } else {
-            $serverUrl = if ($ServerUrl) { $ServerUrl } else { Read-Host "NCC Server-URL (HTTPS)" }
+            $configuredServerUrl = if ($ServerUrl) { $ServerUrl } else { Read-Host "NCC Server-URL (HTTPS)" }
         }
-        if (-not $serverUrl) { throw "Eine Server-URL ist erforderlich." }
-        $env:NCC_VALIDATE_URL = $serverUrl
+        if (-not $configuredServerUrl) { throw "Eine Server-URL ist erforderlich." }
+        $env:NCC_VALIDATE_URL = $configuredServerUrl
         $env:NCC_VALIDATE_INSECURE = [int]$Tailscale.IsPresent
         try {
             & $venvPython -c "import os; from ncc_service.doctor import validate_url; validate_url(os.environ['NCC_VALIDATE_URL'], os.environ['NCC_VALIDATE_INSECURE'] == '1')"
@@ -77,7 +77,7 @@ if (-not (Test-Path $configPath) -or $ReplaceConfig) {
         $pairingId = & $venvPython -c "import secrets; print(secrets.token_urlsafe(18))"
         $pairingSecret = & $venvPython -c "import secrets; print(secrets.token_urlsafe(32))"
         $lines = @(
-            "NCC_AGENT_SERVER_URL=$(Quote-DotEnv $serverUrl)",
+            "NCC_AGENT_SERVER_URL=$(Quote-DotEnv $configuredServerUrl)",
             "NCC_AGENT_PAIRING_ID=$(Quote-DotEnv $pairingId)",
             "NCC_AGENT_PAIRING_SECRET=$(Quote-DotEnv $pairingSecret)",
             "NCC_AGENT_DATA_DIR=$(Quote-DotEnv $dataRoot)",
@@ -137,4 +137,4 @@ if ($serviceExists -and $serviceExists.Status -eq "Running") { Restart-Service -
 else { Start-Service -Name $serviceName }
 Write-Host "[NCC] $Component-Dienst läuft. Konfiguration: $configPath"
 Write-Host "[NCC] Logdatei: $(Join-Path $installRoot "logs\$name.log")"
-if ($Component -eq "Agent" -and $pairingId) { Write-Host "[NCC] Browser-Freigabe: $serverUrl/?pair=$pairingId" }
+if ($Component -eq "Agent" -and $pairingId) { Write-Host "[NCC] Browser-Freigabe: $configuredServerUrl/?pair=$pairingId" }
