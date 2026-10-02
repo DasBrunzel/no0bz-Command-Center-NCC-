@@ -46,6 +46,11 @@ if sys.platform == "win32":
         def SvcDoRun(self) -> None:  # noqa: N802 - Windows SCM contract
             servicemanager.LogInfoMsg(f"{self._svc_display_name_} starting")
             try:
+                # A Windows Server can otherwise keep the service in START_PENDING
+                # until the child process is ready.  A slow protected-process
+                # initialization then triggers the SCM's 30 second timeout even
+                # though the NCC worker itself is healthy.
+                self.ReportServiceStatus(win32service.SERVICE_RUNNING)
                 code = self._managed.run()
             except Exception:
                 logging.exception("NCC service failed")

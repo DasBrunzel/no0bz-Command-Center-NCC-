@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "no0bz-command-center"
-version = "0.5.0b14"
+version = "0.5.0b15"
 description = "Self-hosted monitoring server and cross-platform telemetry agent"
 requires-python = ">=3.10"
 license = {text = "MIT"}
