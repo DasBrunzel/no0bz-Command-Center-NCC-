@@ -545,6 +545,10 @@ function UnraidWorkloadCard({
 }) {
   const running = (state: unknown) =>
     /running|started|up/i.test(String(state || ""));
+  const ordered = [...items].sort((left, right) => {
+    const activity = Number(running(right.state)) - Number(running(left.state));
+    return activity || String(left.name || "").localeCompare(String(right.name || ""), "de");
+  });
   return (
     <article className="surface compact unraid-workload-card">
       <header>
@@ -553,7 +557,7 @@ function UnraidWorkloadCard({
         <b>{items.length}</b>
       </header>
       <div className="unraid-workload-list">
-        {items.map((item, index) => (
+        {ordered.map((item, index) => (
           <div key={`${item.name}-${index}`}>
             <strong>{item.name || `Unbenannt ${kind}`}</strong>
             <span className={running(item.state) ? "running" : "stopped"}>
@@ -1759,7 +1763,7 @@ function App() {
         <footer>
           <ShieldCheck size={14} />
           <span>GESICHERTE VERBINDUNG</span>
-          <b>v0.5.0-beta.26</b>
+          <b>v0.5.0-beta.27</b>
         </footer>
       </aside>
       <div className="mobile-scrim" onClick={() => setSidebar(false)} />
