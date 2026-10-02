@@ -107,6 +107,19 @@ class FleetSummaryResponse(BaseModel):
     server_time: datetime
 
 
+class FleetAlertResponse(BaseModel):
+    alert_id: str
+    node_id: str
+    display_name: str
+    kind: str
+    severity: Literal["warning", "critical"]
+    active: bool
+    message: str
+    opened_at: datetime
+    updated_at: datetime
+    resolved_at: datetime | None
+
+
 class FleetNodeRenameRequest(BaseModel):
     display_name: str = Field(min_length=1, max_length=128)
 

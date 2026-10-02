@@ -9,11 +9,13 @@ from ncc_server.fleet_service import (
     fleet_node,
     fleet_summary,
     forget_fleet_node,
+    list_fleet_alerts,
     list_fleet_nodes,
     node_telemetry,
     rename_fleet_node,
 )
 from ncc_server.schemas import (
+    FleetAlertResponse,
     FleetNodeRenameRequest,
     FleetNodeResponse,
     FleetSummaryResponse,
@@ -39,6 +41,13 @@ async def nodes(
     request: Request, session: Session = Depends(database_session)
 ) -> list[FleetNodeResponse]:
     return list_fleet_nodes(session, request.app.state.server_settings)
+
+
+@router.get("/alerts", response_model=list[FleetAlertResponse])
+async def alerts(
+    limit: int = Query(default=100, ge=1, le=500), session: Session = Depends(database_session)
+) -> list[FleetAlertResponse]:
+    return list_fleet_alerts(session, limit)
 
 
 @router.get("/nodes/{node_id}", response_model=FleetNodeResponse)

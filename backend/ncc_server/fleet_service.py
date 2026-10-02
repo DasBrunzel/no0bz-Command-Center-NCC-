@@ -6,9 +6,38 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ncc_server.config import ServerSettings
-from ncc_server.models import AuditEvent, Node, TelemetryPoint, utc_now
+from ncc_server.models import AlertState, AuditEvent, Node, TelemetryPoint, utc_now
 from ncc_server.node_service import is_online
-from ncc_server.schemas import FleetNodeResponse, FleetSummaryResponse, FleetTelemetryPoint
+from ncc_server.schemas import (
+    FleetAlertResponse,
+    FleetNodeResponse,
+    FleetSummaryResponse,
+    FleetTelemetryPoint,
+)
+
+
+def list_fleet_alerts(session: Session, limit: int) -> list[FleetAlertResponse]:
+    rows = session.execute(
+        select(AlertState, Node.display_name)
+        .join(Node, Node.id == AlertState.node_id)
+        .order_by(AlertState.active.desc(), AlertState.updated_at.desc())
+        .limit(limit)
+    ).all()
+    return [
+        FleetAlertResponse(
+            alert_id=alert.id,
+            node_id=alert.node_id,
+            display_name=display_name,
+            kind=alert.kind,
+            severity=alert.severity,  # type: ignore[arg-type]
+            active=alert.active,
+            message=alert.message,
+            opened_at=alert.opened_at,
+            updated_at=alert.updated_at,
+            resolved_at=alert.resolved_at,
+        )
+        for alert, display_name in rows
+    ]
 
 
 def list_fleet_nodes(session: Session, settings: ServerSettings) -> list[FleetNodeResponse]:

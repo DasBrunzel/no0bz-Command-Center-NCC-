@@ -7,7 +7,15 @@ from fastapi.testclient import TestClient
 from ncc_server.app import create_app
 from ncc_server.config import ServerSettings
 from ncc_server.database import Database
-from ncc_server.models import AgentToken, AuditEvent, Base, Node, TelemetryPoint, utc_now
+from ncc_server.models import (
+    AgentToken,
+    AlertState,
+    AuditEvent,
+    Base,
+    Node,
+    TelemetryPoint,
+    utc_now,
+)
 
 
 def make_database(path: Path) -> Database:
@@ -90,6 +98,22 @@ def test_fleet_api_is_protected_and_returns_latest_metrics(tmp_path: Path) -> No
         assert summary["online_nodes"] == 1
         assert summary["offline_nodes"] == 1
         assert summary["telemetry_points"] == 2
+
+        with database.session() as session:
+            session.add(
+                AlertState(
+                    node_id=online_id,
+                    kind="cpu",
+                    severity="critical",
+                    active=True,
+                    message="Root Server: CPU-Auslastung bei 98 % (critical).",
+                )
+            )
+            session.commit()
+        alerts = client.get("/api/v1/fleet/alerts", headers=headers)
+        assert alerts.status_code == 200
+        assert alerts.json()[0]["display_name"] == "Root Server"
+        assert alerts.json()[0]["active"] is True
 
         telemetry = client.get(
             f"/api/v1/fleet/nodes/{online_id}/telemetry?limit=1", headers=headers
