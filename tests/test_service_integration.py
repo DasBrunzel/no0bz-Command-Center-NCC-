@@ -151,6 +151,15 @@ def test_windows_agent_installer_supports_task_scheduler_fallback() -> None:
     assert "NCC Agent started through Windows Task Scheduler" in runner
 
 
+def test_unraid_configuration_reads_key_without_printing_it() -> None:
+    root = Path(__file__).resolve().parents[1]
+    setup = (root / "scripts/configure_ncc_unraid.ps1").read_text(encoding="utf-8")
+    assert "Read-Host \"Unraid API-Key" in setup
+    assert '"x-api-key" = $apiKey' in setup
+    assert "NCC_UNRAID_API_KEY" in setup
+    assert "Write-Host $apiKey" not in setup
+
+
 def test_service_host_launches_the_venv_python(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
