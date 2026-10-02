@@ -6,7 +6,9 @@ param(
     [switch]$Tailscale,
     [ValidatePattern('^[A-Za-z0-9.:-]+$')]
     [string]$ServerUrl,
-    [switch]$ReplaceConfig
+    [switch]$ReplaceConfig,
+    [ValidateSet("Service", "Task")]
+    [string]$AgentMode = "Service"
 )
 
 $ErrorActionPreference = "Stop"
@@ -17,6 +19,7 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
     if ($Tailscale) { $arguments += " -Tailscale" }
     if ($ServerUrl) { $arguments += " -ServerUrl $ServerUrl" }
     if ($ReplaceConfig) { $arguments += " -ReplaceConfig" }
+    if ($AgentMode -eq "Task") { $arguments += " -AgentMode Task" }
     Start-Process powershell.exe -Verb RunAs -ArgumentList $arguments
     exit
 }
@@ -125,6 +128,29 @@ if (-not (Test-Path $configPath) -or $ReplaceConfig) {
 if ($Component -eq "Server") {
     & $venvPython -m ncc_service.migrate --config $configPath --alembic (Join-Path $installRoot "alembic.ini")
     if ($LASTEXITCODE -ne 0) { throw "Die Datenbankmigration ist fehlgeschlagen." }
+}
+
+if ($Component -eq "Server" -and $AgentMode -ne "Service") {
+    throw "Der Task-Modus ist ausschließlich für den NCC-Agenten verfügbar."
+}
+
+if ($Component -eq "Agent" -and $AgentMode -eq "Task") {
+    $taskName = "NccAgent"
+    $service = Get-Service -Name $taskName -ErrorAction SilentlyContinue
+    if ($service) {
+        if ($service.Status -ne "Stopped") { Stop-Service -Name $taskName -Force -ErrorAction SilentlyContinue }
+        & $venvPython -m ncc_service.windows agent remove
+        if ($LASTEXITCODE -ne 0) { throw "Der bisherige Windows-Dienst konnte nicht entfernt werden." }
+    }
+    $taskCommand = "`"$venvPython`" -m ncc_service.task_runner agent"
+    & schtasks.exe /Create /TN $taskName /SC ONSTART /RU SYSTEM /RL HIGHEST /TR $taskCommand /F | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Die NCC-Agent-Systemaufgabe konnte nicht erstellt werden." }
+    & schtasks.exe /Run /TN $taskName | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Die NCC-Agent-Systemaufgabe konnte nicht gestartet werden." }
+    Write-Host "[NCC] Agent läuft als Systemaufgabe und startet automatisch mit Windows."
+    Write-Host "[NCC] Konfiguration: $configPath"
+    Write-Host "[NCC] Logdatei: $(Join-Path $installRoot 'logs\agent.log')"
+    exit
 }
 
 $serviceName = if ($Component -eq "Agent") { "NccAgent" } else { "NccServer" }

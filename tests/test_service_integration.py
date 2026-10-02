@@ -141,6 +141,15 @@ def test_windows_agent_installer_can_preselect_a_tailscale_server() -> None:
     assert "$target = $ServerUrl" in installer
 
 
+def test_windows_agent_installer_supports_task_scheduler_fallback() -> None:
+    root = Path(__file__).resolve().parents[1]
+    installer = (root / "scripts/install_ncc_service.ps1").read_text(encoding="utf-8")
+    runner = (root / "backend/ncc_service/task_runner.py").read_text(encoding="utf-8")
+    assert '[string]$AgentMode = "Service"' in installer
+    assert "ncc_service.task_runner agent" in installer
+    assert "NCC Agent started through Windows Task Scheduler" in runner
+
+
 def test_service_host_launches_the_venv_python(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
