@@ -28,6 +28,8 @@ class AgentSettings(BaseSettings):
 
     server_url: str = ""
     token: SecretStr = SecretStr("")
+    pairing_id: str = ""
+    pairing_secret: SecretStr = SecretStr("")
     data_dir: Path = Field(default_factory=default_data_dir)
     display_name: str = Field(default="", max_length=128)
     collection_interval_seconds: float = Field(default=5.0, ge=1.0, le=300.0)

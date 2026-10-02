@@ -8,6 +8,7 @@ config_dir=/etc/ncc
 data_dir=/var/lib/ncc-agent
 tailscale=0
 replace_config=0
+pairing_id=
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --tailscale) tailscale=1; shift ;;
@@ -29,19 +30,16 @@ if [ ! -f "$config_dir/agent.env" ] || [ "$replace_config" -eq 1 ]; then
       *) server_url="http://$server_url:8350" ;;
     esac
   fi
-  token=${NCC_INSTALL_AGENT_TOKEN:-}
-  if [ -z "$token" ]; then
-    printf "Individueller Agent-Token: "
-    old_stty=$(stty -g); trap 'stty "$old_stty"' EXIT HUP INT TERM
-    stty -echo; read -r token; stty "$old_stty"; trap - EXIT HUP INT TERM; printf "\n"
-  fi
-  [ -n "$server_url" ] && [ -n "$token" ] || { echo "[FEHLER] URL und Token sind erforderlich." >&2; exit 1; }
+  [ -n "$server_url" ] || { echo "[FEHLER] Eine Server-URL ist erforderlich." >&2; exit 1; }
   NCC_VALIDATE_URL="$server_url" NCC_VALIDATE_INSECURE="$tailscale" "$prefix/venv/bin/python" -c \
     'import os; from ncc_service.doctor import validate_url; validate_url(os.environ["NCC_VALIDATE_URL"], os.environ["NCC_VALIDATE_INSECURE"] == "1")'
   umask 077
   {
     printf 'NCC_AGENT_SERVER_URL="%s"\n' "$server_url"
-    printf 'NCC_AGENT_TOKEN="%s"\n' "$token"
+    pairing_id=$("$prefix/venv/bin/python" -c 'import secrets; print(secrets.token_urlsafe(18))')
+    pairing_secret=$("$prefix/venv/bin/python" -c 'import secrets; print(secrets.token_urlsafe(32))')
+    printf 'NCC_AGENT_PAIRING_ID="%s"\n' "$pairing_id"
+    printf 'NCC_AGENT_PAIRING_SECRET="%s"\n' "$pairing_secret"
     printf 'NCC_AGENT_DATA_DIR="%s"\n' "$data_dir"
     printf 'NCC_AGENT_ALLOW_INSECURE_HTTP=%s\n' "$tailscale"
   } > "$config_dir/agent.env"
@@ -55,3 +53,4 @@ install -m 0644 "$root/packaging/systemd/ncc-agent.service" /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable --now ncc-agent.service
 echo "[NCC] Agent-Dienst installiert. Status: systemctl status ncc-agent"
+[ -z "$pairing_id" ] || echo "[NCC] Browser-Freigabe: ${server_url}/?pair=${pairing_id}"

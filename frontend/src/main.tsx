@@ -145,6 +145,7 @@ function App(){
   useEffect(()=>{void load();const poll=window.setInterval(()=>void load(true),5000);return()=>clearInterval(poll)},[load]);
   useEffect(()=>{const timer=window.setInterval(()=>setClock(new Date()),1000);return()=>clearInterval(timer)},[]);
   useEffect(()=>{if(!selected)return;getJson<Telemetry[]>(`/api/v1/fleet/nodes/${selected.node_id}/telemetry?limit=120`,token).then(setPoints).catch(()=>setPoints([]))},[selected?.node_id,selected?.latest?.recorded_at,token]);
+  useEffect(()=>{const pairingId=new URLSearchParams(window.location.search).get("pair");if(authenticated!==true||!pairingId)return;postJson(`/api/v1/agent-pairings/${encodeURIComponent(pairingId)}/approve`,token).then(()=>window.history.replaceState({},"",window.location.pathname)).catch(()=>undefined)},[authenticated,token]);
   const saveToken=(value:string)=>{localStorage.setItem("ncc-dashboard-token",value);setToken(value);setAuthenticated(null);setAuthError(false)};
   const createInvitation=async(name:string,hours:number)=>{const created=await postJson<IssuedInvitation>("/api/v1/agent-invitations",token,{name,expires_hours:hours});const {token:_,...stored}=created;setInvitations(current=>[stored,...current]);return created};
   const revokeInvitation=async(id:string)=>{await postJson<Invitation>(`/api/v1/agent-invitations/${id}/revoke`,token);const response=await fetch(`/api/v1/agent-invitations/${id}`,{method:"DELETE",headers:headers(token)});if(!response.ok)throw new Error("REQUEST");setInvitations(current=>current.filter(item=>item.token_id!==id))};

@@ -13,6 +13,7 @@ from ncc.config import Settings as CollectorSettings
 from ncc_agent.buffer import TelemetryBuffer
 from ncc_agent.client import AgentClient, AgentRejectedError
 from ncc_agent.config import AgentSettings
+from ncc_agent.credentials import clear_token, load_token, save_token
 from ncc_agent.identity import load_or_create_machine_id
 
 logger = logging.getLogger(__name__)
@@ -40,6 +41,9 @@ class AgentRunner:
             self.machine_id,
         )
         self.client = AgentClient(settings, self.machine_id, self.buffer)
+        saved_token = load_token(settings.data_dir)
+        if saved_token:
+            self.client.set_token(saved_token)
         self.stop_event = threading.Event()
 
     def run(self) -> int:
@@ -59,6 +63,15 @@ class AgentRunner:
                 if time.monotonic() < next_network_attempt:
                     continue
                 try:
+                    if not self.client.has_token:
+                        self.client.register_pairing()
+                        token = self.client.claim_pairing()
+                        if token is None:
+                            next_network_attempt = time.monotonic() + 5.0
+                            continue
+                        save_token(self.settings.data_dir, token)
+                        self.client.set_token(token)
+                        logger.info("NCC Agent pairing approved; internal credential stored locally")
                     if not enrolled:
                         heartbeat_interval = float(self.client.enroll())
                         enrolled = True
@@ -69,6 +82,13 @@ class AgentRunner:
                     backoff = 1.0
                     next_network_attempt = time.monotonic() + heartbeat_interval
                 except AgentRejectedError as exc:
+                    if self.client.has_token and self.settings.pairing_id:
+                        logger.warning("NCC Agent credential was rejected; waiting for a new browser approval")
+                        clear_token(self.settings.data_dir)
+                        self.client.set_token("")
+                        enrolled = False
+                        next_network_attempt = time.monotonic() + 5.0
+                        continue
                     logger.error("NCC Agent authentication/enrollment failed: %s", exc)
                     return 2
                 except (httpx.HTTPError, OSError) as exc:

@@ -27,15 +27,48 @@ class AgentClient:
         self.machine_id = machine_id
         self.buffer = buffer
         self.server_url = settings.validated_server_url()
-        token = settings.token.get_secret_value()
-        if not token:
-            raise ValueError("NCC_AGENT_TOKEN is required")
-        self._headers = {"Authorization": f"Bearer {token}"}
+        self._headers: dict[str, str] = {}
+        self.set_token(settings.token.get_secret_value())
         self._client = httpx.Client(
             timeout=settings.request_timeout_seconds,
             verify=settings.verify_tls,
             transport=transport,
         )
+
+    @property
+    def has_token(self) -> bool:
+        return bool(self._headers)
+
+    def set_token(self, token: str) -> None:
+        self._headers = {"Authorization": f"Bearer {token}"} if token else {}
+
+    def register_pairing(self) -> None:
+        pairing_id = self.settings.pairing_id
+        pairing_secret = self.settings.pairing_secret.get_secret_value()
+        if not pairing_id or not pairing_secret:
+            raise ValueError("NCC agent pairing is not configured")
+        self._request_public(
+            "POST",
+            "/api/v1/agent-pairings/register",
+            json={
+                "pairing_id": pairing_id,
+                "pairing_secret": pairing_secret,
+                "machine_id": self.machine_id,
+                "display_name": (self.settings.display_name or socket.gethostname())[:128],
+                "platform": _platform_name(),
+                "agent_version": __version__,
+                "metadata": _host_metadata(),
+            },
+        )
+
+    def claim_pairing(self) -> str | None:
+        response = self._request_public(
+            "POST",
+            f"/api/v1/agent-pairings/{self.settings.pairing_id}/claim",
+            json={"pairing_secret": self.settings.pairing_secret.get_secret_value()},
+            pending_ok=True,
+        )
+        return None if response.status_code == 409 else str(response.json()["token"])
 
     def enroll(self) -> int:
         response = self._request(
@@ -94,6 +127,15 @@ class AgentClient:
         )
         if response.status_code in {400, 401, 403, 409, 422}:
             raise AgentRejectedError(f"server rejected agent request ({response.status_code})")
+        response.raise_for_status()
+        return response
+
+    def _request_public(self, method: str, path: str, *, pending_ok: bool = False, **kwargs: Any) -> httpx.Response:
+        response = self._client.request(method, f"{self.server_url}{path}", **kwargs)
+        if pending_ok and response.status_code == 409:
+            return response
+        if response.status_code in {400, 401, 403, 410, 422}:
+            raise AgentRejectedError(f"server rejected agent pairing ({response.status_code})")
         response.raise_for_status()
         return response
 

@@ -4,6 +4,13 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.5.0-beta.9] - 2026-10-02
+
+### Added
+
+- Linux-Agenten können sich nun per browserbestätigtem Pairing aufnehmen lassen,
+  ohne einen Agent-Token zu kopieren oder anzuzeigen.
+
 ### Added
 
 - Grundlage für eine browserbestätigte Agent-Aufnahme: zeitlich begrenzte,
