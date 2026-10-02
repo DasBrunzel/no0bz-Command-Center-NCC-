@@ -171,6 +171,14 @@ def test_unraid_settings_support_legacy_setup_key_names() -> None:
     assert settings.unraid_api_key.get_secret_value() == "secret"
 
 
+def test_unraid_schema_inspection_does_not_export_api_key() -> None:
+    root = Path(__file__).resolve().parents[1]
+    script = (root / "scripts/inspect_ncc_unraid_schema.ps1").read_text(encoding="utf-8")
+    assert "__schema" in script
+    assert "ncc-unraid-schema.json" in script
+    assert "apiKey" not in script.split("Write-Host", maxsplit=1)[1]
+
+
 def test_service_host_launches_the_venv_python(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
