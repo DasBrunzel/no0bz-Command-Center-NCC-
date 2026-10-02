@@ -710,6 +710,9 @@ main {
   grid-template-columns: repeat(3, 1fr);
   gap: 13px;
 }
+.unraid-gauge-grid {
+  grid-template-columns: repeat(2, 1fr);
+}
 .gauge-card {
   border: 1px solid var(--line);
   background: var(--surface);

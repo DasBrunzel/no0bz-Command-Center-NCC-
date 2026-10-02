@@ -662,7 +662,7 @@ function NodeOverview({ node }: { node: Node | null }) {
           <small>{ago(node.last_seen_at)}</small>
         </div>
       </div>
-      <div className="gauge-grid">
+      <div className={`gauge-grid ${isUnraid ? "unraid-gauge-grid" : ""}`}>
         <Gauge
           label="CPU"
           value={num(cpu.percent)}
@@ -675,18 +675,14 @@ function NodeOverview({ node }: { node: Node | null }) {
           tone="blue"
           detail={`${num(memory.used_gb).toFixed(1)} / ${num(memory.total_gb).toFixed(1)} GB`}
         />
-        <Gauge
-          label={isUnraid ? "UNRAID API" : "GPU"}
-          value={
-            isUnraid ? (m.unraid?.api_connected ? 100 : 0) : num(gpu.percent)
-          }
-          tone={isUnraid ? "blue" : "purple"}
-          detail={
-            isUnraid
-              ? String(m.unraid?.array_state || "Verbunden")
-              : gpu.name || "Nicht erkannt"
-          }
-        />
+        {!isUnraid && (
+          <Gauge
+            label="GPU"
+            value={num(gpu.percent)}
+            tone="purple"
+            detail={gpu.name || "Nicht erkannt"}
+          />
+        )}
       </div>
       <div className="detail-grid">
         <article className="surface compact">
@@ -1763,7 +1759,7 @@ function App() {
         <footer>
           <ShieldCheck size={14} />
           <span>GESICHERTE VERBINDUNG</span>
-          <b>v0.5.0-beta.27</b>
+          <b>v0.5.0-beta.28</b>
         </footer>
       </aside>
       <div className="mobile-scrim" onClick={() => setSidebar(false)} />

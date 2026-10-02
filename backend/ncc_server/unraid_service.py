@@ -284,11 +284,9 @@ def _disk_temperature(disk: dict[str, object]) -> float | None:
 
 
 def _cpu_temperature(cpu: dict[str, object]) -> float | None:
-    packages = cpu.get("packages")
-    rows = packages if isinstance(packages, list) else [packages]
-    temperatures = [
-        _number(row.get("temp")) for row in rows if isinstance(row, dict)
-    ]
+    packages = _dict(cpu.get("packages"))
+    values = packages.get("temp")
+    temperatures = [_number(value) for value in values] if isinstance(values, list) else [_number(values)]
     valid = [temperature for temperature in temperatures if temperature > 0]
     return max(valid) if valid else None
 
