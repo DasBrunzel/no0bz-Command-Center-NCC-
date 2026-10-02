@@ -179,6 +179,7 @@ aside {
   padding: 0 14px;
   display: flex;
   flex-direction: column;
+  transition: width 0.2s ease, padding 0.2s ease;
 }
 .aside-top {
   height: 76px;
@@ -188,6 +189,32 @@ aside {
   margin: 0 -14px;
   padding: 0 20px;
 }
+.sidebar-toggle {
+  width: 30px;
+  height: 30px;
+  margin-left: auto;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--muted);
+  border-radius: 6px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.sidebar-toggle:hover { color: var(--text); border-color: var(--accent); }
+aside.collapsed { width: 70px; padding: 0 10px; }
+aside.collapsed .aside-top { margin: 0 -10px; padding: 0 10px; justify-content: center; }
+aside.collapsed .brand > div:last-child,
+aside.collapsed nav > span,
+aside.collapsed nav button b,
+aside.collapsed .server-health,
+aside.collapsed footer span,
+aside.collapsed footer b { display: none; }
+aside.collapsed .brand { margin-right: auto; }
+aside.collapsed .sidebar-toggle svg { transform: rotate(180deg); }
+aside.collapsed nav { padding-top: 20px; }
+aside.collapsed nav button { justify-content: center; padding: 0; }
+aside.collapsed footer { grid-template-columns: 1fr; justify-items: center; }
 .brand {
   display: flex;
   align-items: center;
@@ -345,6 +372,7 @@ aside > footer b {
   margin-left: 244px;
   min-height: 100vh;
 }
+.shell.sidebar-collapsed .content { margin-left: 70px; }
 .topbar {
   height: 76px;
   border-bottom: 1px solid var(--line);
@@ -580,7 +608,16 @@ main {
 .node-group h3 span {
   color: var(--accent);
 }
-.node-stack button {
+.node-group-toggle {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+.node-group-toggle:hover h3 { color: var(--text); }
+.node-group > button:not(.node-group-toggle) {
   width: 100%;
   min-height: 88px;
   border: 1px solid var(--line);
@@ -595,10 +632,10 @@ main {
   text-align: left;
   cursor: pointer;
 }
-.node-stack button:hover {
+.node-group > button:not(.node-group-toggle):hover {
   border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
 }
-.node-stack button.selected {
+.node-group > button:not(.node-group-toggle).selected {
   border-color: rgba(var(--accent-rgb), 0.5);
   background: linear-gradient(
     90deg,
@@ -683,7 +720,7 @@ main {
 .is-offline {
   color: var(--muted);
 }
-.node-stack button > svg {
+.node-group > button:not(.node-group-toggle) > svg {
   color: var(--muted);
 }
 .node-overview {
@@ -1087,6 +1124,7 @@ main {
   font: 600 7px JetBrains Mono;
   color: var(--muted);
 }
+.shell.sidebar-collapsed .statusbar { left: 70px; }
 .statusbar span:first-child {
   color: var(--green);
   display: flex;
@@ -1364,6 +1402,15 @@ main {
   .content {
     margin-left: 0;
   }
+  .shell.sidebar-collapsed .content {
+    margin-left: 0;
+  }
+  .shell.sidebar-collapsed .statusbar {
+    left: 0;
+  }
+  .sidebar-toggle {
+    display: none;
+  }
   .topbar {
     padding: 0 15px;
     gap: 12px;
@@ -1457,7 +1504,7 @@ main {
   .hero p {
     max-width: 200px;
   }
-  .node-stack > button {
+  .node-group > button:not(.node-group-toggle) {
     grid-template-columns: 38px minmax(0, 1fr) 12px;
   }
   .node-stack .status-dot {

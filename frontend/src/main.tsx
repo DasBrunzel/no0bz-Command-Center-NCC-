@@ -374,6 +374,7 @@ function Fleet({
   onQuery: (v: string) => void;
   alerts: AlertRecord[];
 }) {
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const fleetAlerts: FleetAlert[] = alerts.filter((alert) => alert.active).map((alert) => ({
     id: alert.alert_id, title: alert.message, detail: `${alert.display_name} · seit ${ago(alert.opened_at)}`, severity: alert.severity,
   }));
@@ -383,9 +384,9 @@ function Fleet({
       .includes(query.toLowerCase()),
   );
   const groups = [
+    { label: "PCS & LAPTOPS", nodes: filtered.filter((node) => node.metadata.source !== "unraid-api" && !/server|tower|android|ios|pixel|phone/i.test(`${node.display_name} ${node.machine_id}`)) },
     { label: "SERVER", nodes: filtered.filter((node) => node.metadata.source === "unraid-api" || /server|tower/i.test(node.display_name)) },
     { label: "MOBILE", nodes: filtered.filter((node) => /android|ios|pixel|phone/i.test(`${node.display_name} ${node.machine_id}`)) },
-    { label: "PCS & LAPTOPS", nodes: filtered.filter((node) => node.metadata.source !== "unraid-api" && !/server|tower|android|ios|pixel|phone/i.test(`${node.display_name} ${node.machine_id}`)) },
   ].filter((group) => group.nodes.length).map((group) => ({ ...group, nodes: [...group.nodes].sort((left, right) => Number(right.online) - Number(left.online) || left.display_name.localeCompare(right.display_name, "de")) }));
   return (
     <>
@@ -410,7 +411,7 @@ function Fleet({
             />
           </label>
           <div className="node-stack">
-            {groups.map((group) => <section className="node-group" key={group.label}><h3>{group.label}<span>{group.nodes.length}</span></h3>{group.nodes.map((node) => {
+            {groups.map((group) => <section className="node-group" key={group.label}><button className="node-group-toggle" onClick={() => setCollapsedGroups((current) => ({...current, [group.label]: !current[group.label]}))}><h3>{group.label}<span>{group.nodes.length} · {collapsedGroups[group.label] ? "+" : "–"}</span></h3></button>{!collapsedGroups[group.label] && group.nodes.map((node) => {
               const m = node.latest?.metrics || {};
               return (
                 <button
@@ -1548,6 +1549,7 @@ function App() {
     [query, setQuery] = useState(""),
     [loading, setLoading] = useState(true),
     [sidebar, setSidebar] = useState(false),
+    [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem("ncc-sidebar-collapsed") === "true"),
     [clock, setClock] = useState(new Date());
   const selected =
     nodes.find((node) => node.node_id === selectedId) || nodes[0] || null;
@@ -1595,6 +1597,7 @@ function App() {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem("ncc-fleet-theme", theme);
   }, [theme]);
+  useEffect(() => localStorage.setItem("ncc-sidebar-collapsed", String(sidebarCollapsed)), [sidebarCollapsed]);
   useEffect(() => {
     void load();
     const poll = window.setInterval(() => void load(true), 5000);
@@ -1698,10 +1701,13 @@ function App() {
             ? "Gerät hinzufügen"
             : "System Settings";
   return (
-    <div className="shell">
-      <aside className={sidebar ? "open" : ""}>
+    <div className={`shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
+      <aside className={`${sidebar ? "open" : ""} ${sidebarCollapsed ? "collapsed" : ""}`}>
         <div className="aside-top">
           <Brand />
+          <button className="sidebar-toggle" onClick={() => setSidebarCollapsed((current) => !current)} aria-label={sidebarCollapsed ? "Seitenmenü ausklappen" : "Seitenmenü einklappen"}>
+            <ChevronRight size={18} />
+          </button>
           <button className="close-menu" onClick={() => setSidebar(false)}>
             <X size={19} />
           </button>
@@ -1742,7 +1748,7 @@ function App() {
         <footer>
           <ShieldCheck size={14} />
           <span>GESICHERTE VERBINDUNG</span>
-          <b>v0.5.0-beta.29</b>
+          <b>v0.5.0-beta.30</b>
         </footer>
       </aside>
       <div className="mobile-scrim" onClick={() => setSidebar(false)} />
