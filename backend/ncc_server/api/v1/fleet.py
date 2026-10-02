@@ -11,8 +11,14 @@ from ncc_server.fleet_service import (
     forget_fleet_node,
     list_fleet_nodes,
     node_telemetry,
+    rename_fleet_node,
 )
-from ncc_server.schemas import FleetNodeResponse, FleetSummaryResponse, FleetTelemetryPoint
+from ncc_server.schemas import (
+    FleetNodeRenameRequest,
+    FleetNodeResponse,
+    FleetSummaryResponse,
+    FleetTelemetryPoint,
+)
 
 router = APIRouter(
     prefix="/fleet",
@@ -51,6 +57,22 @@ async def forget_node(
 ) -> None:
     if not forget_fleet_node(session, node_id):
         raise HTTPException(status_code=404, detail="node not found")
+
+
+@router.patch("/nodes/{node_id}", response_model=FleetNodeResponse)
+async def rename_node(
+    node_id: str,
+    payload: FleetNodeRenameRequest,
+    request: Request,
+    session: Session = Depends(database_session),
+) -> FleetNodeResponse:
+    result = rename_fleet_node(session, node_id, payload.display_name)
+    if result is None:
+        raise HTTPException(status_code=404, detail="node not found")
+    response = fleet_node(session, result.id, request.app.state.server_settings)
+    if response is None:  # pragma: no cover - result was loaded above
+        raise HTTPException(status_code=404, detail="node not found")
+    return response
 
 
 @router.get("/nodes/{node_id}/telemetry", response_model=list[FleetTelemetryPoint])

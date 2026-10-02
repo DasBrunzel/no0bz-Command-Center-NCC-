@@ -107,6 +107,18 @@ class FleetSummaryResponse(BaseModel):
     server_time: datetime
 
 
+class FleetNodeRenameRequest(BaseModel):
+    display_name: str = Field(min_length=1, max_length=128)
+
+    @field_validator("display_name")
+    @classmethod
+    def normalize_display_name(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        if not normalized:
+            raise ValueError("display_name must not be blank")
+        return normalized
+
+
 class AgentInvitationCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=128)
     expires_hours: int = Field(default=168, ge=0, le=8760)

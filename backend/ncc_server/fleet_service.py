@@ -74,6 +74,25 @@ def forget_fleet_node(session: Session, node_id: str) -> bool:
     return True
 
 
+def rename_fleet_node(session: Session, node_id: str, display_name: str) -> Node | None:
+    node = session.get(Node, node_id)
+    if node is None:
+        return None
+    node.display_name = display_name
+    node.updated_at = utc_now()
+    session.add(
+        AuditEvent(
+            actor_type="dashboard",
+            actor_id=node.id,
+            action="node.renamed",
+            details=json.dumps({"display_name": display_name}, separators=(",", ":")),
+        )
+    )
+    session.commit()
+    session.refresh(node)
+    return node
+
+
 def _node_response(
     session: Session, node: Node, settings: ServerSettings
 ) -> FleetNodeResponse:
