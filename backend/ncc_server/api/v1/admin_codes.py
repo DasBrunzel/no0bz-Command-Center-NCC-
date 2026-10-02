@@ -10,13 +10,14 @@ from ncc.security import limited
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from ncc_server.auth import database_session, require_dashboard_access
+from ncc_server.auth import database_session, require_commander_access, require_dashboard_access
 from ncc_server.models import AdminCode, AuditEvent, DashboardSession, utc_now
 from ncc_server.schemas import (
     AdminCodeCreatedResponse,
     AdminCodeCreateRequest,
     AdminCodeRedeemRequest,
     AdminCodeResponse,
+    DashboardAccessResponse,
 )
 
 router = APIRouter(prefix="/admin-codes", tags=["admin codes"])
@@ -30,7 +31,7 @@ def digest(value: str) -> str:
     "",
     response_model=AdminCodeCreatedResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_dashboard_access), Depends(limited("admin-code-create", 10))],
+    dependencies=[Depends(require_commander_access), Depends(limited("admin-code-create", 10))],
 )
 async def create(
     payload: AdminCodeCreateRequest,
@@ -40,6 +41,7 @@ async def create(
     expires = utc_now() + timedelta(minutes=payload.expires_minutes)
     record = AdminCode(
         label=" ".join(payload.label.split()),
+        access_role="beta_tester" if payload.beta_tester else "commander",
         code_hash=digest(code),
         expires_at=expires,
     )
@@ -49,11 +51,18 @@ async def create(
         AuditEvent(
             actor_type="dashboard",
             action="admin-code.created",
-            details=json.dumps({"code_id": record.id, "label": record.label}),
+            details=json.dumps({"code_id": record.id, "label": record.label, "access_role": record.access_role}),
         )
     )
     session.commit()
-    return AdminCodeCreatedResponse(code=code, expires_at=expires)
+    return AdminCodeCreatedResponse(code=code, expires_at=expires, access_role=record.access_role)  # type: ignore[arg-type]
+
+
+@router.get("/access", response_model=DashboardAccessResponse)
+async def access(
+    access_role: str = Depends(require_dashboard_access),
+) -> DashboardAccessResponse:
+    return DashboardAccessResponse(access_role=access_role)  # type: ignore[arg-type]
 
 
 @router.get("", response_model=list[AdminCodeResponse], dependencies=[Depends(require_dashboard_access)])
@@ -91,7 +100,7 @@ async def redeem(
 @router.post(
     "/{code_id}/revoke",
     response_model=AdminCodeResponse,
-    dependencies=[Depends(require_dashboard_access)],
+    dependencies=[Depends(require_commander_access)],
 )
 async def revoke(
     code_id: str,
@@ -137,6 +146,7 @@ def _response(record: AdminCode) -> AdminCodeResponse:
         expires_at=record.expires_at,
         used_at=record.used_at,
         revoked_at=record.revoked_at,
+        access_role=record.access_role,  # type: ignore[arg-type]
     )
 
 

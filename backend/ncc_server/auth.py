@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import ipaddress
 from collections.abc import Iterator
+from typing import Literal
 
 from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy import select
@@ -37,13 +38,13 @@ def require_dashboard_access(
     request: Request,
     authorization: str | None = Header(default=None),
     x_ncc_dashboard_token: str | None = Header(default=None),
-) -> None:
+) -> Literal["commander", "beta_tester"]:
     session_token = request.cookies.get("ncc_dashboard_session", "")
     if session_token:
         with request.app.state.database.session() as session:
-            record = session.scalar(
-                select(DashboardSession)
-                .join(AdminCode, DashboardSession.code_id == AdminCode.id)
+            access_role = session.scalar(
+                select(AdminCode.access_role)
+                .join(DashboardSession, DashboardSession.code_id == AdminCode.id)
                 .where(
                     DashboardSession.token_hash
                     == hashlib.sha256(session_token.encode()).hexdigest()
@@ -52,21 +53,32 @@ def require_dashboard_access(
                 .where(DashboardSession.expires_at > utc_now())
                 .where(AdminCode.revoked_at.is_(None))
             )
-            if record is not None:
-                return
+            if access_role in {"commander", "beta_tester"}:
+                return access_role
     settings = request.app.state.server_settings
     configured = settings.dashboard_token.get_secret_value()
     supplied = x_ncc_dashboard_token or _bearer_token(authorization) or ""
     if configured and supplied and hmac.compare_digest(configured, supplied):
-        return
+        return "commander"
     client_host = request.client.host if request.client else ""
     if settings.dashboard_allow_loopback_without_token and _is_loopback(client_host):
-        return
+        return "commander"
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="missing or invalid dashboard token",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+
+def require_commander_access(
+    access_role: Literal["commander", "beta_tester"] = Depends(require_dashboard_access),
+) -> Literal["commander"]:
+    if access_role != "commander":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="commander access required",
+        )
+    return "commander"
 
 
 def _bearer_token(authorization: str | None) -> str | None:

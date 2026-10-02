@@ -98,7 +98,9 @@ type Invitation = {
   revoked_at: string | null;
 };
 type IssuedInvitation = Invitation & { token: string };
-type IssuedAdminCode = { code: string; expires_at: string };
+type AccessRole = "commander" | "beta_tester";
+type DashboardAccess = { access_role: AccessRole };
+type IssuedAdminCode = { code: string; expires_at: string; access_role: AccessRole };
 type AdminCode = {
   code_id: string;
   label: string;
@@ -107,6 +109,7 @@ type AdminCode = {
   expires_at: string;
   used_at: string | null;
   revoked_at: string | null;
+  access_role: AccessRole;
 };
 type AgentPairing = {
   pairing_id: string;
@@ -391,6 +394,7 @@ function Fleet({
   alerts,
   onCreateGroup,
   onLayout,
+  canDelete,
 }: {
   nodes: Node[];
   groups: FleetGroup[];
@@ -403,6 +407,7 @@ function Fleet({
   alerts: AlertRecord[];
   onCreateGroup: (name: string) => Promise<void>;
   onLayout: (placements: FleetPlacement[]) => Promise<void>;
+  canDelete: boolean;
 }) {
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({}),
     [editing, setEditing] = useState(false),
@@ -502,7 +507,7 @@ function Fleet({
         </div>
       </section>
       <div className="fleet-stage">
-        <NodeOverview node={selected} points={points} monthlyNetwork={monthlyNetwork} />
+        <NodeOverview node={selected} points={points} monthlyNetwork={monthlyNetwork} canDelete={canDelete} />
       </div>
     </>
   );
@@ -598,10 +603,12 @@ function NodeOverview({
   node,
   points,
   monthlyNetwork,
+  canDelete,
 }: {
   node: Node | null;
   points: Telemetry[];
   monthlyNetwork: NetworkUsageSummary | null;
+  canDelete: boolean;
 }) {
   const [forgetting, setForgetting] = useState(false),
     [renaming, setRenaming] = useState(false);
@@ -819,14 +826,14 @@ function NodeOverview({
         >
           {renaming ? "Wird umbenannt …" : "Gerät umbenennen"}
         </button>
-        <button
+        {canDelete && <button
           className="forget-node"
           disabled={forgetting}
           onClick={() => void forget()}
         >
           <Trash2 size={15} />
           {forgetting ? "Gerät wird entfernt …" : "Gerät vergessen"}
-        </button>
+        </button>}
       </div>
     </section>
   );
@@ -1140,11 +1147,13 @@ function EnrollmentPage({
   onCreate,
   onRevoke,
   busy,
+  canManageAccess,
 }: {
   invitations: Invitation[];
   onCreate: (name: string, hours: number) => Promise<IssuedInvitation>;
   onRevoke: (id: string) => Promise<void>;
   busy: boolean;
+  canManageAccess: boolean;
 }) {
   const [name, setName] = useState(""),
     [hours, setHours] = useState("168"),
@@ -1152,6 +1161,7 @@ function EnrollmentPage({
     [issued, setIssued] = useState<IssuedInvitation | null>(null),
     [error, setError] = useState(""),
     [codeLabel, setCodeLabel] = useState(""),
+    [betaTester, setBetaTester] = useState(false),
     [adminCode, setAdminCode] = useState<IssuedAdminCode | null>(null),
     [adminCodes, setAdminCodes] = useState<AdminCode[]>([]),
     [pairings, setPairings] = useState<AgentPairing[]>([]);
@@ -1215,10 +1225,11 @@ function EnrollmentPage({
         await postJson<IssuedAdminCode>(
           "/api/v1/admin-codes",
           localStorage.getItem("ncc-dashboard-token") || "",
-          { label: codeLabel, expires_minutes: 15 },
+          { label: codeLabel, expires_minutes: 15, beta_tester: betaTester },
         ),
       );
       setCodeLabel("");
+      setBetaTester(false);
       void loadAdminCodes();
     } catch {
       setError(
@@ -1263,7 +1274,7 @@ function EnrollmentPage({
         </div>
         <UserPlus size={28} />
       </section>
-      <div className="enrollment-grid">
+      {canManageAccess && <div className="enrollment-grid">
         <section className="surface enrollment-form">
           <header className="section-head">
             <div>
@@ -1376,8 +1387,8 @@ function EnrollmentPage({
             </ol>
           </section>
         )}
-      </div>
-      <section className="surface invitation-list">
+      </div>}
+      {canManageAccess && <><section className="surface invitation-list">
         <header className="section-head">
           <div>
             <span className="eyebrow">BROWSER-ZUGANG</span>
@@ -1400,6 +1411,17 @@ function EnrollmentPage({
               placeholder="z. B. Pixel 7 Pro"
             />
           </label>
+          <label className="beta-tester-toggle">
+            <input
+              type="checkbox"
+              checked={betaTester}
+              onChange={(event) => setBetaTester(event.target.checked)}
+            />
+            <span>
+              <strong>Beta-Tester</strong>
+              <small>Kein Erstellen neuer Codes und keine Löschrechte.</small>
+            </span>
+          </label>
           <button className="primary" disabled={busy} type="submit">
             <KeyRound size={16} /> Admin-Code erzeugen
           </button>
@@ -1421,7 +1443,7 @@ function EnrollmentPage({
             </div>
             <small>
               Auf dem Zielgerät die Dashboard-Adresse öffnen und diesen Code
-              eingeben.
+              eingeben. {adminCode.access_role === "beta_tester" ? "Der Zugang ist als Beta-Tester eingeschränkt." : "Der Zugang ist Commander."}
             </small>
           </div>
         )}
@@ -1435,6 +1457,7 @@ function EnrollmentPage({
                   · Läuft ab:{" "}
                   {new Date(item.expires_at).toLocaleString("de-DE")}
                 </span>
+                {item.access_role === "beta_tester" && <small className="beta-badge">BETA-TESTER</small>}
               </div>
               <span className={`invitation-status ${item.status}`}>
                 {item.status === "ready"
@@ -1563,7 +1586,7 @@ function EnrollmentPage({
             </div>
           )}
         </div>
-      </section>
+      </section></>}
     </div>
   );
 }
@@ -1663,6 +1686,7 @@ function App() {
     [selectedId, setSelectedId] = useState(""),
     [points, setPoints] = useState<Telemetry[]>([]),
     [monthlyNetwork, setMonthlyNetwork] = useState<NetworkUsageSummary | null>(null);
+  const [accessRole, setAccessRole] = useState<AccessRole>("commander");
   const [page, setPage] = useState<Page>("fleet"),
     [query, setQuery] = useState(""),
     [loading, setLoading] = useState(true),
@@ -1682,6 +1706,7 @@ function App() {
           nextInvitations,
           nextAlerts,
           nextPolicy,
+          nextAccess,
         ] = await Promise.all([
           getJson<Node[]>("/api/v1/fleet/nodes", token),
           getJson<FleetGroup[]>("/api/v1/fleet/groups", token),
@@ -1689,6 +1714,7 @@ function App() {
           getJson<Invitation[]>("/api/v1/agent-invitations", token),
           getJson<AlertRecord[]>("/api/v1/fleet/alerts", token),
           getJson<AlertPolicy>("/api/v1/fleet/alert-policy", token),
+          getJson<DashboardAccess>("/api/v1/admin-codes/access", token),
         ]);
         setNodes(nextNodes);
         setGroups(nextGroups);
@@ -1696,6 +1722,7 @@ function App() {
         setInvitations(nextInvitations);
         setAlerts(nextAlerts);
         setPolicy(nextPolicy);
+        setAccessRole(nextAccess.access_role);
         setAuthenticated(true);
         setAuthError(false);
         setSelectedId((current) =>
@@ -1833,6 +1860,8 @@ function App() {
     ],
     [],
   );
+  const canManageAccess = accessRole === "commander";
+  const visibleNav = canManageAccess ? nav : nav.filter((item) => item.id !== "onboarding");
   if (authenticated !== true)
     return (
       <Login onSave={saveToken} error={authenticated === false && authError} />
@@ -1861,7 +1890,7 @@ function App() {
         </div>
         <nav>
           <span>COMMAND CENTER</span>
-          {nav.map((item) => (
+          {visibleNav.map((item) => (
             <button
               key={item.id}
               className={page === item.id ? "active" : ""}
@@ -1897,7 +1926,7 @@ function App() {
         <footer>
           <ShieldCheck size={14} />
           <span>GESICHERTE VERBINDUNG</span>
-          <b>v0.5.0-beta.37</b>
+          <b>v0.5.0-beta.38</b>
         </footer>
       </aside>
       <div className="mobile-scrim" onClick={() => setSidebar(false)} />
@@ -1930,10 +1959,10 @@ function App() {
               <RefreshCw size={17} className={loading ? "spin" : ""} />
             </button>
             <div className="commander">
-              <span>C</span>
+              <span>{canManageAccess ? "C" : "B"}</span>
               <div>
-                <b>Commander</b>
-                <small>Administrator</small>
+                <b>{canManageAccess ? "Commander" : "Beta-Tester"}</b>
+                <small className={canManageAccess ? "" : "beta-badge"}>{canManageAccess ? "Administrator" : "BETA-TESTER"}</small>
               </div>
             </div>
           </div>
@@ -1952,6 +1981,7 @@ function App() {
               alerts={alerts}
               onCreateGroup={createFleetGroup}
               onLayout={saveFleetLayout}
+              canDelete={canManageAccess}
             />
           ) : page === "statistics" ? (
             <StatisticsPage />
@@ -1963,6 +1993,7 @@ function App() {
               onCreate={createInvitation}
               onRevoke={revokeInvitation}
               busy={loading}
+              canManageAccess={canManageAccess}
             />
           ) : (
             <SettingsPage

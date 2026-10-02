@@ -220,6 +220,7 @@ class AgentInvitationCreatedResponse(AgentInvitationResponse):
 class AdminCodeCreateRequest(BaseModel):
     label: str = Field(min_length=1, max_length=128)
     expires_minutes: int = Field(default=15, ge=1, le=60)
+    beta_tester: bool = False
 
     @field_validator("label")
     @classmethod
@@ -233,6 +234,7 @@ class AdminCodeCreateRequest(BaseModel):
 class AdminCodeCreatedResponse(BaseModel):
     code: str
     expires_at: datetime
+    access_role: Literal["commander", "beta_tester"]
 
 
 class AdminCodeResponse(BaseModel):
@@ -243,6 +245,11 @@ class AdminCodeResponse(BaseModel):
     expires_at: datetime
     used_at: datetime | None
     revoked_at: datetime | None
+    access_role: Literal["commander", "beta_tester"]
+
+
+class DashboardAccessResponse(BaseModel):
+    access_role: Literal["commander", "beta_tester"]
 
 
 class AdminCodeRedeemRequest(BaseModel):

@@ -125,6 +125,7 @@ class AdminCode(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     label: Mapped[str] = mapped_column(String(128), nullable=False)
+    access_role: Mapped[str] = mapped_column(String(32), nullable=False, default="commander")
     code_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ncc_server.agent_tokens import agent_token_is_expired, issue_agent_token, revoke_agent_token
-from ncc_server.auth import database_session, require_dashboard_access
+from ncc_server.auth import database_session, require_commander_access, require_dashboard_access
 from ncc_server.models import AgentToken, Node, utc_now
 from ncc_server.schemas import (
     AgentInvitationCreatedResponse,
@@ -40,7 +40,7 @@ async def invitations(
     "",
     response_model=AgentInvitationCreatedResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(limited("v1-agent-invitations-create", 30))],
+    dependencies=[Depends(require_commander_access), Depends(limited("v1-agent-invitations-create", 30))],
 )
 async def create_invitation(
     payload: AgentInvitationCreateRequest,
@@ -59,7 +59,7 @@ async def create_invitation(
 @router.post(
     "/{token_id}/revoke",
     response_model=AgentInvitationResponse,
-    dependencies=[Depends(limited("v1-agent-invitations-revoke", 30))],
+    dependencies=[Depends(require_commander_access), Depends(limited("v1-agent-invitations-revoke", 30))],
 )
 async def revoke_invitation(
     token_id: str,
@@ -73,7 +73,7 @@ async def revoke_invitation(
     return _response(session, record)
 
 
-@router.delete("/{token_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{token_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_commander_access)])
 async def remove_revoked_invitation(
     token_id: str,
     session: Session = Depends(database_session),

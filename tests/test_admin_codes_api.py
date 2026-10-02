@@ -73,3 +73,39 @@ def test_admin_code_cannot_be_redeemed_twice(tmp_path: Path) -> None:
         code = created.json()["code"]
         assert client.post("/api/v1/admin-codes/redeem", json={"code": code}).status_code == 200
         assert client.post("/api/v1/admin-codes/redeem", json={"code": code}).status_code == 401
+
+
+def test_beta_tester_code_is_badged_and_cannot_manage_or_delete(tmp_path: Path) -> None:
+    database = make_database(tmp_path / "beta-tester.db")
+    app = create_app(
+        ServerSettings(database_url="sqlite+pysqlite://", dashboard_token="dashboard-secret"),
+        database,
+    )
+    commander_headers = {"X-NCC-Dashboard-Token": "dashboard-secret"}
+    with TestClient(app) as commander:
+        invitation = commander.post(
+            "/api/v1/agent-invitations",
+            headers=commander_headers,
+            json={"name": "Test-PC", "expires_hours": 24},
+        ).json()
+        created = commander.post(
+            "/api/v1/admin-codes",
+            headers=commander_headers,
+            json={"label": "Beta Friend", "beta_tester": True},
+        )
+        assert created.status_code == 201
+        assert created.json()["access_role"] == "beta_tester"
+
+        with TestClient(app) as beta_tester:
+            assert beta_tester.post(
+                "/api/v1/admin-codes/redeem", json={"code": created.json()["code"]}
+            ).status_code == 200
+            assert beta_tester.get("/api/v1/admin-codes/access").json() == {
+                "access_role": "beta_tester"
+            }
+            assert beta_tester.post(
+                "/api/v1/admin-codes", json={"label": "Escalation"}
+            ).status_code == 403
+            assert beta_tester.delete(
+                f"/api/v1/agent-invitations/{invitation['token_id']}"
+            ).status_code == 403
