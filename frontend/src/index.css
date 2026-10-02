@@ -594,7 +594,7 @@ main {
 .navigator-group > div {
   display: grid;
   gap: 8px;
-  grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
 }
 .navigator-group > div.editing {
   border-radius: 8px;
