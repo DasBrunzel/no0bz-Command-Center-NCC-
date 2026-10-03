@@ -93,6 +93,7 @@ type Theme =
   | "orbit"
   | "blueprint"
   | "studio";
+type LayoutTheme = "orbit" | "blueprint" | "studio";
 type Invitation = {
   token_id: string;
   name: string;
@@ -169,6 +170,8 @@ const THEMES: { id: Theme; name: string; color: string }[] = [
   { id: "blueprint", name: "Blueprint Dock", color: "#68a7ff" },
   { id: "studio", name: "Studio Deck", color: "#ff8eb5" },
 ];
+const isLayoutTheme = (theme: Theme): theme is LayoutTheme =>
+  theme === "orbit" || theme === "blueprint" || theme === "studio";
 const num = (value: unknown) =>
   typeof value === "number" && Number.isFinite(value) ? value : 0;
 const metric = (value: unknown, digits = 1) =>
@@ -543,6 +546,236 @@ function Fleet({
         <NodeOverview node={selected} points={points} monthlyNetwork={monthlyNetwork} canDelete={canDelete} />
       </div>
     </>
+  );
+}
+
+type AlternateFleetProps = {
+  layout: LayoutTheme;
+  nodes: Node[];
+  selected: Node | null;
+  points: Telemetry[];
+  monthlyNetwork: NetworkUsageSummary | null;
+  onSelect: (id: string) => void;
+  alerts: AlertRecord[];
+  dismissedAlerts: Set<string>;
+  onDismissAlert: (id: string) => void;
+};
+
+function AlternateFleet({
+  layout,
+  nodes,
+  selected,
+  points,
+  monthlyNetwork,
+  onSelect,
+  alerts,
+  dismissedAlerts,
+  onDismissAlert,
+}: AlternateFleetProps) {
+  const activeAlerts = alerts.filter(
+    (alert) => alert.active && !dismissedAlerts.has(alert.alert_id),
+  );
+  if (!selected) {
+    return (
+      <section className="alternate-empty surface">
+        <Server size={44} />
+        <h2>Warte auf das erste System</h2>
+        <p>Sobald ein Agent Daten sendet, füllt sich dieses Dashboard.</p>
+      </section>
+    );
+  }
+  const props = {
+    nodes,
+    selected,
+    points,
+    monthlyNetwork,
+    onSelect,
+    activeAlerts,
+    onDismissAlert,
+  };
+  if (layout === "orbit") return <OrbitDashboard {...props} />;
+  if (layout === "blueprint") return <BlueprintDashboard {...props} />;
+  return <StudioDashboard {...props} />;
+}
+
+type DashboardProps = Omit<AlternateFleetProps, "layout" | "alerts" | "dismissedAlerts" | "selected"> & {
+  selected: Node;
+  activeAlerts: AlertRecord[];
+};
+
+function DeviceChoices({
+  nodes,
+  selected,
+  onSelect,
+}: Pick<DashboardProps, "nodes" | "selected" | "onSelect">) {
+  return (
+    <div className="alternate-device-choices">
+      {nodes.map((node) => (
+        <button
+          type="button"
+          key={node.node_id}
+          className={selected.node_id === node.node_id ? "selected" : ""}
+          onClick={() => onSelect(node.node_id)}
+        >
+          <i className={node.online ? "online" : "offline"} />
+          <span>{node.display_name}</span>
+          {node.access_role === "beta_tester" && <small>BETA</small>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function AlternateAlerts({
+  alerts,
+  onDismissAlert,
+}: { alerts: AlertRecord[]; onDismissAlert: (id: string) => void }) {
+  if (!alerts.length) return null;
+  return (
+    <div className="alternate-alerts">
+      {alerts.map((alert) => (
+        <article key={alert.alert_id} className={alert.severity}>
+          <AlertTriangle size={15} />
+          <span>{alert.message} · {alert.display_name}</span>
+          <button
+            type="button"
+            title="Warnung ausblenden"
+            aria-label={`${alert.message} ausblenden`}
+            onClick={() => onDismissAlert(alert.alert_id)}
+          >
+            <X size={14} />
+          </button>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function OrbitDashboard({
+  nodes,
+  selected,
+  points,
+  monthlyNetwork,
+  onSelect,
+  activeAlerts,
+  onDismissAlert,
+}: DashboardProps) {
+  const m = selected.latest?.metrics || {};
+  const cpu = m.cpu || {}, memory = m.memory || {}, gpu = m.gpus?.[0] || {}, network = m.network || {};
+  return (
+    <section className="orbit-dashboard">
+      <header className="orbit-masthead">
+        <div>
+          <span>LIVE SYSTEM ORBIT</span>
+          <h1>{selected.display_name}</h1>
+          <p>{nodes.filter((node) => node.online).length} von {nodes.length} Systemen im Kontakt</p>
+        </div>
+        <StatusDot online={selected.online} />
+      </header>
+      <DeviceChoices nodes={nodes} selected={selected} onSelect={onSelect} />
+      <AlternateAlerts alerts={activeAlerts} onDismissAlert={onDismissAlert} />
+      <div className="orbit-workspace">
+        <article className="orbit-core">
+          <div className="orbit-ring">
+            <Cpu size={28} />
+            <strong>{num(cpu.percent).toFixed(0)}%</strong>
+            <span>CPU</span>
+          </div>
+          <div>
+            <span className="eyebrow">SYSTEMKERN</span>
+            <h2>{cpu.name || selected.platform.toUpperCase()}</h2>
+            <p>{typeof cpu.temperature_c === "number" ? `${metric(cpu.temperature_c, 0)} °C · ` : ""}{typeof cpu.frequency_mhz === "number" ? `${metric(cpu.frequency_mhz, 0)} MHz` : "Takt wird erfasst"}</p>
+          </div>
+        </article>
+        <article className="orbit-stat ram"><MemoryStick size={18} /><span>MEMORY</span><strong>{num(memory.percent).toFixed(0)}%</strong><small>{metric(memory.used_gb)} / {metric(memory.total_gb)} GB</small></article>
+        <article className="orbit-stat gpu"><MonitorCog size={18} /><span>GRAPHICS</span><strong>{num(gpu.percent).toFixed(0)}%</strong><small>{gpu.name || "Keine GPU-Daten"}</small></article>
+        <article className="orbit-network">
+          <header><Network size={17} /><span>DATENSTROM</span><b>↓ {num(network.download_mbps).toFixed(1)} · ↑ {num(network.upload_mbps).toFixed(1)} Mbps</b></header>
+          <Sparkline points={points} metric={(point) => num(point.network?.download_mbps)} maxValue={Math.max(10, ...points.map((point) => num(point.metrics.network?.download_mbps)))} color="var(--blue)" />
+          <small>{monthlyNetwork?.available ? `Monat: ${metric(monthlyNetwork.received_bytes / 1024 ** 3, 1)} GB empfangen · ${metric(monthlyNetwork.sent_bytes / 1024 ** 3, 1)} GB gesendet` : "Monatsverkehr wird aufgebaut"}</small>
+        </article>
+        <article className="orbit-disks">
+          <header><HardDrive size={17} /><span>DATENTRÄGER</span></header>
+          {(m.disks || []).slice(0, 4).map((disk: Metrics, index: number) => <div key={`${disk.mount}-${index}`}><b>{disk.mount || disk.name || `Disk ${index + 1}`}</b><i><em style={{ width: `${Math.min(100, num(disk.percent))}%` }} /></i><span>{num(disk.percent).toFixed(0)}%</span></div>)}
+          {!(m.disks || []).length && <p>Keine Laufwerksdaten</p>}
+        </article>
+      </div>
+    </section>
+  );
+}
+
+function BlueprintDashboard({
+  nodes,
+  selected,
+  points,
+  monthlyNetwork,
+  onSelect,
+  activeAlerts,
+  onDismissAlert,
+}: DashboardProps) {
+  const m = selected.latest?.metrics || {};
+  const cpu = m.cpu || {}, memory = m.memory || {}, gpu = m.gpus?.[0] || {}, network = m.network || {};
+  const processes: Metrics[] = Array.isArray(m.processes) ? m.processes : [];
+  return (
+    <section className="blueprint-dashboard">
+      <div className="blueprint-roster">
+        <span>NODE INDEX / {nodes.length.toString().padStart(2, "0")}</span>
+        <DeviceChoices nodes={nodes} selected={selected} onSelect={onSelect} />
+        <footer><b>{selected.agent_version || "Agent unbekannt"}</b><small>{selected.machine_id}</small></footer>
+      </div>
+      <div className="blueprint-canvas">
+        <header className="blueprint-title">
+          <div><span>TELEMETRY BLUEPRINT</span><h1>{selected.display_name}</h1></div>
+          <div><StatusDot online={selected.online} /><small>{ago(selected.last_seen_at)}</small></div>
+        </header>
+        <AlternateAlerts alerts={activeAlerts} onDismissAlert={onDismissAlert} />
+        <div className="blueprint-modules">
+          <article><Cpu size={22} /><span>COMPUTE</span><strong>{num(cpu.percent).toFixed(1)}%</strong><small>{typeof cpu.temperature_c === "number" ? `${metric(cpu.temperature_c, 0)} °C` : "Temperatur n/a"}</small></article>
+          <article><MemoryStick size={22} /><span>MEMORY</span><strong>{num(memory.percent).toFixed(1)}%</strong><small>{metric(memory.used_gb)} / {metric(memory.total_gb)} GB</small></article>
+          <article><MonitorCog size={22} /><span>ACCELERATOR</span><strong>{num(gpu.percent).toFixed(1)}%</strong><small>{gpu.name || "nicht erkannt"}</small></article>
+        </div>
+        <article className="blueprint-network">
+          <header><Network size={18} /><span>NETWORK ROUTE</span><b>{network.interface || "Automatisch"}</b></header>
+          <div><span>DOWN <strong>{num(network.download_mbps).toFixed(1)} Mbps</strong></span><Sparkline points={points} metric={(point) => num(point.network?.download_mbps)} maxValue={Math.max(10, ...points.map((point) => num(point.metrics.network?.download_mbps)))} color="var(--blue)" /></div>
+          <div><span>UP <strong>{num(network.upload_mbps).toFixed(1)} Mbps</strong></span><Sparkline points={points} metric={(point) => num(point.network?.upload_mbps)} maxValue={Math.max(10, ...points.map((point) => num(point.metrics.network?.upload_mbps)))} color="var(--purple)" /></div>
+          <footer>{monthlyNetwork?.available ? `${metric(monthlyNetwork.received_bytes / 1024 ** 3, 1)} GB ↓ / ${metric(monthlyNetwork.sent_bytes / 1024 ** 3, 1)} GB ↑ in diesem Monat` : "Monatszähler wird aufgebaut"}</footer>
+        </article>
+        <div className="blueprint-lower">
+          <article className="blueprint-storage"><header><HardDrive size={17} /><span>STORAGE MAP</span></header>{(m.disks || []).slice(0, 5).map((disk: Metrics, index: number) => <div key={`${disk.mount}-${index}`}><span>{disk.mount || disk.name || `Disk ${index + 1}`}</span><i><em style={{ width: `${Math.min(100, num(disk.percent))}%` }} /></i><b>{num(disk.percent).toFixed(0)}%</b></div>)}</article>
+          <article className="blueprint-processes"><header><Activity size={17} /><span>ACTIVE TASKS</span></header>{processes.slice(0, 5).map((process: Metrics) => <div key={process.pid}><span>{process.name || "Unbekannt"}</span><b>{Math.min(100, num(process.cpu)).toFixed(1)}%</b></div>)}{!processes.length && <p>Keine Prozessdaten</p>}</article>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function StudioDashboard({
+  nodes,
+  selected,
+  points,
+  monthlyNetwork,
+  onSelect,
+  activeAlerts,
+  onDismissAlert,
+}: DashboardProps) {
+  const m = selected.latest?.metrics || {};
+  const cpu = m.cpu || {}, memory = m.memory || {}, gpu = m.gpus?.[0] || {}, network = m.network || {};
+  return (
+    <section className="studio-dashboard">
+      <header className="studio-hero">
+        <div><span>YOUR INFRASTRUCTURE, CURATED</span><h1>{selected.display_name}</h1><p>{selected.platform.toUpperCase()} · {selected.access_role === "beta_tester" ? "BETA-TESTER" : "COMMANDER NODE"}</p></div>
+        <div className="studio-availability"><StatusDot online={selected.online} /><strong>{ago(selected.last_seen_at)}</strong></div>
+      </header>
+      <DeviceChoices nodes={nodes} selected={selected} onSelect={onSelect} />
+      <AlternateAlerts alerts={activeAlerts} onDismissAlert={onDismissAlert} />
+      <div className="studio-gallery">
+        <article className="studio-feature"><span>CPU LOAD</span><strong>{num(cpu.percent).toFixed(0)}<small>%</small></strong><p>{typeof cpu.temperature_c === "number" ? `${metric(cpu.temperature_c, 0)} °C aktuell` : "Temperatur nicht verfügbar"}</p><div className="studio-bars">{Array.isArray(cpu.per_core) && cpu.per_core.slice(0, 16).map((value: unknown, index: number) => <i key={index} style={{ height: `${Math.max(8, num(value))}%` }} />)}</div></article>
+        <article className="studio-feature memory"><span>MEMORY</span><strong>{num(memory.percent).toFixed(0)}<small>%</small></strong><p>{metric(memory.used_gb)} GB von {metric(memory.total_gb)} GB genutzt</p><div className="studio-meter"><i style={{ width: `${Math.min(100, num(memory.percent))}%` }} /></div></article>
+        <article className="studio-feature graphics"><span>GRAPHICS</span><strong>{num(gpu.percent).toFixed(0)}<small>%</small></strong><p>{gpu.name || "Keine GPU-Telemetrie"}</p><div className="studio-meter"><i style={{ width: `${Math.min(100, num(gpu.percent))}%` }} /></div></article>
+        <article className="studio-traffic"><header><span>NETWORK STORY</span><b>↓ {num(network.download_mbps).toFixed(1)} Mbps</b></header><Sparkline points={points} metric={(point) => num(point.network?.download_mbps)} maxValue={Math.max(10, ...points.map((point) => num(point.metrics.network?.download_mbps)))} color="var(--blue)" /><footer>{monthlyNetwork?.available ? `${metric(monthlyNetwork.received_bytes / 1024 ** 3, 1)} GB diesen Monat empfangen` : "Verkehr wird erfasst"}</footer></article>
+        <article className="studio-library"><header><HardDrive size={17} /><span>DEVICE LIBRARY</span></header>{(m.disks || []).slice(0, 4).map((disk: Metrics, index: number) => <div key={`${disk.mount}-${index}`}><b>{disk.mount || disk.name || `Disk ${index + 1}`}</b><span>{num(disk.percent).toFixed(0)}% belegt</span><i><em style={{ width: `${Math.min(100, num(disk.percent))}%` }} /></i></div>)}{!(m.disks || []).length && <p>Keine Laufwerksdaten</p>}</article>
+      </div>
+    </section>
   );
 }
 
@@ -1979,7 +2212,7 @@ function App() {
         <footer>
           <ShieldCheck size={14} />
           <span>GESICHERTE VERBINDUNG</span>
-          <b>v0.5.0-beta.40</b>
+          <b>v0.5.0-beta.41</b>
         </footer>
       </aside>
       <div className="mobile-scrim" onClick={() => setSidebar(false)} />
