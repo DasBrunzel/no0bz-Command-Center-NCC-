@@ -73,6 +73,7 @@ def test_fleet_api_is_protected_and_returns_latest_metrics(tmp_path: Path) -> No
         database_url="sqlite+pysqlite://",
         dashboard_token="dashboard-secret",
         dashboard_allow_loopback_without_token=False,
+        chat_upload_dir=tmp_path / "chat-uploads",
     )
     app = create_app(settings, database)
     headers = {"X-NCC-Dashboard-Token": "dashboard-secret"}
@@ -133,6 +134,30 @@ def test_fleet_api_is_protected_and_returns_latest_metrics(tmp_path: Path) -> No
         assert alerts.status_code == 200
         assert alerts.json()[0]["display_name"] == "Root Server"
         assert alerts.json()[0]["active"] is True
+        cleared = client.post("/api/v1/fleet/alerts/clear", headers=headers)
+        assert cleared.status_code == 200
+        assert cleared.json()["cleared"] >= 1
+        assert not any(item["active"] for item in client.get("/api/v1/fleet/alerts", headers=headers).json())
+
+        chat_message = client.post(
+            "/api/v1/fleet/chat/messages",
+            headers=headers,
+            json={"sender_node_id": online_id, "body": "**Hallo Fleet**", "body_format": "markdown"},
+        )
+        assert chat_message.status_code == 201
+        assert chat_message.json()["sender_name"] == "Root Server"
+        uploaded = client.post(
+            "/api/v1/fleet/chat/uploads",
+            headers=headers,
+            data={"sender_node_id": online_id, "body": "Logdatei", "body_format": "plain"},
+            files={"file": ("diagnose.txt", b"NCC", "text/plain")},
+        )
+        assert uploaded.status_code == 201
+        messages = client.get("/api/v1/fleet/chat/messages", headers=headers).json()
+        assert len(messages) == 2
+        assert messages[-1]["attachment"]["name"] == "diagnose.txt"
+        attachment = client.get(messages[-1]["attachment"]["url"], headers=headers)
+        assert attachment.content == b"NCC"
 
         telemetry = client.get(
             f"/api/v1/fleet/nodes/{online_id}/telemetry?limit=1", headers=headers

@@ -51,6 +51,7 @@ def test_foundation_metadata_contains_persistent_entities() -> None:
         "agent_tokens",
         "audit_events",
         "dashboard_sessions",
+        "fleet_chat_messages",
         "fleet_groups",
         "nodes",
         "telemetry_points",

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 
-from ncc.config import ENV_FILE
+from ncc.config import ENV_FILE, ROOT
 from pydantic import AliasChoices, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -36,6 +37,7 @@ class ServerSettings(BaseSettings):
         default="horsttower",
         validation_alias=AliasChoices("NCC_SERVER_UNRAID_DISPLAY_NAME", "NCC_UNRAID_DISPLAY_NAME"),
     )
+    chat_upload_dir: Path = Field(default_factory=lambda: ROOT / "ncc_chat_uploads")
 
 
 @lru_cache

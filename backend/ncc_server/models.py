@@ -197,3 +197,21 @@ class TrafficStatisticsSettings(Base):
 
     id: Mapped[str] = mapped_column(String(16), primary_key=True, default="default")
     reset_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class FleetChatMessage(Base):
+    """A durable Fleet-wide conversation entry, optionally with one attachment."""
+
+    __tablename__ = "fleet_chat_messages"
+    __table_args__ = (Index("ix_fleet_chat_messages_created", "created_at"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    sender_node_id: Mapped[str | None] = mapped_column(ForeignKey("nodes.id", ondelete="SET NULL"))
+    sender_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    body_format: Mapped[str] = mapped_column(String(16), nullable=False, default="plain")
+    attachment_name: Mapped[str | None] = mapped_column(String(255))
+    attachment_path: Mapped[str | None] = mapped_column(String(255))
+    attachment_type: Mapped[str | None] = mapped_column(String(128))
+    attachment_size: Mapped[int | None] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)

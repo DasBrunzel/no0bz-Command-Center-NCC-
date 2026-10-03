@@ -8,6 +8,7 @@ from ncc_server.alert_service import get_alert_policy, update_alert_policy
 from ncc_server.auth import database_session, require_commander_access, require_dashboard_access
 from ncc_server.fleet_service import (
     create_fleet_group,
+    clear_active_alerts,
     fleet_node,
     fleet_summary,
     forget_fleet_node,
@@ -82,6 +83,11 @@ async def alerts(
     limit: int = Query(default=100, ge=1, le=500), session: Session = Depends(database_session)
 ) -> list[FleetAlertResponse]:
     return list_fleet_alerts(session, limit)
+
+
+@router.post("/alerts/clear", dependencies=[Depends(require_commander_access)])
+async def clear_alerts(session: Session = Depends(database_session)) -> dict[str, int]:
+    return {"cleared": clear_active_alerts(session)}
 
 
 @router.get("/alert-policy", response_model=AlertPolicyResponse)

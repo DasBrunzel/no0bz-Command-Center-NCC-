@@ -100,6 +100,32 @@ def list_fleet_alerts(session: Session, limit: int) -> list[FleetAlertResponse]:
     ]
 
 
+def clear_active_alerts(session: Session) -> int:
+    """Resolve visible alerts without discarding their history.
+
+    The alert evaluator can reopen a condition if it is still present on its
+    next run, so this is a deliberate acknowledgement rather than suppression.
+    """
+    now = utc_now()
+    active = session.scalars(select(AlertState).where(AlertState.active.is_(True))).all()
+    for alert in active:
+        alert.active = False
+        alert.updated_at = now
+        alert.resolved_at = now
+        alert.last_notified_state = "resolved"
+    if active:
+        session.add(
+            AuditEvent(
+                actor_type="dashboard",
+                actor_id=None,
+                action="fleet.alerts.cleared",
+                details=json.dumps({"count": len(active), "cleared_at": now.isoformat()}),
+            )
+        )
+    session.commit()
+    return len(active)
+
+
 def list_fleet_nodes(session: Session, settings: ServerSettings) -> list[FleetNodeResponse]:
     nodes = session.scalars(select(Node).order_by(Node.display_name, Node.id)).all()
     responses = [_node_response(session, node, settings) for node in nodes]

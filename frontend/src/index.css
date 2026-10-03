@@ -649,6 +649,8 @@ main {
   display: grid;
   gap: 4px;
 }
+.navigator-title { background: transparent; border: 0; color: var(--text); cursor: pointer; display: grid; gap: 4px; padding: 0; text-align: left; }
+.navigator-title:hover strong { color: var(--accent); }
 .fleet-navigator > header strong {
   font: 600 10px JetBrains Mono;
 }
@@ -1288,27 +1290,25 @@ main {
   inset: auto 0 0;
   position: absolute;
 }
+.process-insight > header { align-items: center; display: flex; justify-content: space-between; }
+.process-insight > header > div { align-items: center; display: flex; gap: 7px; }
+.process-insight > header > b { color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); border-radius: 5px; padding: 4px 6px; font: 700 7px JetBrains Mono; }
 .process-list {
   display: grid;
   gap: 6px;
   margin-top: 14px;
 }
-.process-list > div {
-  align-items: center;
-  border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
-  display: grid;
-  font: 600 7px JetBrains Mono;
-  gap: 7px;
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
-  padding-bottom: 5px;
-}
-.process-list span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.process-list b { color: var(--accent); }
-.process-list small { color: var(--muted); }
+.process-list > article { align-items: center; background: color-mix(in srgb, var(--surface2) 62%, transparent); border: 1px solid color-mix(in srgb, var(--line) 72%, transparent); border-radius: 7px; display: grid; gap: 9px; grid-template-columns: 24px minmax(0, 1fr) auto; padding: 8px; }
+.process-rank { color: var(--accent); font: 700 8px JetBrains Mono; }
+.process-list > article > div { min-width: 0; display: grid; gap: 3px; }
+.process-list strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; }
+.process-list small { color: var(--muted); font: 600 7px JetBrains Mono; }
+.process-list i { background: var(--line); border-radius: 4px; display: block; height: 3px; overflow: hidden; }
+.process-list i em { background: linear-gradient(90deg, var(--accent), var(--purple)); display: block; height: 100%; }
+.process-list dl { display: flex; gap: 8px; margin: 0; }
+.process-list dl div { display: grid; gap: 2px; }
+.process-list dt { color: var(--muted); font: 600 6px JetBrains Mono; }
+.process-list dd { color: var(--text); margin: 0; font: 700 8px JetBrains Mono; }
 .process-list p { color: var(--muted); font-size: 9px; }
 .cpu-threads { border-top: 1px solid var(--line); margin-top: 12px; padding-top: 11px; }
 .cpu-threads > div { color: var(--muted); display: flex; font: 600 7px JetBrains Mono; justify-content: space-between; }
@@ -2782,3 +2782,14 @@ main {
     display: none;
   }
 }
+
+/* Fleet-quality controls: alerts, chat and compact process cards. */
+.alerts-title-actions { align-items: center; display: flex; gap: 13px; }
+.alerts-title-actions > svg { color: var(--accent); }
+.clear-alerts { align-items: center; background: color-mix(in srgb, var(--green) 10%, var(--surface)); border: 1px solid color-mix(in srgb, var(--green) 45%, var(--line)); border-radius: 7px; color: var(--green); cursor: pointer; display: flex; font: 700 8px JetBrains Mono; gap: 7px; padding: 8px 10px; }
+.clear-alerts:hover { background: color-mix(in srgb, var(--green) 18%, var(--surface)); }.clear-alerts:disabled { cursor: wait; opacity: .6; }
+.alerts-overview { display: grid; gap: 10px; grid-template-columns: repeat(3, 1fr); }.alerts-overview article { min-height: 82px; padding: 14px; }.alerts-overview svg { color: var(--accent); }.alerts-overview span { color: var(--muted); display: block; font: 700 7px JetBrains Mono; margin: 9px 0 4px; }.alerts-overview strong { font: 700 24px JetBrains Mono; }.alerts-overview article:nth-child(2) svg, .alerts-overview article:nth-child(2) strong { color: var(--danger); }.alerts-overview article:nth-child(3) svg, .alerts-overview article:nth-child(3) strong { color: var(--green); }
+.fleet-chat-page { display: grid; gap: 16px; }.chat-hero { align-items: center; display: flex; justify-content: space-between; min-height: 120px; padding: 22px; }.chat-hero h1 { font-size: 25px; margin: 5px 0; }.chat-hero p { color: var(--muted); font-size: 10px; line-height: 1.6; margin: 0; max-width: 620px; }.chat-hero > svg { color: var(--accent); }.chat-layout { align-items: start; display: grid; gap: 16px; grid-template-columns: 210px minmax(0, 1fr); }.chat-members { padding: 14px; }.chat-members header { align-items: center; border-bottom: 1px solid var(--line); display: flex; font: 700 8px JetBrains Mono; justify-content: space-between; padding-bottom: 10px; }.chat-members header b { color: var(--accent); }.chat-members > div { align-items: center; border-bottom: 1px solid color-mix(in srgb, var(--line) 65%, transparent); display: flex; gap: 8px; padding: 11px 2px; }.chat-members i { background: var(--muted); border-radius: 50%; height: 7px; width: 7px; }.chat-members i.online { background: var(--green); box-shadow: 0 0 8px var(--green); }.chat-members span { display: grid; gap: 2px; min-width: 0; }.chat-members strong { font-size: 9px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.chat-members small { color: var(--muted); font-size: 7px; text-transform: capitalize; }
+.chat-thread { display: grid; grid-template-rows: auto minmax(270px, 1fr) auto; min-height: 600px; padding: 18px; }.chat-thread > header h2 { font-size: 15px; margin: 4px 0 14px; }.chat-messages { border-bottom: 1px solid var(--line); border-top: 1px solid var(--line); max-height: 560px; min-height: 280px; overflow: auto; padding: 12px 0; }.chat-messages > article { align-items: flex-start; display: flex; gap: 9px; margin: 0 0 13px; }.chat-avatar { background: color-mix(in srgb, var(--accent) 15%, var(--surface2)); border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line)); border-radius: 7px; color: var(--accent); display: grid; flex: none; font: 700 11px JetBrains Mono; height: 30px; place-items: center; width: 30px; }.chat-messages > article > div:last-child { flex: 1; min-width: 0; }.chat-messages article header { align-items: center; display: flex; gap: 7px; }.chat-messages article header strong { font-size: 10px; }.chat-messages article header small { color: var(--muted); font-size: 7px; }.chat-messages article header b { color: var(--purple); font: 700 6px JetBrains Mono; }.chat-messages pre { color: var(--text); font: 10px/1.55 Inter, system-ui, sans-serif; margin: 5px 0 0; white-space: pre-wrap; word-break: break-word; }.chat-messages pre.markdown-message { background: color-mix(in srgb, var(--purple) 6%, transparent); border-left: 2px solid var(--purple); padding: 8px; }.chat-attachment { align-items: center; background: var(--surface2); border: 1px solid var(--line); border-radius: 6px; color: var(--text); cursor: pointer; display: flex; gap: 7px; margin-top: 7px; max-width: 100%; padding: 7px 8px; }.chat-attachment svg { color: var(--accent); }.chat-attachment span { font-size: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.chat-attachment small { color: var(--muted); font: 700 7px JetBrains Mono; }.chat-empty { color: var(--muted); display: grid; font-size: 9px; gap: 7px; justify-items: center; min-height: 230px; place-content: center; }.chat-empty svg { color: var(--accent); }
+.chat-composer { display: grid; gap: 9px; padding-top: 13px; }.chat-composer > div, .chat-composer footer { align-items: center; display: flex; gap: 9px; }.chat-composer label { color: var(--muted); display: grid; font: 700 7px JetBrains Mono; gap: 4px; }.chat-composer select, .chat-composer textarea { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; color: var(--text); outline: 0; }.chat-composer select { font-size: 9px; height: 29px; padding: 0 7px; }.chat-composer textarea { font: 10px Inter, system-ui, sans-serif; min-height: 74px; padding: 9px; resize: vertical; }.chat-composer footer > small { color: var(--muted); font-size: 7px; }.chat-file { align-items: center !important; border: 1px dashed var(--line); border-radius: 6px; color: var(--muted) !important; cursor: pointer; display: flex !important; gap: 6px; max-width: 240px; padding: 7px 8px; }.chat-file span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.chat-file input { display: none; }.chat-composer footer .primary { align-items: center; display: flex; gap: 7px; margin-left: auto; }
+@media (max-width: 760px) { .chat-layout { grid-template-columns: 1fr; }.chat-members { display: none; }.alerts-overview { grid-template-columns: 1fr 1fr; }.chat-thread { padding: 14px; } }

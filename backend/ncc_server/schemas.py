@@ -194,6 +194,41 @@ class FleetNodeRoleUpdateRequest(BaseModel):
     access_role: Literal["commander", "beta_tester"]
 
 
+class FleetChatMessageCreateRequest(BaseModel):
+    sender_node_id: str | None = Field(default=None, min_length=1, max_length=36)
+    body: str = Field(default="", max_length=20_000)
+    body_format: Literal["plain", "markdown"] = "plain"
+
+    @field_validator("body")
+    @classmethod
+    def require_text_when_present(cls, value: str) -> str:
+        return value.rstrip()
+
+
+class FleetChatAttachmentResponse(BaseModel):
+    name: str
+    content_type: str
+    size: int
+    url: str
+
+
+class FleetChatMessageResponse(BaseModel):
+    message_id: str
+    sender_node_id: str | None
+    sender_name: str
+    body: str
+    body_format: Literal["plain", "markdown"]
+    attachment: FleetChatAttachmentResponse | None
+    created_at: datetime
+
+
+class FleetChatParticipantResponse(BaseModel):
+    node_id: str
+    display_name: str
+    platform: str
+    online: bool
+
+
 class AgentInvitationCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=128)
     expires_hours: int = Field(default=168, ge=0, le=8760)

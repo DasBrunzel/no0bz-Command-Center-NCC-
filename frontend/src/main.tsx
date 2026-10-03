@@ -19,12 +19,15 @@ import {
   LayoutDashboard,
   MemoryStick,
   Menu,
+  MessageSquare,
   MonitorCog,
   Moon,
   Network,
   RefreshCw,
+  Paperclip,
   Search,
   Server,
+  Send,
   Settings,
   ShieldCheck,
   Signal,
@@ -151,7 +154,10 @@ type AlertPolicy = {
   gpu_threshold: number;
   disk_threshold: number;
 };
-type Page = "fleet" | "statistics" | "alerts" | "onboarding" | "settings";
+type ChatAttachment = { name: string; content_type: string; size: number; url: string };
+type ChatMessage = { message_id: string; sender_node_id: string | null; sender_name: string; body: string; body_format: "plain" | "markdown"; attachment: ChatAttachment | null; created_at: string };
+type ChatParticipant = { node_id: string; display_name: string; platform: string; online: boolean };
+type Page = "fleet" | "statistics" | "alerts" | "chat" | "onboarding" | "settings";
 
 const THEMES: { id: Theme; name: string; color: string }[] = [
   { id: "nightmare", name: "Nightmare Red", color: "#ff334f" },
@@ -465,7 +471,7 @@ function Fleet({
   dismissedAlerts: Set<string>;
   onDismissAlert: (id: string) => void;
 }) {
-  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({}),
+  const [navigatorCollapsed, setNavigatorCollapsed] = useState(false),
     [editing, setEditing] = useState(false),
     [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
   const fleetAlerts: FleetAlert[] = alerts.filter((alert) => alert.active && !dismissedAlerts.has(alert.alert_id)).map((alert) => ({
@@ -504,10 +510,11 @@ function Fleet({
       <AlertPanel alerts={fleetAlerts} onDismiss={onDismissAlert} />
       <section className="surface fleet-navigator">
         <header>
-          <div>
+          <button type="button" className="navigator-title" onClick={() => setNavigatorCollapsed((current) => !current)}>
             <span className="eyebrow">FLEET NAVIGATOR</span>
-            <strong>{nodes.filter((node) => node.online).length}/{nodes.length} SYSTEME AKTIV</strong>
-          </div>
+            <strong>{nodes.filter((node) => node.online).length}/{nodes.length} SYSTEME AKTIV · {navigatorCollapsed ? "AUSKLAPPEN" : "EINKLAPPEN"}</strong>
+          </button>
+          {!navigatorCollapsed && <>
           <div className="navigator-actions">
             {editing && (
               <button
@@ -528,9 +535,10 @@ function Fleet({
             <Search size={15} />
             <input value={query} onChange={(event) => onQuery(event.target.value)} placeholder="Gerät suchen …" />
           </label>
+          </>}
         </header>
-        <div className="navigator-groups">
-          {grouped.map((group) => <section className="navigator-group" key={group.group_id}><button className="node-group-toggle" onClick={() => setCollapsedGroups((current) => ({...current, [group.group_id]: !current[group.group_id]}))}><h3>{group.name}<span>{group.nodes.length} · {collapsedGroups[group.group_id] ? "+" : "–"}</span></h3></button>{!collapsedGroups[group.group_id] && <div className={editing ? "editing" : ""} onDragOver={(event) => { if (editing) event.preventDefault(); }} onDrop={(event) => { if (editing) { event.preventDefault(); void moveNode(group.group_id); } }}>{group.nodes.map((node) => {
+        {!navigatorCollapsed && <div className="navigator-groups">
+          {grouped.map((group) => <section className="navigator-group" key={group.group_id}><h3>{group.name}<span>{group.nodes.length}</span></h3><div className={editing ? "editing" : ""} onDragOver={(event) => { if (editing) event.preventDefault(); }} onDrop={(event) => { if (editing) { event.preventDefault(); void moveNode(group.group_id); } }}>{group.nodes.map((node) => {
               return (
                 <button
                   key={node.node_id}
@@ -553,7 +561,7 @@ function Fleet({
                   <StatusDot online={node.online} />
                 </button>
               );
-            })}{!group.nodes.length && <span className="navigator-placeholder">{editing ? "Gerät hierher ziehen" : "Platz für weitere Geräte"}</span>}</div>}</section>)}
+            })}{!group.nodes.length && <span className="navigator-placeholder">{editing ? "Gerät hierher ziehen" : "Platz für weitere Geräte"}</span>}</div></section>)}
             {!filtered.length && (
               <div className="navigator-empty">
                 <Boxes size={30} />
@@ -561,7 +569,7 @@ function Fleet({
                 <span>Starte einen NCC-Agenten oder ändere die Suche.</span>
               </div>
             )}
-        </div>
+        </div>}
       </section>
       <div className="fleet-stage">
         <NodeOverview node={selected} points={points} monthlyNetwork={monthlyNetwork} canDelete={canDelete} />
@@ -1148,9 +1156,9 @@ function NodeOverview({
       {!isUnraid && (
         <div className="system-insights-grid">
           <article className="surface system-insight process-insight">
-            <header><Activity size={16} /><span>AKTIVSTE PROZESSE</span></header>
+            <header><div><Activity size={16} /><span>AKTIVSTE PROZESSE</span></div><b>{processes.length} LIVE</b></header>
             <div className="process-list">
-              {processes.slice(0, 6).map((process: Metrics) => <div key={process.pid}><span title={process.name}>{process.name || "Unbekannt"}</span><b>CPU {Math.min(100, num(process.cpu)).toFixed(1)}%</b><small>RAM {metric(process.memory)}%</small><small>GPU {typeof m.process_gpu?.[String(process.pid)] === "number" ? `${Math.min(100, num(m.process_gpu[String(process.pid)])).toFixed(1)}%` : "—"}</small></div>)}
+              {processes.slice(0, 6).map((process: Metrics, index: number) => <article key={process.pid}><span className="process-rank">{String(index + 1).padStart(2, "0")}</span><div><strong title={process.name}>{process.name || "Unbekannt"}</strong><small>PID {process.pid || "—"} · CPU {Math.min(100, num(process.cpu)).toFixed(1)}%</small><i><em style={{ width: `${Math.min(100, num(process.cpu))}%` }} /></i></div><dl><div><dt>RAM</dt><dd>{metric(process.memory)}%</dd></div><div><dt>GPU</dt><dd>{typeof m.process_gpu?.[String(process.pid)] === "number" ? `${Math.min(100, num(m.process_gpu[String(process.pid)])).toFixed(1)}%` : "—"}</dd></div></dl></article>)}
               {!processes.length && <p>Keine Prozessdaten verfügbar.</p>}
             </div>
           </article>
@@ -1529,8 +1537,70 @@ function TelemetryPage({
   );
 }
 
-function AlertsPage({ alerts }: { alerts: AlertRecord[] }) {
+function FleetChat({ token }: { token: string }) {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [participants, setParticipants] = useState<ChatParticipant[]>([]);
+  const [senderNodeId, setSenderNodeId] = useState("");
+  const [body, setBody] = useState("");
+  const [format, setFormat] = useState<"plain" | "markdown">("plain");
+  const [attachment, setAttachment] = useState<File | null>(null);
+  const [sending, setSending] = useState(false);
+  const load = useCallback(async () => {
+    const [nextMessages, nextParticipants] = await Promise.all([
+      getJson<ChatMessage[]>("/api/v1/fleet/chat/messages", token),
+      getJson<ChatParticipant[]>("/api/v1/fleet/chat/participants", token),
+    ]);
+    setMessages(nextMessages);
+    setParticipants(nextParticipants);
+    setSenderNodeId((current) => current || nextParticipants[0]?.node_id || "");
+  }, [token]);
+  useEffect(() => {
+    void load();
+    const timer = window.setInterval(() => void load(), 5000);
+    return () => clearInterval(timer);
+  }, [load]);
+  const send = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!body.trim() && !attachment) return;
+    setSending(true);
+    try {
+      if (attachment) {
+        const data = new FormData();
+        data.set("file", attachment);
+        data.set("sender_node_id", senderNodeId);
+        data.set("body", body);
+        data.set("body_format", format);
+        const response = await fetch("/api/v1/fleet/chat/uploads", { method: "POST", headers: headers(token), body: data });
+        if (!response.ok) throw new Error("REQUEST");
+      } else {
+        await postJson("/api/v1/fleet/chat/messages", token, { sender_node_id: senderNodeId || null, body, body_format: format });
+      }
+      setBody("");
+      setAttachment(null);
+      const input = document.getElementById("fleet-chat-file") as HTMLInputElement | null;
+      if (input) input.value = "";
+      await load();
+    } finally { setSending(false); }
+  };
+  const download = async (message: ChatMessage) => {
+    if (!message.attachment) return;
+    const response = await fetch(message.attachment.url, { headers: headers(token) });
+    if (!response.ok) return;
+    const url = URL.createObjectURL(await response.blob());
+    const link = document.createElement("a");
+    link.href = url; link.download = message.attachment.name; link.click(); URL.revokeObjectURL(url);
+  };
+  return <section className="fleet-chat-page">
+    <header className="surface chat-hero"><div><span className="eyebrow">FLEET-KOMMUNIKATION</span><h1>Fleet Chat</h1><p>Nachrichten und Anhänge bleiben auf HorstServer erhalten – auch nach einem Browser-Neustart.</p></div><MessageSquare size={28} /></header>
+    <div className="chat-layout"><section className="surface chat-members"><header><span>CHATTER</span><b>{participants.length}</b></header>{participants.map((node) => <div key={node.node_id}><i className={node.online ? "online" : ""} /><span><strong>{node.display_name}</strong><small>{node.platform}</small></span></div>)}</section>
+      <section className="surface chat-thread"><header><div><span className="eyebrow">GEMEINSAMER VERLAUF</span><h2>{messages.length ? `${messages.length} Nachrichten` : "Noch keine Nachricht"}</h2></div></header><div className="chat-messages">{messages.map((message) => <article key={message.message_id}><div className="chat-avatar">{message.sender_name.slice(0, 1).toUpperCase()}</div><div><header><strong>{message.sender_name}</strong><small>{new Date(message.created_at).toLocaleString("de-DE")}</small>{message.body_format === "markdown" && <b>MARKDOWN</b>}</header>{message.body && <pre className={message.body_format === "markdown" ? "markdown-message" : ""}>{message.body}</pre>}{message.attachment && <button type="button" className="chat-attachment" onClick={() => void download(message)}><Paperclip size={14} /><span>{message.attachment.name}</span><small>{(message.attachment.size / 1024 / 1024).toFixed(1)} MB</small></button>}</div></article>)}{!messages.length && <div className="chat-empty"><MessageSquare size={34} /><strong>Der Fleet Chat ist bereit.</strong><span>Schreib die erste Nachricht an deine Geräte.</span></div>}</div>
+        <form className="chat-composer" onSubmit={(event) => void send(event)}><div><label>Absender<select value={senderNodeId} onChange={(event) => setSenderNodeId(event.target.value)}>{participants.map((node) => <option key={node.node_id} value={node.node_id}>{node.display_name}</option>)}</select></label><label>Format<select value={format} onChange={(event) => setFormat(event.target.value as "plain" | "markdown")}><option value="plain">Text</option><option value="markdown">Markdown</option></select></label></div><textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder="Nachricht an die Fleet …" maxLength={20000} /><footer><label className="chat-file"><Paperclip size={15} /><span>{attachment?.name || "Datei anhängen"}</span><input id="fleet-chat-file" type="file" onChange={(event) => setAttachment(event.target.files?.[0] || null)} /></label><small>Maximal 100 MB</small><button className="primary" disabled={sending || (!body.trim() && !attachment)}><Send size={15} />{sending ? "Sende …" : "Senden"}</button></footer></form></section></div>
+  </section>;
+}
+
+function AlertsPage({ alerts, canClear, onClear }: { alerts: AlertRecord[]; canClear: boolean; onClear: () => Promise<void> }) {
   const active = alerts.filter((alert) => alert.active);
+  const [clearing, setClearing] = useState(false);
   return (
     <section className="alerts-page">
       <div className="surface alerts-title">
@@ -1543,8 +1613,9 @@ function AlertsPage({ alerts }: { alerts: AlertRecord[] }) {
               : "Keine aktive Warnung"}
           </p>
         </div>
-        <Bell size={25} />
+        <div className="alerts-title-actions">{canClear && active.length > 0 && <button className="clear-alerts" disabled={clearing} onClick={() => { if (window.confirm("Alle aktuell sichtbaren Warnungen als erledigt markieren? Neue Probleme erscheinen weiterhin automatisch.")) { setClearing(true); void onClear().finally(() => setClearing(false)); } }}><Check size={15} />{clearing ? "Leere …" : "Alle erledigt"}</button>}<Bell size={25} /></div>
       </div>
+      <div className="alerts-overview"><article className="surface"><AlertTriangle size={18} /><span>AKTIV</span><strong>{active.length}</strong></article><article className="surface"><Bell size={18} /><span>KRITISCH</span><strong>{active.filter((alert) => alert.severity === "critical").length}</strong></article><article className="surface"><Check size={18} /><span>BEHOBEN</span><strong>{alerts.filter((alert) => !alert.active).length}</strong></article></div>
       <div className="alert-records">
         {alerts.map((alert) => (
           <article
@@ -2427,6 +2498,11 @@ function App() {
     });
     if (!response.ok) throw new Error("REQUEST");
   };
+  const clearAllAlerts = async () => {
+    const response = await fetch("/api/v1/fleet/alerts/clear", { method: "POST", headers: headers(token) });
+    if (!response.ok) throw new Error("REQUEST");
+    await load(true);
+  };
   const createFleetGroup = async (name: string) => {
     const group = await postJson<FleetGroup>("/api/v1/fleet/groups", token, { name });
     setGroups((current) => [...current, group].sort((left, right) => left.position - right.position || left.name.localeCompare(right.name, "de")));
@@ -2457,6 +2533,7 @@ function App() {
         icon: <BarChart3 size={17} />,
       },
       { id: "alerts" as Page, label: "Warnungen", icon: <Bell size={17} /> },
+      { id: "chat" as Page, label: "Fleet Chat", icon: <MessageSquare size={17} /> },
       {
         id: "onboarding" as Page,
         label: "Gerät hinzufügen",
@@ -2483,6 +2560,8 @@ function App() {
         ? "Statistiken"
         : page === "alerts"
           ? "Warnungszentrum"
+          : page === "chat"
+            ? "Fleet Chat"
           : page === "onboarding"
             ? "Gerät hinzufügen"
             : "System Settings";
@@ -2536,7 +2615,7 @@ function App() {
         <footer>
           <ShieldCheck size={14} />
           <span>GESICHERTE VERBINDUNG</span>
-          <b>v0.5.0-beta.56</b>
+          <b>v0.5.0-beta.57</b>
         </footer>
       </aside>
       <div className="mobile-scrim" onClick={() => setSidebar(false)} />
@@ -2610,7 +2689,9 @@ function App() {
           ) : page === "statistics" ? (
             <StatisticsPage nodes={nodes} summary={summary} token={token} />
           ) : page === "alerts" ? (
-            <AlertsPage alerts={alerts} />
+            <AlertsPage alerts={alerts} canClear={canManageAccess} onClear={clearAllAlerts} />
+          ) : page === "chat" ? (
+            <FleetChat token={token} />
           ) : page === "onboarding" ? (
             <EnrollmentPage
               invitations={invitations}

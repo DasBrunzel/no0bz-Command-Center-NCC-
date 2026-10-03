@@ -4,6 +4,22 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.5.0-beta.57] - 2026-10-03
+
+### Added
+
+- Der neue **Fleet Chat** speichert Nachrichten dauerhaft auf dem NCC-Server.
+  Alle Geräte erscheinen automatisch als Chatter; Text, Markdown und Anhänge bis
+  100 MiB können zentral geteilt werden.
+- Das Warnungszentrum kann aktive Hinweise als erledigt markieren. Bleibt eine
+  Ursache bestehen, wird die Warnung durch die normale Prüfung erneut geöffnet.
+
+### Changed
+
+- Warnungszentrum, aktive Prozessliste und Fleet Navigator wurden übersichtlicher
+  gestaltet. Der Navigator selbst ist nun ein- und ausklappbar; einzelne Gruppen
+  bleiben beim Ausklappen stets sichtbar.
+
 ## [0.5.0-beta.56] - 2026-10-03
 
 ### Fixed
