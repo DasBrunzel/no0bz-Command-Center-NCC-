@@ -27,7 +27,10 @@ class NodeNotApprovedError(Exception):
     pass
 
 
-TELEMETRY_DUPLICATE_WINDOW = timedelta(seconds=1)
+# Independent agent processes that observe the same host snapshot are emitted
+# within a few milliseconds. A full second also catches normal, consecutive
+# agent samples on busy Windows hosts and produces false health alerts.
+TELEMETRY_DUPLICATE_WINDOW = timedelta(milliseconds=250)
 
 
 def enroll_node(

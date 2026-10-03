@@ -4,6 +4,14 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.5.0-beta.55] - 2026-10-03
+
+### Fixed
+
+- Die Doppeltelemetrie-Erkennung berücksichtigt nur noch Messungen in echter
+  Millisekunden-Nähe. Reguläre, aufeinanderfolgende Windows-Messungen im Abstand
+  von einer Sekunde erzeugen damit keine falsche Agent-Gesundheitswarnung mehr.
+
 ## [0.5.0-beta.54] - 2026-10-03
 
 ### Added
