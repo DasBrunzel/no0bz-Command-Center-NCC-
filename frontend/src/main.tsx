@@ -2485,7 +2485,7 @@ function App() {
         <footer>
           <ShieldCheck size={14} />
           <span>GESICHERTE VERBINDUNG</span>
-          <b>v0.5.0-beta.48</b>
+          <b>v0.5.0-beta.49</b>
         </footer>
       </aside>
       <div className="mobile-scrim" onClick={() => setSidebar(false)} />

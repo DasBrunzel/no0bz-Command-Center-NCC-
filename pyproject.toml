@@ -31,7 +31,7 @@ dev = ["pytest>=8", "pytest-asyncio>=0.24", "ruff>=0.8", "mypy>=1.13", "types-ps
 where = ["backend"]
 
 [tool.setuptools.package-data]
-ncc_server = ["static/*", "static/assets/*"]
+ncc_server = ["static/*", "static/assets/*", "static/assets/hardware/*"]
 
 [tool.ruff]
 line-length = 100
