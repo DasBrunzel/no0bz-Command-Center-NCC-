@@ -14,15 +14,21 @@ import {
   Clock3,
   Copy,
   Cpu,
+  Download,
+  FileText,
   HardDrive,
   KeyRound,
   LayoutDashboard,
+  Image as ImageIcon,
   MemoryStick,
+  Maximize2,
   Menu,
   MessageSquare,
   MonitorCog,
   Moon,
   Network,
+  Film,
+  Music2,
   RefreshCw,
   Paperclip,
   Search,
@@ -1537,6 +1543,32 @@ function TelemetryPage({
   );
 }
 
+function ChatAttachmentView({ attachment, token, onOpen }: { attachment: ChatAttachment; token: string; onOpen: (attachment: ChatAttachment, url: string, kind: "image" | "video" | "audio" | "pdf") => void }) {
+  const [url, setUrl] = useState("");
+  const kind = attachment.content_type.startsWith("image/") ? "image" : attachment.content_type.startsWith("video/") ? "video" : attachment.content_type.startsWith("audio/") ? "audio" : attachment.content_type === "application/pdf" ? "pdf" : "file";
+  useEffect(() => {
+    if (kind === "file") return;
+    let active = true, objectUrl = "";
+    fetch(attachment.url, { headers: headers(token) }).then(async (response) => {
+      if (!response.ok) return;
+      objectUrl = URL.createObjectURL(await response.blob());
+      if (active) setUrl(objectUrl);
+    }).catch(() => undefined);
+    return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [attachment.url, kind, token]);
+  const download = async () => {
+    const response = await fetch(attachment.url, { headers: headers(token) });
+    if (!response.ok) return;
+    const temporary = URL.createObjectURL(await response.blob());
+    const link = document.createElement("a"); link.href = temporary; link.download = attachment.name; link.click(); URL.revokeObjectURL(temporary);
+  };
+  if (kind === "image") return <button type="button" className="chat-media image" onClick={() => url && onOpen(attachment, url, "image")}><img src={url} alt={attachment.name} /><span><ImageIcon size={14} />{attachment.name}<Maximize2 size={13} /></span></button>;
+  if (kind === "video") return <div className="chat-media video"><header><Film size={14} />{attachment.name}</header>{url && <video src={url} controls preload="metadata" />}</div>;
+  if (kind === "audio") return <div className="chat-media audio"><header><Music2 size={14} />{attachment.name}</header>{url && <audio src={url} controls />}</div>;
+  if (kind === "pdf") return <button type="button" className="chat-media document" onClick={() => url && onOpen(attachment, url, "pdf")}><FileText size={21} /><span><b>{attachment.name}</b><small>PDF-Vorschau öffnen</small></span><Maximize2 size={14} /></button>;
+  return <button type="button" className="chat-attachment" onClick={() => void download()}><Paperclip size={14} /><span>{attachment.name}</span><small>{(attachment.size / 1024 / 1024).toFixed(1)} MB</small><Download size={13} /></button>;
+}
+
 function FleetChat({ token }: { token: string }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [participants, setParticipants] = useState<ChatParticipant[]>([]);
@@ -1545,6 +1577,7 @@ function FleetChat({ token }: { token: string }) {
   const [format, setFormat] = useState<"plain" | "markdown">("plain");
   const [attachment, setAttachment] = useState<File | null>(null);
   const [sending, setSending] = useState(false);
+  const [preview, setPreview] = useState<{ attachment: ChatAttachment; url: string; kind: "image" | "video" | "audio" | "pdf" } | null>(null);
   const load = useCallback(async () => {
     const [nextMessages, nextParticipants] = await Promise.all([
       getJson<ChatMessage[]>("/api/v1/fleet/chat/messages", token),
@@ -1582,19 +1615,12 @@ function FleetChat({ token }: { token: string }) {
       await load();
     } finally { setSending(false); }
   };
-  const download = async (message: ChatMessage) => {
-    if (!message.attachment) return;
-    const response = await fetch(message.attachment.url, { headers: headers(token) });
-    if (!response.ok) return;
-    const url = URL.createObjectURL(await response.blob());
-    const link = document.createElement("a");
-    link.href = url; link.download = message.attachment.name; link.click(); URL.revokeObjectURL(url);
-  };
   return <section className="fleet-chat-page">
     <header className="surface chat-hero"><div><span className="eyebrow">FLEET-KOMMUNIKATION</span><h1>Fleet Chat</h1><p>Nachrichten und Anhänge bleiben auf HorstServer erhalten – auch nach einem Browser-Neustart.</p></div><MessageSquare size={28} /></header>
     <div className="chat-layout"><section className="surface chat-members"><header><span>CHATTER</span><b>{participants.length}</b></header>{participants.map((node) => <div key={node.node_id}><i className={node.online ? "online" : ""} /><span><strong>{node.display_name}</strong><small>{node.platform}</small></span></div>)}</section>
-      <section className="surface chat-thread"><header><div><span className="eyebrow">GEMEINSAMER VERLAUF</span><h2>{messages.length ? `${messages.length} Nachrichten` : "Noch keine Nachricht"}</h2></div></header><div className="chat-messages">{messages.map((message) => <article key={message.message_id}><div className="chat-avatar">{message.sender_name.slice(0, 1).toUpperCase()}</div><div><header><strong>{message.sender_name}</strong><small>{new Date(message.created_at).toLocaleString("de-DE")}</small>{message.body_format === "markdown" && <b>MARKDOWN</b>}</header>{message.body && <pre className={message.body_format === "markdown" ? "markdown-message" : ""}>{message.body}</pre>}{message.attachment && <button type="button" className="chat-attachment" onClick={() => void download(message)}><Paperclip size={14} /><span>{message.attachment.name}</span><small>{(message.attachment.size / 1024 / 1024).toFixed(1)} MB</small></button>}</div></article>)}{!messages.length && <div className="chat-empty"><MessageSquare size={34} /><strong>Der Fleet Chat ist bereit.</strong><span>Schreib die erste Nachricht an deine Geräte.</span></div>}</div>
+      <section className="surface chat-thread"><header><div><span className="eyebrow">GEMEINSAMER VERLAUF</span><h2>{messages.length ? `${messages.length} Nachrichten` : "Noch keine Nachricht"}</h2></div></header><div className="chat-messages">{messages.map((message) => <article key={message.message_id}><div className="chat-avatar">{message.sender_name.slice(0, 1).toUpperCase()}</div><div><header><strong>{message.sender_name}</strong><small>{new Date(message.created_at).toLocaleString("de-DE")}</small>{message.body_format === "markdown" && <b>MARKDOWN</b>}</header>{message.body && <pre className={message.body_format === "markdown" ? "markdown-message" : ""}>{message.body}</pre>}{message.attachment && <ChatAttachmentView attachment={message.attachment} token={token} onOpen={(nextAttachment, url, kind) => setPreview({ attachment: nextAttachment, url, kind })} />}</div></article>)}{!messages.length && <div className="chat-empty"><MessageSquare size={34} /><strong>Der Fleet Chat ist bereit.</strong><span>Schreib die erste Nachricht an deine Geräte.</span></div>}</div>
         <form className="chat-composer" onSubmit={(event) => void send(event)}><div><label>Absender<select value={senderNodeId} onChange={(event) => setSenderNodeId(event.target.value)}>{participants.map((node) => <option key={node.node_id} value={node.node_id}>{node.display_name}</option>)}</select></label><label>Format<select value={format} onChange={(event) => setFormat(event.target.value as "plain" | "markdown")}><option value="plain">Text</option><option value="markdown">Markdown</option></select></label></div><textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder="Nachricht an die Fleet …" maxLength={20000} /><footer><label className="chat-file"><Paperclip size={15} /><span>{attachment?.name || "Datei anhängen"}</span><input id="fleet-chat-file" type="file" onChange={(event) => setAttachment(event.target.files?.[0] || null)} /></label><small>Maximal 100 MB</small><button className="primary" disabled={sending || (!body.trim() && !attachment)}><Send size={15} />{sending ? "Sende …" : "Senden"}</button></footer></form></section></div>
+    {preview && <div className="chat-preview-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setPreview(null)}><section className="chat-preview"><header><div><span className="eyebrow">DATEIVORSCHAU</span><h2>{preview.attachment.name}</h2></div><button onClick={() => setPreview(null)} aria-label="Vorschau schließen"><X size={18} /></button></header><div className="chat-preview-content">{preview.kind === "image" ? <img src={preview.url} alt={preview.attachment.name} /> : <iframe src={preview.url} title={preview.attachment.name} />}</div><footer><span>{(preview.attachment.size / 1024 / 1024).toFixed(1)} MB</span><a href={preview.url} download={preview.attachment.name}><Download size={15} />Download</a></footer></section></div>}
   </section>;
 }
 
@@ -2615,7 +2641,7 @@ function App() {
         <footer>
           <ShieldCheck size={14} />
           <span>GESICHERTE VERBINDUNG</span>
-          <b>v0.5.0-beta.57</b>
+          <b>v0.5.0-beta.58</b>
         </footer>
       </aside>
       <div className="mobile-scrim" onClick={() => setSidebar(false)} />

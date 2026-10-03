@@ -4,6 +4,14 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.5.0-beta.58] - 2026-10-03
+
+### Added
+
+- Fleet Chat erkennt nun Bild-, Video-, Audio- und PDF-Anhänge automatisch.
+  Bilder und PDFs öffnen sich in einer großen Vorschau mit Download, während
+  Videos und Audio direkt im Chat abspielbar sind.
+
 ## [0.5.0-beta.57] - 2026-10-03
 
 ### Added
