@@ -988,6 +988,24 @@ function NodeOverview({
     typeof cpu.temperature_c === "number"
       ? `${num(cpu.temperature_c).toFixed(0)} °C CPU-Temperatur`
       : undefined;
+  const cpuModel = String(cpu.model || "CPU nicht erkannt");
+  const gpuModel = String(gpu.name || gpu.model || "Keine GPU erkannt");
+  const cpuLogo = (() => {
+    const model = cpuModel.toLowerCase();
+    if (model.includes("intel")) return "/hardware/intel.svg";
+    const ryzen = model.match(/ryzen\s*([3579])/i)?.[1];
+    return ryzen ? `/hardware/ryzen${ryzen}.jpg` : null;
+  })();
+  const gpuLogo = (() => {
+    const model = gpuModel.toLowerCase();
+    if (model.includes("nvidia") || model.includes("geforce"))
+      return model.includes("rtx") ? "/hardware/nvidia-rtx.jpg" : "/hardware/nvidia-gtx.png";
+    if (model.includes("amd") || model.includes("radeon")) return "/hardware/amd-radeon.png";
+    return null;
+  })();
+  const operatingSystem = isUnraid
+    ? `Unraid ${m.unraid?.version || node.agent_version || ""}`.trim()
+    : String(m.system?.platform || node.platform || "Betriebssystem unbekannt");
   return (
     <section className="node-overview">
       <div className={`surface hero ${isUnraid ? "unraid-hero" : ""}`}>
@@ -998,9 +1016,19 @@ function NodeOverview({
           <h1>{node.display_name}</h1>
           <p>
             {isUnraid
-              ? `UNRAID API · ${node.machine_id}`
-              : `${node.platform.toUpperCase()} · ${String(node.metadata.architecture || "Architektur unbekannt")} · ${node.machine_id}`}
+              ? `${operatingSystem} · UNRAID API`
+              : `${operatingSystem} · ${String(node.metadata.architecture || "Architektur unbekannt")}`}
           </p>
+        </div>
+        <div className="node-hardware" aria-label="Erkannte Hardware">
+          <div title={cpuModel}>
+            {cpuLogo ? <img src={cpuLogo} alt="CPU-Hersteller" /> : <Cpu size={22} />}
+            <span>{cpuModel}</span>
+          </div>
+          {!isUnraid && <div title={gpuModel}>
+            {gpuLogo ? <img src={gpuLogo} alt="GPU-Hersteller" /> : <MonitorCog size={22} />}
+            <span>{gpuModel}</span>
+          </div>}
         </div>
         <div className="hero-status">
           <StatusDot online={node.online} />
@@ -2457,7 +2485,7 @@ function App() {
         <footer>
           <ShieldCheck size={14} />
           <span>GESICHERTE VERBINDUNG</span>
-          <b>v0.5.0-beta.46</b>
+          <b>v0.5.0-beta.47</b>
         </footer>
       </aside>
       <div className="mobile-scrim" onClick={() => setSidebar(false)} />

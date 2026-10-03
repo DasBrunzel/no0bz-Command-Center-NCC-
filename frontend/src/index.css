@@ -965,6 +965,39 @@ main {
   color: var(--muted);
   font-size: 8px;
 }
+.node-hardware {
+  align-items: center;
+  display: flex;
+  flex: 1;
+  gap: 11px;
+  justify-content: flex-end;
+  margin: 0 25px;
+  min-width: 0;
+}
+.node-hardware > div {
+  align-items: center;
+  background: color-mix(in srgb, var(--surface2) 60%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 76%, transparent);
+  display: flex;
+  gap: 8px;
+  max-width: 240px;
+  min-width: 0;
+  padding: 6px 9px;
+}
+.node-hardware img {
+  height: 25px;
+  max-width: 42px;
+  object-fit: contain;
+  width: 38px;
+}
+.node-hardware svg { color: var(--accent); flex: 0 0 auto; }
+.node-hardware span {
+  color: var(--muted);
+  font: 700 8px JetBrains Mono;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .gauge-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -1914,6 +1947,9 @@ main {
   .hero {
     align-items: flex-start;
     gap: 12px;
+  }
+  .node-hardware {
+    display: none;
   }
   .fleet-navigator { padding: 13px; }
   .navigator-node {
