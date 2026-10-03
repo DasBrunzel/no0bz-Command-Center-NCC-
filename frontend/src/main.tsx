@@ -992,15 +992,15 @@ function NodeOverview({
   const gpuModel = String(gpu.name || gpu.model || "Keine GPU erkannt");
   const cpuLogo = (() => {
     const model = cpuModel.toLowerCase();
-    if (model.includes("intel")) return "/hardware/intel.svg";
+    if (model.includes("intel")) return "/assets/hardware/intel.svg";
     const ryzen = model.match(/ryzen\s*([3579])/i)?.[1];
-    return ryzen ? `/hardware/ryzen${ryzen}.jpg` : null;
+    return ryzen ? `/assets/hardware/ryzen${ryzen}.jpg` : null;
   })();
   const gpuLogo = (() => {
     const model = gpuModel.toLowerCase();
     if (model.includes("nvidia") || model.includes("geforce"))
-      return model.includes("rtx") ? "/hardware/nvidia-rtx.jpg" : "/hardware/nvidia-gtx.png";
-    if (model.includes("amd") || model.includes("radeon")) return "/hardware/amd-radeon.png";
+      return model.includes("rtx") ? "/assets/hardware/nvidia-rtx.jpg" : "/assets/hardware/nvidia-gtx.png";
+    if (model.includes("amd") || model.includes("radeon")) return "/assets/hardware/amd-radeon.png";
     return null;
   })();
   const operatingSystem = isUnraid
@@ -2485,7 +2485,7 @@ function App() {
         <footer>
           <ShieldCheck size={14} />
           <span>GESICHERTE VERBINDUNG</span>
-          <b>v0.5.0-beta.47</b>
+          <b>v0.5.0-beta.48</b>
         </footer>
       </aside>
       <div className="mobile-scrim" onClick={() => setSidebar(false)} />
