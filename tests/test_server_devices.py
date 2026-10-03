@@ -78,6 +78,25 @@ def test_token_enrollment_and_heartbeat_are_persistent(tmp_path: Path) -> None:
             "/api/v1/nodes/telemetry", json=telemetry_payload, headers=headers
         )
         assert duplicate.json() == {"accepted": 0, "duplicates": 1}
+        near_duplicate = client.post(
+            "/api/v1/nodes/telemetry",
+            json={
+                "points": [
+                    {
+                        "sample_id": "22345678-1234-4234-8234-123456789abc",
+                        "recorded_at": (utc_now() + timedelta(seconds=5)).isoformat(),
+                        "metrics": {"cpu": {"percent": 43.0}},
+                    },
+                    {
+                        "sample_id": "32345678-1234-4234-8234-123456789abc",
+                        "recorded_at": (utc_now() + timedelta(seconds=5, milliseconds=200)).isoformat(),
+                        "metrics": {"cpu": {"percent": 44.0}},
+                    },
+                ]
+            },
+            headers=headers,
+        )
+        assert near_duplicate.json() == {"accepted": 1, "duplicates": 1}
         repeated_in_batch = client.post(
             "/api/v1/nodes/telemetry",
             json={"points": telemetry_payload["points"] * 2},
@@ -98,7 +117,7 @@ def test_token_enrollment_and_heartbeat_are_persistent(tmp_path: Path) -> None:
         assert node is not None
         assert node.metadata_json == {"tailscale": True}
         assert node.last_seen_at is not None
-        assert session.query(TelemetryPoint).count() == 1
+        assert session.query(TelemetryPoint).count() == 2
     reopened.dispose()
 
 

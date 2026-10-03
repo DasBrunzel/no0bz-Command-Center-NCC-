@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -25,6 +25,9 @@ class TokenNotEnrolledError(Exception):
 
 class NodeNotApprovedError(Exception):
     pass
+
+
+TELEMETRY_DUPLICATE_WINDOW = timedelta(seconds=1)
 
 
 def enroll_node(
@@ -123,11 +126,26 @@ def store_telemetry(
             )
         ).all()
     )
+    latest = session.scalar(
+        select(TelemetryPoint)
+        .where(TelemetryPoint.node_id == node.id)
+        .order_by(TelemetryPoint.recorded_at.desc())
+        .limit(1)
+    )
+    latest_recorded_at = latest.recorded_at if latest is not None else None
     accepted = 0
     duplicates = 0
     for point in points:
         sample_id = str(point.sample_id)
         if sample_id in existing:
+            duplicates += 1
+            continue
+        if latest_recorded_at is not None and _same_telemetry_window(
+            latest_recorded_at, point.recorded_at
+        ):
+            # Two independently running local agents can have different sample
+            # IDs but emit the same host snapshot milliseconds apart. Keep the
+            # first point so counter-based statistics cannot double-count it.
             duplicates += 1
             continue
         try:
@@ -145,6 +163,7 @@ def store_telemetry(
             duplicates += 1
         else:
             existing.add(sample_id)
+            latest_recorded_at = point.recorded_at
             accepted += 1
     now = utc_now()
     node.last_seen_at = now
@@ -172,6 +191,14 @@ def _offline_timeout(node: Node, default_seconds: int) -> int:
     if metadata.get("source") == "unraid-api":
         return max(default_seconds, 90)
     return default_seconds
+
+
+def _same_telemetry_window(left: datetime, right: datetime) -> bool:
+    if left.tzinfo is None:
+        left = left.replace(tzinfo=timezone.utc)
+    if right.tzinfo is None:
+        right = right.replace(tzinfo=timezone.utc)
+    return abs(left - right) <= TELEMETRY_DUPLICATE_WINDOW
 
 
 def _bound_node(session: Session, token: AgentToken) -> Node:

@@ -266,6 +266,48 @@ def test_commander_can_reset_visible_network_statistics_without_deleting_raw_dat
         assert session.query(AuditEvent).filter_by(action="traffic.statistics.reset").count() == 1
 
 
+def test_monthly_network_usage_ignores_impossible_counter_jumps(tmp_path: Path) -> None:
+    database = make_database(tmp_path / "network-sanity.db")
+    online_id, _ = seed(database)
+    now = utc_now()
+    with database.session() as session:
+        session.add_all(
+            [
+                TelemetryPoint(
+                    node_id=online_id,
+                    sample_id="88888888-8888-4888-8888-888888888888",
+                    recorded_at=now - timedelta(seconds=10),
+                    payload={"network": {"bytes_recv": 1000, "bytes_sent": 1000}},
+                ),
+                TelemetryPoint(
+                    node_id=online_id,
+                    sample_id="99999999-9999-4999-8999-999999999999",
+                    recorded_at=now - timedelta(seconds=9),
+                    payload={"network": {"bytes_recv": 100 * 1024**3, "bytes_sent": 1000}},
+                ),
+                TelemetryPoint(
+                    node_id=online_id,
+                    sample_id="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                    recorded_at=now - timedelta(seconds=4),
+                    payload={"network": {"bytes_recv": 1600, "bytes_sent": 1300}},
+                ),
+            ]
+        )
+        session.commit()
+    app = create_app(
+        ServerSettings(database_url="sqlite+pysqlite://", dashboard_token="dashboard-secret"),
+        database,
+    )
+    with TestClient(app) as client:
+        result = client.get(
+            f"/api/v1/fleet/nodes/{online_id}/network/month",
+            headers={"X-NCC-Dashboard-Token": "dashboard-secret"},
+        )
+    assert result.status_code == 200
+    assert result.json()["received_bytes"] == 600
+    assert result.json()["sent_bytes"] == 300
+
+
 def test_unraid_polling_uses_a_grace_period() -> None:
     node = Node(
         machine_id="unraid:horsttower",

@@ -33,6 +33,7 @@ DEFAULT_FLEET_GROUPS = (
     ("default-mobile", "MOBILE", 2),
     ("default-friends", "FRIENDS", 3),
 )
+MAX_PLAUSIBLE_NETWORK_BYTES_PER_SECOND = 2.5 * 1024**3
 
 
 def list_fleet_groups(session: Session) -> list[FleetGroupResponse]:
@@ -161,6 +162,7 @@ def node_monthly_network_usage(
         .order_by(TelemetryPoint.recorded_at)
     ).all()
     previous_pair = _network_counters(previous.payload) if previous is not None else None
+    previous_recorded_at = previous.recorded_at if previous is not None else None
     received = sent = 0
     samples = 0
     for point in points:
@@ -169,9 +171,23 @@ def node_monthly_network_usage(
             continue
         samples += 1
         if previous_pair is not None:
-            received += _counter_delta(previous_pair[0], current_pair[0])
-            sent += _counter_delta(previous_pair[1], current_pair[1])
-        previous_pair = current_pair
+            elapsed = _elapsed_seconds(previous_recorded_at, point.recorded_at)
+            received_delta = _plausible_counter_delta(previous_pair[0], current_pair[0], elapsed)
+            sent_delta = _plausible_counter_delta(previous_pair[1], current_pair[1], elapsed)
+            if received_delta is not None:
+                received += received_delta
+            if sent_delta is not None:
+                sent += sent_delta
+            # Do not let one implausible counter jump become the baseline for
+            # the next valid sample. This prevents alternating collectors from
+            # manufacturing a reset and another large traffic amount.
+            previous_pair = (
+                current_pair[0] if received_delta is not None else previous_pair[0],
+                current_pair[1] if sent_delta is not None else previous_pair[1],
+            )
+        else:
+            previous_pair = current_pair
+        previous_recorded_at = point.recorded_at
     return NetworkUsageSummary(
         period_start=effective_start,
         received_bytes=received,
@@ -224,6 +240,23 @@ def _number(value: object) -> float | None:
 
 def _counter_delta(previous: int, current: int) -> int:
     return current - previous if current >= previous else current
+
+
+def _elapsed_seconds(previous: datetime | None, current: datetime) -> float:
+    if previous is None:
+        return 0.0
+    if previous.tzinfo is None:
+        previous = previous.replace(tzinfo=timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+    return max(0.001, (current - previous).total_seconds())
+
+
+def _plausible_counter_delta(
+    previous: int, current: int, elapsed_seconds: float
+) -> int | None:
+    delta = _counter_delta(previous, current)
+    return delta if delta <= MAX_PLAUSIBLE_NETWORK_BYTES_PER_SECOND * elapsed_seconds else None
 
 
 def fleet_summary(session: Session, settings: ServerSettings) -> FleetSummaryResponse:

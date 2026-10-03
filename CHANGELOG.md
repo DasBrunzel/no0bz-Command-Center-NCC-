@@ -4,6 +4,16 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.5.0-beta.52] - 2026-10-03
+
+### Fixed
+
+- NCC verwirft nahezu zeitgleiche Telemetriedoppelmeldungen desselben Geräts,
+  auch wenn sie unterschiedliche Sample-IDs besitzen.
+- Die Monatsverkehrsberechnung ignoriert Zählersprünge oberhalb einer plausiblen
+  Netzwerkgeschwindigkeit und lässt solche Ausreißer nicht zum nächsten
+  Berechnungs-Basiswert werden.
+
 ## [0.5.0-beta.51] - 2026-10-03
 
 ### Added
