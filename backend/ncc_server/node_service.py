@@ -46,6 +46,7 @@ def enroll_node(
             display_name=payload.display_name,
             platform=payload.platform,
             approved=True,
+            access_role=token.access_role,
         )
         session.add(node)
         try:
@@ -67,6 +68,7 @@ def enroll_node(
         )
     node.display_name = payload.display_name
     node.platform = payload.platform
+    node.access_role = token.access_role
     node.agent_version = payload.agent_version
     node.metadata_json = dict(payload.metadata)
     node.last_seen_at = now

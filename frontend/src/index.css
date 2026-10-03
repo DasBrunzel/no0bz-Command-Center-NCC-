@@ -134,6 +134,51 @@
   --green: #baca55;
   --amber: #ffb52e;
 }
+[data-theme="glass"] {
+  --bg: #0b1020;
+  --sidebar: #111936;
+  --surface: rgba(27, 39, 76, 0.68);
+  --surface2: rgba(59, 79, 132, 0.42);
+  --line: rgba(176, 214, 255, 0.22);
+  --text: #f4f8ff;
+  --muted: #aab9d8;
+  --accent: #79e6ff;
+  --accent-rgb: 121, 230, 255;
+  --blue: #8ab4ff;
+  --purple: #d6a2ff;
+  --green: #83f4c2;
+  --amber: #ffd27a;
+}
+[data-theme="terminal"] {
+  --bg: #030605;
+  --sidebar: #07100a;
+  --surface: #09150c;
+  --surface2: #0d2112;
+  --line: #1d4e29;
+  --text: #d7ffd9;
+  --muted: #72ad7b;
+  --accent: #9cff57;
+  --accent-rgb: 156, 255, 87;
+  --blue: #63d8a0;
+  --purple: #d7ff6b;
+  --green: #9cff57;
+  --amber: #ffd45c;
+}
+[data-theme="aurora"] {
+  --bg: #101327;
+  --sidebar: #171b3c;
+  --surface: #1d2348;
+  --surface2: #283261;
+  --line: #3f4d82;
+  --text: #f5f4ff;
+  --muted: #a9afd0;
+  --accent: #b79cff;
+  --accent-rgb: 183, 156, 255;
+  --blue: #73c9ff;
+  --purple: #e5a8ff;
+  --green: #81edc0;
+  --amber: #ffd27d;
+}
 * {
   box-sizing: border-box;
 }
@@ -1907,6 +1952,134 @@ main {
 .fleet-alerts article span {
   font-size: 10px;
   color: var(--muted);
+}
+.alert-dismiss {
+  align-items: center;
+  align-self: stretch;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: pointer;
+  display: grid;
+  margin-left: auto;
+  min-width: 28px;
+  place-items: center;
+}
+.alert-dismiss:hover {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+  color: var(--accent);
+}
+.fleet-beta-badge {
+  background: color-mix(in srgb, var(--purple) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--purple) 45%, var(--line));
+  border-radius: 4px;
+  color: var(--purple);
+  display: inline-block;
+  font: 700 7px JetBrains Mono;
+  letter-spacing: .04em;
+  margin-top: 3px;
+  padding: 2px 4px;
+  width: max-content;
+}
+
+/* Additional design systems. Existing themes intentionally keep their original look. */
+[data-theme="glass"] body {
+  background: radial-gradient(circle at 12% 0%, #29477c 0, transparent 34%), var(--bg);
+  font-family: Inter, system-ui, sans-serif;
+}
+[data-theme="glass"] .shell {
+  background: linear-gradient(135deg, rgba(79, 112, 187, .18), transparent 42%), transparent;
+}
+[data-theme="glass"] aside {
+  background: rgba(12, 23, 52, .72);
+  backdrop-filter: blur(24px);
+  border-right-color: rgba(176, 214, 255, .18);
+}
+[data-theme="glass"] .surface,
+[data-theme="glass"] .stat-card,
+[data-theme="glass"] .gauge-card,
+[data-theme="glass"] .navigator-node,
+[data-theme="glass"] .node-group > button:not(.node-group-toggle) {
+  backdrop-filter: blur(18px);
+  background: linear-gradient(145deg, rgba(71, 96, 160, .34), rgba(21, 34, 74, .5));
+  border-color: rgba(176, 214, 255, .2);
+  border-radius: 18px;
+  box-shadow: 0 18px 45px rgba(3, 8, 26, .28), inset 0 1px rgba(255, 255, 255, .1);
+}
+[data-theme="glass"] .topbar {
+  background: rgba(11, 16, 32, .68);
+  border-bottom-color: rgba(176, 214, 255, .18);
+}
+[data-theme="glass"] .brand-mark,
+[data-theme="glass"] .device-icon {
+  border-radius: 14px;
+}
+
+[data-theme="terminal"] body,
+[data-theme="terminal"] button,
+[data-theme="terminal"] input {
+  font-family: "JetBrains Mono", Consolas, monospace;
+}
+[data-theme="terminal"] .shell {
+  background: repeating-linear-gradient(0deg, rgba(156, 255, 87, .018) 0, rgba(156, 255, 87, .018) 1px, transparent 1px, transparent 4px), var(--bg);
+}
+[data-theme="terminal"] aside,
+[data-theme="terminal"] .topbar {
+  background: var(--sidebar);
+  border-color: var(--line);
+}
+[data-theme="terminal"] .surface,
+[data-theme="terminal"] .stat-card,
+[data-theme="terminal"] .gauge-card,
+[data-theme="terminal"] .navigator-node,
+[data-theme="terminal"] .node-group > button:not(.node-group-toggle) {
+  background: var(--surface);
+  border-color: var(--line);
+  border-radius: 2px;
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, .35);
+}
+[data-theme="terminal"] .surface::before {
+  color: var(--muted);
+}
+[data-theme="terminal"] .eyebrow,
+[data-theme="terminal"] .navigator-group h3,
+[data-theme="terminal"] .stat-card span {
+  text-transform: uppercase;
+}
+[data-theme="terminal"] .brand-mark {
+  border-radius: 2px;
+  box-shadow: 0 0 18px rgba(var(--accent-rgb), .22);
+}
+
+[data-theme="aurora"] body {
+  background: radial-gradient(circle at 80% -10%, #514c9e 0, transparent 35%), var(--bg);
+}
+[data-theme="aurora"] .shell {
+  background: radial-gradient(circle at 15% 35%, rgba(104, 173, 255, .13), transparent 28%), transparent;
+}
+[data-theme="aurora"] aside {
+  background: linear-gradient(180deg, #1c2149, #12162f);
+  border-right-color: rgba(183, 156, 255, .25);
+}
+[data-theme="aurora"] .surface,
+[data-theme="aurora"] .stat-card,
+[data-theme="aurora"] .gauge-card,
+[data-theme="aurora"] .navigator-node,
+[data-theme="aurora"] .node-group > button:not(.node-group-toggle) {
+  background: linear-gradient(160deg, rgba(40, 50, 97, .92), rgba(26, 32, 70, .95));
+  border-color: rgba(183, 156, 255, .25);
+  border-radius: 16px;
+  box-shadow: 0 20px 55px rgba(4, 5, 24, .28);
+}
+[data-theme="aurora"] .stat-icon,
+[data-theme="aurora"] .device-icon {
+  border-radius: 13px;
+}
+[data-theme="aurora"] .topbar {
+  background: rgba(16, 19, 39, .75);
+  border-bottom-color: rgba(183, 156, 255, .22);
 }
 .alerts-page {
   display: grid;

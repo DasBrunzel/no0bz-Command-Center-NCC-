@@ -50,6 +50,7 @@ type Node = {
   display_name: string;
   platform: string;
   approved: boolean;
+  access_role: AccessRole;
   online: boolean;
   agent_version: string | null;
   metadata: Record<string, unknown>;
@@ -85,7 +86,10 @@ type Theme =
   | "matrix"
   | "dracula"
   | "nordic"
-  | "amber";
+  | "amber"
+  | "glass"
+  | "terminal"
+  | "aurora";
 type Invitation = {
   token_id: string;
   name: string;
@@ -155,6 +159,9 @@ const THEMES: { id: Theme; name: string; color: string }[] = [
   { id: "dracula", name: "Dracula", color: "#ff6680" },
   { id: "nordic", name: "Nordic Frost", color: "#88c0d0" },
   { id: "amber", name: "Retro Amber", color: "#ffb52e" },
+  { id: "glass", name: "Glass Command", color: "#79e6ff" },
+  { id: "terminal", name: "Terminal Grid", color: "#9cff57" },
+  { id: "aurora", name: "Aurora Horizon", color: "#b79cff" },
 ];
 const num = (value: unknown) =>
   typeof value === "number" && Number.isFinite(value) ? value : 0;
@@ -353,7 +360,13 @@ function Sparkline({
   );
 }
 
-function AlertPanel({ alerts }: { alerts: FleetAlert[] }) {
+function AlertPanel({
+  alerts,
+  onDismiss,
+}: {
+  alerts: FleetAlert[];
+  onDismiss: (id: string) => void;
+}) {
   if (!alerts.length) return null;
   return (
     <section className="surface fleet-alerts">
@@ -375,6 +388,15 @@ function AlertPanel({ alerts }: { alerts: FleetAlert[] }) {
               <strong>{alert.title}</strong>
               <span>{alert.detail}</span>
             </div>
+            <button
+              type="button"
+              className="alert-dismiss"
+              title="Warnung ausblenden"
+              aria-label={`${alert.title} ausblenden`}
+              onClick={() => onDismiss(alert.id)}
+            >
+              <X size={15} />
+            </button>
           </article>
         ))}
       </div>
@@ -395,6 +417,8 @@ function Fleet({
   onCreateGroup,
   onLayout,
   canDelete,
+  dismissedAlerts,
+  onDismissAlert,
 }: {
   nodes: Node[];
   groups: FleetGroup[];
@@ -408,11 +432,13 @@ function Fleet({
   onCreateGroup: (name: string) => Promise<void>;
   onLayout: (placements: FleetPlacement[]) => Promise<void>;
   canDelete: boolean;
+  dismissedAlerts: Set<string>;
+  onDismissAlert: (id: string) => void;
 }) {
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({}),
     [editing, setEditing] = useState(false),
     [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
-  const fleetAlerts: FleetAlert[] = alerts.filter((alert) => alert.active).map((alert) => ({
+  const fleetAlerts: FleetAlert[] = alerts.filter((alert) => alert.active && !dismissedAlerts.has(alert.alert_id)).map((alert) => ({
     id: alert.alert_id, title: alert.message, detail: `${alert.display_name} · seit ${ago(alert.opened_at)}`, severity: alert.severity,
   }));
   const filtered = nodes.filter((node) =>
@@ -445,7 +471,7 @@ function Fleet({
   };
   return (
     <>
-      <AlertPanel alerts={fleetAlerts} />
+      <AlertPanel alerts={fleetAlerts} onDismiss={onDismissAlert} />
       <section className="surface fleet-navigator">
         <header>
           <div>
@@ -492,6 +518,7 @@ function Fleet({
                   <div className="node-copy">
                     <strong>{node.display_name}</strong>
                     <span>{node.platform} · {node.agent_version || "Agent unbekannt"}</span>
+                    {node.access_role === "beta_tester" && <small className="fleet-beta-badge">BETA-TESTER</small>}
                   </div>
                   <StatusDot online={node.online} />
                 </button>
@@ -1686,6 +1713,9 @@ function App() {
     [selectedId, setSelectedId] = useState(""),
     [points, setPoints] = useState<Telemetry[]>([]),
     [monthlyNetwork, setMonthlyNetwork] = useState<NetworkUsageSummary | null>(null);
+  const [dismissedAlertIds, setDismissedAlertIds] = useState<Set<string>>(
+    () => new Set(JSON.parse(localStorage.getItem("ncc-dismissed-alerts") || "[]")),
+  );
   const [accessRole, setAccessRole] = useState<AccessRole>("commander");
   const [page, setPage] = useState<Page>("fleet"),
     [query, setQuery] = useState(""),
@@ -1721,6 +1751,15 @@ function App() {
         setSummary(nextSummary);
         setInvitations(nextInvitations);
         setAlerts(nextAlerts);
+        const activeAlertIds = new Set(
+          nextAlerts.filter((alert) => alert.active).map((alert) => alert.alert_id),
+        );
+        setDismissedAlertIds((current) => {
+          const next = new Set([...current].filter((id) => activeAlertIds.has(id)));
+          if (next.size === current.size && [...next].every((id) => current.has(id))) return current;
+          localStorage.setItem("ncc-dismissed-alerts", JSON.stringify([...next]));
+          return next;
+        });
         setPolicy(nextPolicy);
         setAccessRole(nextAccess.access_role);
         setAuthenticated(true);
@@ -1788,6 +1827,14 @@ function App() {
     setToken(value);
     setAuthenticated(null);
     setAuthError(false);
+  };
+  const dismissAlert = (id: string) => {
+    setDismissedAlertIds((current) => {
+      const next = new Set(current);
+      next.add(id);
+      localStorage.setItem("ncc-dismissed-alerts", JSON.stringify([...next]));
+      return next;
+    });
   };
   const createInvitation = async (name: string, hours: number) => {
     const created = await postJson<IssuedInvitation>(
@@ -1926,7 +1973,7 @@ function App() {
         <footer>
           <ShieldCheck size={14} />
           <span>GESICHERTE VERBINDUNG</span>
-          <b>v0.5.0-beta.38</b>
+          <b>v0.5.0-beta.39</b>
         </footer>
       </aside>
       <div className="mobile-scrim" onClick={() => setSidebar(false)} />
@@ -1982,6 +2029,8 @@ function App() {
               onCreateGroup={createFleetGroup}
               onLayout={saveFleetLayout}
               canDelete={canManageAccess}
+              dismissedAlerts={dismissedAlertIds}
+              onDismissAlert={dismissAlert}
             />
           ) : page === "statistics" ? (
             <StatisticsPage />

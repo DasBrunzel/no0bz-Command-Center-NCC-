@@ -33,6 +33,7 @@ class Node(Base):
     display_name: Mapped[str] = mapped_column(String(128), nullable=False)
     platform: Mapped[str] = mapped_column(String(32), nullable=False)
     approved: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    access_role: Mapped[str] = mapped_column(String(32), nullable=False, default="commander")
     agent_version: Mapped[str | None] = mapped_column(String(32))
     metadata_json: Mapped[dict[str, object]] = mapped_column("metadata", JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(
@@ -97,6 +98,7 @@ class AgentToken(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     node_id: Mapped[str | None] = mapped_column(ForeignKey("nodes.id", ondelete="CASCADE"))
     name: Mapped[str] = mapped_column(String(128), nullable=False)
+    access_role: Mapped[str] = mapped_column(String(32), nullable=False, default="commander")
     token_hash: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
@@ -151,6 +153,7 @@ class AgentPairing(Base):
     display_name: Mapped[str] = mapped_column(String(128), nullable=False)
     machine_id: Mapped[str] = mapped_column(String(128), nullable=False)
     platform: Mapped[str] = mapped_column(String(32), nullable=False)
+    access_role: Mapped[str] = mapped_column(String(32), nullable=False, default="commander")
     agent_version: Mapped[str] = mapped_column(String(32), nullable=False)
     metadata_json: Mapped[dict[str, object]] = mapped_column("metadata", JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)

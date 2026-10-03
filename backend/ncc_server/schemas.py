@@ -30,6 +30,7 @@ class NodeResponse(BaseModel):
     display_name: str
     platform: str
     approved: bool
+    access_role: Literal["commander", "beta_tester"]
     online: bool
     agent_version: str | None
     last_seen_at: datetime | None
@@ -100,6 +101,7 @@ class FleetNodeResponse(BaseModel):
     display_name: str
     platform: str
     approved: bool
+    access_role: Literal["commander", "beta_tester"]
     online: bool
     agent_version: str | None
     metadata: dict[str, object]
@@ -269,6 +271,7 @@ class AgentPairingResponse(BaseModel):
     pairing_id: str
     display_name: str
     platform: str
+    access_role: Literal["commander", "beta_tester"]
     status: Literal["waiting", "approved", "claimed", "expired", "cancelled"]
     created_at: datetime
     expires_at: datetime

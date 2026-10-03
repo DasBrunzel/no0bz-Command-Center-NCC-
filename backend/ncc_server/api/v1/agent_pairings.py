@@ -80,9 +80,13 @@ async def list_pairings(session: Session = Depends(database_session)) -> list[Ag
 @router.post(
     "/{pairing_id}/approve",
     response_model=AgentPairingResponse,
-    dependencies=[Depends(require_dashboard_access), Depends(limited("v1-agent-pairing-approve", 20))],
+    dependencies=[Depends(limited("v1-agent-pairing-approve", 20))],
 )
-async def approve(pairing_id: str, session: Session = Depends(database_session)) -> AgentPairingResponse:
+async def approve(
+    pairing_id: str,
+    access_role: Literal["commander", "beta_tester"] = Depends(require_dashboard_access),
+    session: Session = Depends(database_session),
+) -> AgentPairingResponse:
     record = session.get(AgentPairing, pairing_id)
     if record is None or record.cancelled_at is not None or record.claimed_at is not None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="pairing request not found")
@@ -90,12 +94,19 @@ async def approve(pairing_id: str, session: Session = Depends(database_session))
         raise HTTPException(status_code=status.HTTP_410_GONE, detail="pairing request expired")
     if record.approved_at is None:
         record.approved_at = utc_now()
+        record.access_role = access_role
+        existing_node = session.scalar(select(Node).where(Node.machine_id == record.machine_id))
+        if existing_node is not None:
+            existing_node.access_role = access_role
         session.add(
             AuditEvent(
                 actor_type="dashboard",
                 actor_id=record.id,
                 action="agent-pairing.approved",
-                details=json.dumps({"machine_id": record.machine_id}, separators=(",", ":")),
+                details=json.dumps(
+                    {"machine_id": record.machine_id, "access_role": access_role},
+                    separators=(",", ":"),
+                ),
             )
         )
         session.commit()
@@ -124,9 +135,11 @@ async def claim(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="pairing was already claimed")
     record.claimed_at = utc_now()
     issued = issue_agent_token(session, record.display_name, None, actor_type="agent-pairing")
+    issued.record.access_role = record.access_role
     existing_node = session.scalar(select(Node).where(Node.machine_id == record.machine_id))
     if existing_node is not None:
         issued.record.node_id = existing_node.id
+        existing_node.access_role = record.access_role
         for prior_token in session.scalars(
             select(AgentToken).where(
                 AgentToken.node_id == existing_node.id,
@@ -171,6 +184,7 @@ def _response(record: AgentPairing) -> AgentPairingResponse:
         pairing_id=record.id,
         display_name=record.display_name,
         platform=record.platform,
+        access_role=record.access_role,  # type: ignore[arg-type]
         status=pairing_status,
         created_at=record.created_at,
         expires_at=record.expires_at,

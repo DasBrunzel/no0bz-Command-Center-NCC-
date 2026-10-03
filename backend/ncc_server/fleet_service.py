@@ -261,6 +261,7 @@ def _node_response(
         display_name=node.display_name,
         platform=node.platform,
         approved=node.approved,
+        access_role=node.access_role,  # type: ignore[arg-type]
         online=is_online(node, settings.node_offline_after_seconds),
         agent_version=node.agent_version,
         metadata=node.metadata_json,

@@ -118,3 +118,51 @@ def test_pairing_rebinds_an_existing_machine_and_revokes_its_old_credential(tmp_
         rebound = session.query(AgentToken).filter(AgentToken.token_hash != "old-token-hash").one()
         assert old_token is not None and old_token.revoked_at is not None
         assert rebound.node_id == node_id
+
+
+def test_beta_dashboard_approval_marks_the_claimed_node(tmp_path: Path) -> None:
+    database = make_database(tmp_path / "pairing-beta-role.db")
+    app = create_app(
+        ServerSettings(database_url="sqlite+pysqlite://", dashboard_token="dashboard-secret"),
+        database,
+    )
+    payload = pairing_payload()
+    commander_headers = {"X-NCC-Dashboard-Token": "dashboard-secret"}
+    with TestClient(app) as commander:
+        created = commander.post(
+            "/api/v1/admin-codes",
+            headers=commander_headers,
+            json={"label": "Beta friend", "beta_tester": True},
+        )
+        assert created.status_code == 201
+        with TestClient(app) as beta:
+            assert beta.post(
+                "/api/v1/admin-codes/redeem", json={"code": created.json()["code"]}
+            ).status_code == 200
+            assert commander.post("/api/v1/agent-pairings/register", json=payload).status_code == 201
+            approved = beta.post(
+                f"/api/v1/agent-pairings/{payload['pairing_id']}/approve"
+            )
+            assert approved.status_code == 200
+            assert approved.json()["access_role"] == "beta_tester"
+            claimed = beta.post(
+                f"/api/v1/agent-pairings/{payload['pairing_id']}/claim",
+                json={"pairing_secret": payload["pairing_secret"]},
+            )
+            assert claimed.status_code == 200
+            enrolled = beta.post(
+                "/api/v1/nodes/enroll",
+                headers={"Authorization": f"Bearer {claimed.json()['token']}"},
+                json={
+                    "machine_id": payload["machine_id"],
+                    "display_name": payload["display_name"],
+                    "platform": payload["platform"],
+                    "agent_version": payload["agent_version"],
+                    "metadata": payload["metadata"],
+                },
+            )
+            assert enrolled.status_code == 200
+            assert enrolled.json()["access_role"] == "beta_tester"
+            fleet = beta.get("/api/v1/fleet/nodes")
+            assert fleet.status_code == 200
+            assert fleet.json()[0]["access_role"] == "beta_tester"
