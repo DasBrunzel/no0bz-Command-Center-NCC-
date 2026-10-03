@@ -4,6 +4,14 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.5.0-beta.53] - 2026-10-03
+
+### Fixed
+
+- Die Traffic-Plausibilitätsprüfung berücksichtigt zusätzlich die vom Agenten
+  gemeldete Live-Up-/Downloadrate. Dadurch werden niedrige Live-Raten nicht mehr
+  mit mehrgigabytegroßen Zählerdeltas verrechnet.
+
 ## [0.5.0-beta.52] - 2026-10-03
 
 ### Fixed

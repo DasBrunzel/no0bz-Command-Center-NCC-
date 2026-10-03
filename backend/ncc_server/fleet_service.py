@@ -172,8 +172,18 @@ def node_monthly_network_usage(
         samples += 1
         if previous_pair is not None:
             elapsed = _elapsed_seconds(previous_recorded_at, point.recorded_at)
-            received_delta = _plausible_counter_delta(previous_pair[0], current_pair[0], elapsed)
-            sent_delta = _plausible_counter_delta(previous_pair[1], current_pair[1], elapsed)
+            received_delta = _plausible_counter_delta(
+                previous_pair[0],
+                current_pair[0],
+                elapsed,
+                _reported_rate_limit(point.payload, "download_mbps", elapsed),
+            )
+            sent_delta = _plausible_counter_delta(
+                previous_pair[1],
+                current_pair[1],
+                elapsed,
+                _reported_rate_limit(point.payload, "upload_mbps", elapsed),
+            )
             if received_delta is not None:
                 received += received_delta
             if sent_delta is not None:
@@ -253,10 +263,26 @@ def _elapsed_seconds(previous: datetime | None, current: datetime) -> float:
 
 
 def _plausible_counter_delta(
-    previous: int, current: int, elapsed_seconds: float
+    previous: int, current: int, elapsed_seconds: float, reported_limit: float | None
 ) -> int | None:
     delta = _counter_delta(previous, current)
-    return delta if delta <= MAX_PLAUSIBLE_NETWORK_BYTES_PER_SECOND * elapsed_seconds else None
+    ceiling = MAX_PLAUSIBLE_NETWORK_BYTES_PER_SECOND * elapsed_seconds
+    if reported_limit is not None:
+        ceiling = min(ceiling, reported_limit)
+    return delta if delta <= ceiling else None
+
+
+def _reported_rate_limit(payload: dict[str, object], field: str, elapsed_seconds: float) -> float | None:
+    network = payload.get("network")
+    if not isinstance(network, dict):
+        return None
+    rate_mbps = _number(network.get(field))
+    if rate_mbps is None:
+        return None
+    # The rate and counters originate in the same agent sample. Allow generous
+    # measurement jitter plus a small cold-start allowance, but not a multi-GB
+    # counter jump while the agent reports a few Kbit/s of live traffic.
+    return max(8 * 1024**2, rate_mbps * 1_000_000 / 8 * elapsed_seconds * 4)
 
 
 def fleet_summary(session: Session, settings: ServerSettings) -> FleetSummaryResponse:

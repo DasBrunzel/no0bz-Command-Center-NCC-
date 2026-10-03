@@ -283,7 +283,14 @@ def test_monthly_network_usage_ignores_impossible_counter_jumps(tmp_path: Path) 
                     node_id=online_id,
                     sample_id="99999999-9999-4999-8999-999999999999",
                     recorded_at=now - timedelta(seconds=9),
-                    payload={"network": {"bytes_recv": 100 * 1024**3, "bytes_sent": 1000}},
+                    payload={
+                        "network": {
+                            "bytes_recv": 2 * 1024**3,
+                            "bytes_sent": 2 * 1024**3,
+                            "download_mbps": 0.01,
+                            "upload_mbps": 0.01,
+                        }
+                    },
                 ),
                 TelemetryPoint(
                     node_id=online_id,
