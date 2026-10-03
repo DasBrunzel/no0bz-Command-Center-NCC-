@@ -1288,11 +1288,11 @@ function StatisticsPage({
       <div className="statistics-kpis">
         <article className="surface statistics-kpi availability">
           <div><Wifi size={19} /><span>VERFÜGBARKEIT</span></div>
-          <strong>{percentOnline}%</strong>
-          <small>{summary?.online_nodes || 0} von {summary?.total_nodes || 0} Agenten online</small>
-          <i><em style={{ width: `${percentOnline}%` }} /></i>
-          <div className="statistics-availability-list">
-            {availability.map(({ node, value }) => <span key={node.node_id}><b>{node.display_name}</b><em className={node.online ? "online" : ""}>{value}%</em></span>)}
+          <div className="statistics-availability-content">
+            <div className="statistics-availability-total"><strong>{percentOnline}%</strong><small>{summary?.online_nodes || 0} von {summary?.total_nodes || 0} Agenten online</small></div>
+            <div className="statistics-availability-list">
+              {availability.map(({ node, value }) => <span key={node.node_id}><b>{node.display_name}</b><em className={node.online ? "online" : ""}>{value}%</em></span>)}
+            </div>
           </div>
         </article>
         <article className="surface statistics-kpi">
@@ -1327,15 +1327,13 @@ function StatisticsPage({
           <header><div><span className="eyebrow">AKTUELLER MONAT</span><h2>Netzwerkverkehr</h2></div><Network size={19} /></header>
           <div className="traffic-total"><span>GESAMT</span><strong>{trafficAvailable ? bytes(totalReceived + totalSent) : "—"}</strong></div>
           <div className="traffic-split"><div><ArrowDownToLine size={16} /><span>Empfangen</span><b>{trafficAvailable ? bytes(totalReceived) : "Noch keine Zähler"}</b></div><div><ArrowUpToLine size={16} /><span>Gesendet</span><b>{trafficAvailable ? bytes(totalSent) : "Noch keine Zähler"}</b></div></div>
+          <div className="traffic-live-mini">
+            <div><span>LIVE · ALLE GERÄTE</span><b>↓ {liveTraffic[liveTraffic.length - 1]?.download.toFixed(1) || "0.0"} · ↑ {liveTraffic[liveTraffic.length - 1]?.upload.toFixed(1) || "0.0"} Mbps</b></div>
+            <TrafficHistoryChart values={liveTraffic} />
+          </div>
           <small>Wird aus den Rohdaten berechnet und am Monatsersten neu angezeigt.</small>
         </article>
       </div>
-
-      <article className="surface statistics-live-traffic">
-        <header><div><span className="eyebrow">LIVE · ALLE GERÄTE</span><h2>Gesamter Netzwerkverkehr</h2></div><Network size={19} /></header>
-        <TrafficHistoryChart values={liveTraffic} />
-        <footer><span><i className="download" />Download</span><b>{liveTraffic[liveTraffic.length - 1]?.download.toFixed(1) || "0.0"} Mbps</b><span><i className="upload" />Upload</span><b>{liveTraffic[liveTraffic.length - 1]?.upload.toFixed(1) || "0.0"} Mbps</b></footer>
-      </article>
 
       <div className="statistics-layout lower">
         <article className="surface statistics-ranking traffic-ranking">
@@ -2459,7 +2457,7 @@ function App() {
         <footer>
           <ShieldCheck size={14} />
           <span>GESICHERTE VERBINDUNG</span>
-          <b>v0.5.0-beta.45</b>
+          <b>v0.5.0-beta.46</b>
         </footer>
       </aside>
       <div className="mobile-scrim" onClick={() => setSidebar(false)} />
