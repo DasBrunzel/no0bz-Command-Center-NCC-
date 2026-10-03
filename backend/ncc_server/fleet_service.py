@@ -246,6 +246,27 @@ def rename_fleet_node(session: Session, node_id: str, display_name: str) -> Node
     return node
 
 
+def update_fleet_node_role(
+    session: Session, node_id: str, access_role: str
+) -> Node | None:
+    node = session.get(Node, node_id)
+    if node is None:
+        return None
+    node.access_role = access_role
+    node.updated_at = utc_now()
+    session.add(
+        AuditEvent(
+            actor_type="dashboard",
+            actor_id=node.id,
+            action="node.access-role.updated",
+            details=json.dumps({"access_role": access_role}, separators=(",", ":")),
+        )
+    )
+    session.commit()
+    session.refresh(node)
+    return node
+
+
 def _node_response(
     session: Session, node: Node, settings: ServerSettings
 ) -> FleetNodeResponse:

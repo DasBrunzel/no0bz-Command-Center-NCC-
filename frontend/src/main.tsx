@@ -877,7 +877,8 @@ function NodeOverview({
   canDelete: boolean;
 }) {
   const [forgetting, setForgetting] = useState(false),
-    [renaming, setRenaming] = useState(false);
+    [renaming, setRenaming] = useState(false),
+    [updatingRole, setUpdatingRole] = useState(false);
   if (!node)
     return (
       <section className="surface empty-stage">
@@ -939,6 +940,28 @@ function NodeOverview({
     }
     setRenaming(false);
     window.alert("Der Gerätename konnte nicht geändert werden.");
+  };
+  const toggleRole = async () => {
+    const nextRole: AccessRole =
+      node.access_role === "beta_tester" ? "commander" : "beta_tester";
+    const label = nextRole === "beta_tester" ? "Beta-Tester" : "Commander";
+    if (!window.confirm(`„${node.display_name}“ als ${label} markieren?`)) return;
+    setUpdatingRole(true);
+    const dashboardToken = localStorage.getItem("ncc-dashboard-token") || "";
+    const response = await fetch(`/api/v1/fleet/nodes/${node.node_id}/role`, {
+      method: "PATCH",
+      headers: {
+        ...headers(dashboardToken),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ access_role: nextRole }),
+    });
+    if (response.ok) {
+      window.location.reload();
+      return;
+    }
+    setUpdatingRole(false);
+    window.alert("Die Geräte-Rolle konnte nicht geändert werden.");
   };
   const cpuTemperature =
     typeof cpu.temperature_c === "number"
@@ -1092,6 +1115,17 @@ function NodeOverview({
         >
           {renaming ? "Wird umbenannt …" : "Gerät umbenennen"}
         </button>
+        {canDelete && <button
+          className="node-role"
+          disabled={updatingRole}
+          onClick={() => void toggleRole()}
+        >
+          {updatingRole
+            ? "Rolle wird geändert …"
+            : node.access_role === "beta_tester"
+              ? "Zu Commander machen"
+              : "Als Beta-Tester markieren"}
+        </button>}
         {canDelete && <button
           className="forget-node"
           disabled={forgetting}
@@ -2212,7 +2246,7 @@ function App() {
         <footer>
           <ShieldCheck size={14} />
           <span>GESICHERTE VERBINDUNG</span>
-          <b>v0.5.0-beta.41</b>
+          <b>v0.5.0-beta.43</b>
         </footer>
       </aside>
       <div className="mobile-scrim" onClick={() => setSidebar(false)} />
@@ -2254,7 +2288,19 @@ function App() {
           </div>
         </header>
         <main>
-          {page === "fleet" ? (
+          {page === "fleet" ? isLayoutTheme(theme) ? (
+            <AlternateFleet
+              layout={theme}
+              nodes={nodes}
+              selected={selected}
+              onSelect={setSelectedId}
+              points={points}
+              monthlyNetwork={monthlyNetwork}
+              alerts={alerts}
+              dismissedAlerts={dismissedAlertIds}
+              onDismissAlert={dismissAlert}
+            />
+          ) : (
             <Fleet
               nodes={nodes}
               groups={groups}

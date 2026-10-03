@@ -149,6 +149,14 @@ def test_fleet_api_is_protected_and_returns_latest_metrics(tmp_path: Path) -> No
         assert renamed.status_code == 200
         assert renamed.json()["display_name"] == "Horst Server"
 
+        role = client.patch(
+            f"/api/v1/fleet/nodes/{online_id}/role",
+            headers=headers,
+            json={"access_role": "beta_tester"},
+        )
+        assert role.status_code == 200
+        assert role.json()["access_role"] == "beta_tester"
+
         forgotten = client.delete(f"/api/v1/fleet/nodes/{online_id}", headers=headers)
         assert forgotten.status_code == 204
         assert client.get(f"/api/v1/fleet/nodes/{online_id}", headers=headers).status_code == 404
@@ -159,6 +167,7 @@ def test_fleet_api_is_protected_and_returns_latest_metrics(tmp_path: Path) -> No
         assert session.query(AgentToken).count() == 0
         assert session.query(AuditEvent).filter_by(action="node.forgotten").count() == 1
         assert session.query(AuditEvent).filter_by(action="node.renamed").count() == 1
+        assert session.query(AuditEvent).filter_by(action="node.access-role.updated").count() == 1
 
 
 def test_loopback_dashboard_access_can_be_enabled(tmp_path: Path) -> None:

@@ -18,6 +18,7 @@ from ncc_server.fleet_service import (
     node_telemetry,
     rename_fleet_node,
     update_fleet_layout,
+    update_fleet_node_role,
 )
 from ncc_server.schemas import (
     AlertPolicyResponse,
@@ -28,6 +29,7 @@ from ncc_server.schemas import (
     FleetLayoutUpdateRequest,
     FleetNodeRenameRequest,
     FleetNodeResponse,
+    FleetNodeRoleUpdateRequest,
     FleetSummaryResponse,
     FleetTelemetryPoint,
     NetworkUsageSummary,
@@ -121,6 +123,26 @@ async def rename_node(
     session: Session = Depends(database_session),
 ) -> FleetNodeResponse:
     result = rename_fleet_node(session, node_id, payload.display_name)
+    if result is None:
+        raise HTTPException(status_code=404, detail="node not found")
+    response = fleet_node(session, result.id, request.app.state.server_settings)
+    if response is None:  # pragma: no cover - result was loaded above
+        raise HTTPException(status_code=404, detail="node not found")
+    return response
+
+
+@router.patch(
+    "/nodes/{node_id}/role",
+    response_model=FleetNodeResponse,
+    dependencies=[Depends(require_commander_access)],
+)
+async def update_node_role(
+    node_id: str,
+    payload: FleetNodeRoleUpdateRequest,
+    request: Request,
+    session: Session = Depends(database_session),
+) -> FleetNodeResponse:
+    result = update_fleet_node_role(session, node_id, payload.access_role)
     if result is None:
         raise HTTPException(status_code=404, detail="node not found")
     response = fleet_node(session, result.id, request.app.state.server_settings)

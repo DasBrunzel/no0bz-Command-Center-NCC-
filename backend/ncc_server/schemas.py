@@ -190,6 +190,10 @@ class FleetNodeRenameRequest(BaseModel):
         return normalized
 
 
+class FleetNodeRoleUpdateRequest(BaseModel):
+    access_role: Literal["commander", "beta_tester"]
+
+
 class AgentInvitationCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=128)
     expires_hours: int = Field(default=168, ge=0, le=8760)
