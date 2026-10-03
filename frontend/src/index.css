@@ -2625,6 +2625,29 @@ main {
 .statistics-device-row b { font-family: Inter, system-ui, sans-serif; }
 .statistics-device-row small { color: var(--muted); font-size: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .statistics-device-row .status-dot { font-size: 7px; }
+.statistics-kpi.availability { min-height: 190px; }
+.statistics-availability-list { border-top: 1px solid color-mix(in srgb, var(--line) 75%, transparent); display: grid; gap: 5px; margin-top: 11px; padding-top: 9px; }
+.statistics-availability-list span { align-items: center; display: flex; font: 700 8px JetBrains Mono; gap: 8px; justify-content: space-between; }
+.statistics-availability-list b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.statistics-availability-list em { color: var(--danger); font-style: normal; }
+.statistics-availability-list em.online { color: var(--green); }
+.statistics-kpi:not(.availability) small { line-height: 1.45; margin-top: 2px; }
+.statistics-note { color: var(--muted); display: block; font-size: 8px; line-height: 1.45; margin-top: 17px; }
+.statistics-live-traffic { min-height: 290px; padding: 20px; }
+.statistics-live-chart { height: 175px; margin: 18px 0 13px; position: relative; }
+.statistics-live-chart svg { height: 100%; overflow: visible; width: 100%; }
+.statistics-live-chart path.grid { fill: none; stroke: color-mix(in srgb, var(--line) 70%, transparent); stroke-width: .55; vector-effect: non-scaling-stroke; }
+.statistics-live-chart path.download,
+.statistics-live-chart path.upload { fill: none; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.statistics-live-chart path.download { stroke: var(--blue); }
+.statistics-live-chart path.upload { stroke: var(--accent); }
+.statistics-live-chart > span { color: var(--muted); font-size: 9px; inset: 0; margin: auto; position: absolute; text-align: center; }
+.statistics-live-traffic footer { align-items: center; border-top: 1px solid var(--line); display: flex; font: 700 9px JetBrains Mono; gap: 9px; padding-top: 12px; }
+.statistics-live-traffic footer span { align-items: center; color: var(--muted); display: inline-flex; gap: 5px; }
+.statistics-live-traffic footer span:nth-of-type(2) { margin-left: 14px; }
+.statistics-live-traffic footer i { border-radius: 50%; display: block; height: 6px; width: 6px; }
+.statistics-live-traffic footer i.download { background: var(--blue); }
+.statistics-live-traffic footer i.upload { background: var(--accent); }
 @media (max-width: 1180px) {
   .statistics-kpis { grid-template-columns: repeat(2, 1fr); }
 }

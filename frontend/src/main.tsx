@@ -369,6 +369,27 @@ function Sparkline({
   );
 }
 
+function TrafficHistoryChart({ values }: { values: { download: number; upload: number }[] }) {
+  const maximum = Math.max(1, ...values.flatMap((value) => [value.download, value.upload]));
+  const line = (metric: "download" | "upload") => values.length > 1
+    ? values.map((value, index) => {
+      const x = (index / (values.length - 1)) * 100;
+      const y = 100 - (Math.max(0, value[metric]) / maximum) * 90 - 5;
+      return `${index ? "L" : "M"}${x.toFixed(2)} ${y.toFixed(2)}`;
+    }).join(" ")
+    : "";
+  return (
+    <div className="statistics-live-chart">
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="Live-Netzwerkverkehr">
+        <path className="grid" d="M0 25H100M0 50H100M0 75H100" />
+        {line("download") && <path className="download" d={line("download")} />}
+        {line("upload") && <path className="upload" d={line("upload")} />}
+      </svg>
+      {!line("download") && <span>Live-Verlauf wird aufgebaut …</span>}
+    </div>
+  );
+}
+
 function AlertPanel({
   alerts,
   onDismiss,
@@ -1149,42 +1170,75 @@ function StatisticsPage({
   token: string;
 }) {
   const [traffic, setTraffic] = useState<Record<string, NetworkUsageSummary>>({});
+  const [trafficHistory, setTrafficHistory] = useState<Record<string, Telemetry[]>>({});
   useEffect(() => {
     let current = true;
     Promise.all(
-      nodes.map(async (node) => [
-        node.node_id,
-        await getJson<NetworkUsageSummary>(
-          `/api/v1/fleet/nodes/${node.node_id}/network/month`,
-          token,
-        ),
-      ] as const),
+      nodes.map(async (node) => {
+        const [monthly, history] = await Promise.all([
+          getJson<NetworkUsageSummary>(`/api/v1/fleet/nodes/${node.node_id}/network/month`, token),
+          getJson<Telemetry[]>(`/api/v1/fleet/nodes/${node.node_id}/telemetry?limit=48`, token),
+        ]);
+        return [node.node_id, monthly, history] as const;
+      }),
     )
       .then((entries) => {
-        if (current) setTraffic(Object.fromEntries(entries));
+        if (!current) return;
+        setTraffic(Object.fromEntries(entries.map(([nodeId, monthly]) => [nodeId, monthly])));
+        setTrafficHistory(Object.fromEntries(entries.map(([nodeId, , history]) => [nodeId, history])));
       })
       .catch(() => {
-        if (current) setTraffic({});
+        if (current) {
+          setTraffic({});
+          setTrafficHistory({});
+        }
       });
     return () => { current = false; };
   }, [nodes, token]);
 
   const measured = nodes.filter((node) => node.latest);
-  const average = (read: (metrics: Metrics) => number) =>
-    measured.length
-      ? measured.reduce((total, node) => total + read(node.latest!.metrics), 0) / measured.length
-      : 0;
-  const averageCpu = average((metrics) => num(metrics.cpu?.percent));
-  const averageMemory = average((metrics) => num(metrics.memory?.percent));
-  const averageGpu = average((metrics) => num(metrics.gpus?.[0]?.percent));
+  const cpuThreads = (metrics: Metrics) => Math.max(1, num(metrics.cpu?.logical_cores || metrics.cpu?.threads));
+  const totalThreads = measured.reduce((total, node) => total + cpuThreads(node.latest!.metrics), 0);
+  const usedCpuThreads = measured.reduce(
+    (total, node) => total + (num(node.latest!.metrics.cpu?.percent) / 100) * cpuThreads(node.latest!.metrics),
+    0,
+  );
+  const fleetCpu = totalThreads ? (usedCpuThreads / totalThreads) * 100 : 0;
+  const totalMemory = measured.reduce((total, node) => total + num(node.latest!.metrics.memory?.total_gb), 0);
+  const usedMemory = measured.reduce((total, node) => total + num(node.latest!.metrics.memory?.used_gb), 0);
+  const fleetMemory = totalMemory ? (usedMemory / totalMemory) * 100 : 0;
+  const gpus: (Metrics & { nodeName: string })[] = measured.flatMap((node) =>
+    Array.isArray(node.latest!.metrics.gpus)
+      ? node.latest!.metrics.gpus.map((gpu: Metrics) => ({ ...gpu, nodeName: node.display_name }) as Metrics & { nodeName: string })
+      : [],
+  );
+  const fleetGpu = gpus.length ? gpus.reduce((total, gpu) => total + num(gpu.percent), 0) / gpus.length : 0;
+  const gpuScore = (gpu: Metrics) => {
+    const declared = num(gpu.performance_score || gpu.tflops || gpu.vram_total_gb || gpu.memory_total_gb);
+    if (declared) return declared * 10000;
+    const modelNumber = Number(String(gpu.name || gpu.model || "").match(/\b(\d{3,4})\b/)?.[1] || 0);
+    return modelNumber;
+  };
+  const strongestGpu = [...gpus].sort((left, right) => gpuScore(right) - gpuScore(left))[0];
   const totalReceived = Object.values(traffic).reduce((total, item) => total + item.received_bytes, 0);
   const totalSent = Object.values(traffic).reduce((total, item) => total + item.sent_bytes, 0);
   const trafficAvailable = Object.values(traffic).some((item) => item.available);
   const percentOnline = summary?.total_nodes
     ? Math.round((summary.online_nodes / summary.total_nodes) * 100)
     : 0;
-  const rankedCpu = [...measured]
-    .sort((left, right) => num(right.latest?.metrics.cpu?.percent) - num(left.latest?.metrics.cpu?.percent))
+  const availability = [...nodes]
+    .map((node) => ({ node, value: node.online ? 100 : 0 }))
+    .sort((left, right) => right.value - left.value || left.node.display_name.localeCompare(right.node.display_name, "de"));
+  const rankedLoad = [...measured]
+    .map((node) => {
+      const metrics = node.latest!.metrics;
+      const gpuLoads = Array.isArray(metrics.gpus) ? metrics.gpus : [];
+      const gpu = gpuLoads.length ? gpuLoads.reduce((total: number, item: Metrics) => total + num(item.percent), 0) / gpuLoads.length : 0;
+      const values = [num(metrics.cpu?.percent), num(metrics.memory?.percent)];
+      if (gpuLoads.length) values.push(gpu);
+      return { node, value: values.reduce((total, item) => total + item, 0) / values.length };
+    })
+    .sort((left, right) => right.value - left.value)
     .slice(0, 5);
   const rankedTraffic = [...nodes]
     .sort((left, right) => {
@@ -1199,6 +1253,21 @@ function StatisticsPage({
       : value >= 1024 ** 2
         ? `${(value / 1024 ** 2).toFixed(0)} MB`
         : `${(value / 1024).toFixed(0)} KB`;
+  const liveTraffic = useMemo(() => {
+    const pointCount = Math.max(2, ...Object.values(trafficHistory).map((history) => history.length));
+    return Array.from({ length: pointCount }, (_, index) =>
+      Object.values(trafficHistory).reduce(
+        (total, history) => {
+          const point = history[history.length - pointCount + index];
+          return {
+            download: total.download + num(point?.metrics.network?.download_mbps),
+            upload: total.upload + num(point?.metrics.network?.upload_mbps),
+          };
+        },
+        { download: 0, upload: 0 },
+      ),
+    );
+  }, [trafficHistory]);
 
   return (
     <section className="statistics-page">
@@ -1220,36 +1289,39 @@ function StatisticsPage({
         <article className="surface statistics-kpi availability">
           <div><Wifi size={19} /><span>VERFÜGBARKEIT</span></div>
           <strong>{percentOnline}%</strong>
-          <small>{summary?.online_nodes || 0} von {summary?.total_nodes || 0} Geräten online</small>
+          <small>{summary?.online_nodes || 0} von {summary?.total_nodes || 0} Agenten online</small>
           <i><em style={{ width: `${percentOnline}%` }} /></i>
+          <div className="statistics-availability-list">
+            {availability.map(({ node, value }) => <span key={node.node_id}><b>{node.display_name}</b><em className={node.online ? "online" : ""}>{value}%</em></span>)}
+          </div>
         </article>
         <article className="surface statistics-kpi">
-          <div><Cpu size={19} /><span>Ø CPU-LAST</span></div>
-          <strong>{averageCpu.toFixed(1)}%</strong>
-          <small>{measured.length} Systeme mit Live-Daten</small>
+          <div><Cpu size={19} /><span>CPU-LAST</span></div>
+          <strong>{fleetCpu.toFixed(1)}%</strong>
+          <small>{usedCpuThreads.toFixed(1)} / {totalThreads} Threads in Nutzung</small>
         </article>
         <article className="surface statistics-kpi">
-          <div><MemoryStick size={19} /><span>Ø RAM-LAST</span></div>
-          <strong>{averageMemory.toFixed(1)}%</strong>
-          <small>Aus den letzten Messwerten</small>
+          <div><MemoryStick size={19} /><span>RAM-LAST</span></div>
+          <strong>{fleetMemory.toFixed(1)}%</strong>
+          <small>{usedMemory.toFixed(1)} GB / {totalMemory.toFixed(1)} GB belegt</small>
         </article>
         <article className="surface statistics-kpi">
-          <div><MonitorCog size={19} /><span>Ø GPU-LAST</span></div>
-          <strong>{averageGpu.toFixed(1)}%</strong>
-          <small>Geräte ohne GPU zählen als 0%</small>
+          <div><MonitorCog size={19} /><span>GPU-LAST</span></div>
+          <strong>{fleetGpu.toFixed(1)}%</strong>
+          <small>{gpus.length} GPU{gpus.length === 1 ? "" : "s"} · {strongestGpu ? `Stärkste: ${strongestGpu.name || strongestGpu.model || strongestGpu.nodeName}` : "Keine GPU erkannt"}</small>
         </article>
       </div>
 
       <div className="statistics-layout">
         <article className="surface statistics-ranking">
-          <header><div><span className="eyebrow">AKTUELL</span><h2>CPU-Rangliste</h2></div><Cpu size={19} /></header>
+          <header><div><span className="eyebrow">AKTUELL</span><h2>System-Rangliste</h2></div><Activity size={19} /></header>
           <div className="statistics-bars">
-            {rankedCpu.map((node) => {
-              const value = num(node.latest?.metrics.cpu?.percent);
+            {rankedLoad.map(({ node, value }) => {
               return <div key={node.node_id}><span><i className={node.online ? "online" : ""} />{node.display_name}</span><em><b style={{ width: `${Math.min(100, value)}%` }} /></em><strong>{value.toFixed(1)}%</strong></div>;
             })}
-            {!rankedCpu.length && <p>Es sind noch keine Live-Messwerte vorhanden.</p>}
+            {!rankedLoad.length && <p>Es sind noch keine Live-Messwerte vorhanden.</p>}
           </div>
+          <small className="statistics-note">Bewertung aus CPU-, RAM- und GPU-Auslastung; Geräte ohne GPU werden anhand von CPU und RAM gewertet.</small>
         </article>
         <article className="surface statistics-traffic">
           <header><div><span className="eyebrow">AKTUELLER MONAT</span><h2>Netzwerkverkehr</h2></div><Network size={19} /></header>
@@ -1258,6 +1330,12 @@ function StatisticsPage({
           <small>Wird aus den Rohdaten berechnet und am Monatsersten neu angezeigt.</small>
         </article>
       </div>
+
+      <article className="surface statistics-live-traffic">
+        <header><div><span className="eyebrow">LIVE · ALLE GERÄTE</span><h2>Gesamter Netzwerkverkehr</h2></div><Network size={19} /></header>
+        <TrafficHistoryChart values={liveTraffic} />
+        <footer><span><i className="download" />Download</span><b>{liveTraffic[liveTraffic.length - 1]?.download.toFixed(1) || "0.0"} Mbps</b><span><i className="upload" />Upload</span><b>{liveTraffic[liveTraffic.length - 1]?.upload.toFixed(1) || "0.0"} Mbps</b></footer>
+      </article>
 
       <div className="statistics-layout lower">
         <article className="surface statistics-ranking traffic-ranking">
@@ -2381,7 +2459,7 @@ function App() {
         <footer>
           <ShieldCheck size={14} />
           <span>GESICHERTE VERBINDUNG</span>
-          <b>v0.5.0-beta.44</b>
+          <b>v0.5.0-beta.45</b>
         </footer>
       </aside>
       <div className="mobile-scrim" onClick={() => setSidebar(false)} />
