@@ -1139,20 +1139,155 @@ function NodeOverview({
   );
 }
 
-function StatisticsPage() {
+function StatisticsPage({
+  nodes,
+  summary,
+  token,
+}: {
+  nodes: Node[];
+  summary: Summary | null;
+  token: string;
+}) {
+  const [traffic, setTraffic] = useState<Record<string, NetworkUsageSummary>>({});
+  useEffect(() => {
+    let current = true;
+    Promise.all(
+      nodes.map(async (node) => [
+        node.node_id,
+        await getJson<NetworkUsageSummary>(
+          `/api/v1/fleet/nodes/${node.node_id}/network/month`,
+          token,
+        ),
+      ] as const),
+    )
+      .then((entries) => {
+        if (current) setTraffic(Object.fromEntries(entries));
+      })
+      .catch(() => {
+        if (current) setTraffic({});
+      });
+    return () => { current = false; };
+  }, [nodes, token]);
+
+  const measured = nodes.filter((node) => node.latest);
+  const average = (read: (metrics: Metrics) => number) =>
+    measured.length
+      ? measured.reduce((total, node) => total + read(node.latest!.metrics), 0) / measured.length
+      : 0;
+  const averageCpu = average((metrics) => num(metrics.cpu?.percent));
+  const averageMemory = average((metrics) => num(metrics.memory?.percent));
+  const averageGpu = average((metrics) => num(metrics.gpus?.[0]?.percent));
+  const totalReceived = Object.values(traffic).reduce((total, item) => total + item.received_bytes, 0);
+  const totalSent = Object.values(traffic).reduce((total, item) => total + item.sent_bytes, 0);
+  const trafficAvailable = Object.values(traffic).some((item) => item.available);
+  const percentOnline = summary?.total_nodes
+    ? Math.round((summary.online_nodes / summary.total_nodes) * 100)
+    : 0;
+  const rankedCpu = [...measured]
+    .sort((left, right) => num(right.latest?.metrics.cpu?.percent) - num(left.latest?.metrics.cpu?.percent))
+    .slice(0, 5);
+  const rankedTraffic = [...nodes]
+    .sort((left, right) => {
+      const rightTotal = (traffic[right.node_id]?.received_bytes || 0) + (traffic[right.node_id]?.sent_bytes || 0);
+      const leftTotal = (traffic[left.node_id]?.received_bytes || 0) + (traffic[left.node_id]?.sent_bytes || 0);
+      return rightTotal - leftTotal;
+    })
+    .slice(0, 5);
+  const bytes = (value: number) =>
+    value >= 1024 ** 3
+      ? `${(value / 1024 ** 3).toFixed(1)} GB`
+      : value >= 1024 ** 2
+        ? `${(value / 1024 ** 2).toFixed(0)} MB`
+        : `${(value / 1024).toFixed(0)} KB`;
+
   return (
-    <section className="surface statistics-placeholder">
-      <BarChart3 size={42} />
-      <span className="eyebrow">NCC STATISTIKEN</span>
-      <h1>Deine Daten bekommen ein Zuhause.</h1>
-      <p>
-        Monatsverkehr wird bereits dauerhaft aus den Rohdaten berechnet. Als
-        Nächstes entstehen hier Zeiträume, Vergleiche und Langzeitverläufe für
-        deine gesamte Fleet.
-      </p>
-      <div>
-        <span>NETZWERK</span><span>RESSOURCEN</span><span>VERFÜGBARKEIT</span>
+    <section className="statistics-page">
+      <header className="statistics-hero surface">
+        <div>
+          <span className="eyebrow">NCC INTELLIGENCE</span>
+          <h1>Statistiken</h1>
+          <p>
+            Momentaufnahme deiner Infrastruktur und Verkehr im aktuellen Monat.
+          </p>
+        </div>
+        <div className="statistics-hero-meta">
+          <BarChart3 size={25} />
+          <span>{summary ? `Aktualisiert ${new Date(summary.server_time).toLocaleTimeString("de-DE")}` : "Daten werden geladen"}</span>
+        </div>
+      </header>
+
+      <div className="statistics-kpis">
+        <article className="surface statistics-kpi availability">
+          <div><Wifi size={19} /><span>VERFÜGBARKEIT</span></div>
+          <strong>{percentOnline}%</strong>
+          <small>{summary?.online_nodes || 0} von {summary?.total_nodes || 0} Geräten online</small>
+          <i><em style={{ width: `${percentOnline}%` }} /></i>
+        </article>
+        <article className="surface statistics-kpi">
+          <div><Cpu size={19} /><span>Ø CPU-LAST</span></div>
+          <strong>{averageCpu.toFixed(1)}%</strong>
+          <small>{measured.length} Systeme mit Live-Daten</small>
+        </article>
+        <article className="surface statistics-kpi">
+          <div><MemoryStick size={19} /><span>Ø RAM-LAST</span></div>
+          <strong>{averageMemory.toFixed(1)}%</strong>
+          <small>Aus den letzten Messwerten</small>
+        </article>
+        <article className="surface statistics-kpi">
+          <div><MonitorCog size={19} /><span>Ø GPU-LAST</span></div>
+          <strong>{averageGpu.toFixed(1)}%</strong>
+          <small>Geräte ohne GPU zählen als 0%</small>
+        </article>
       </div>
+
+      <div className="statistics-layout">
+        <article className="surface statistics-ranking">
+          <header><div><span className="eyebrow">AKTUELL</span><h2>CPU-Rangliste</h2></div><Cpu size={19} /></header>
+          <div className="statistics-bars">
+            {rankedCpu.map((node) => {
+              const value = num(node.latest?.metrics.cpu?.percent);
+              return <div key={node.node_id}><span><i className={node.online ? "online" : ""} />{node.display_name}</span><em><b style={{ width: `${Math.min(100, value)}%` }} /></em><strong>{value.toFixed(1)}%</strong></div>;
+            })}
+            {!rankedCpu.length && <p>Es sind noch keine Live-Messwerte vorhanden.</p>}
+          </div>
+        </article>
+        <article className="surface statistics-traffic">
+          <header><div><span className="eyebrow">AKTUELLER MONAT</span><h2>Netzwerkverkehr</h2></div><Network size={19} /></header>
+          <div className="traffic-total"><span>GESAMT</span><strong>{trafficAvailable ? bytes(totalReceived + totalSent) : "—"}</strong></div>
+          <div className="traffic-split"><div><ArrowDownToLine size={16} /><span>Empfangen</span><b>{trafficAvailable ? bytes(totalReceived) : "Noch keine Zähler"}</b></div><div><ArrowUpToLine size={16} /><span>Gesendet</span><b>{trafficAvailable ? bytes(totalSent) : "Noch keine Zähler"}</b></div></div>
+          <small>Wird aus den Rohdaten berechnet und am Monatsersten neu angezeigt.</small>
+        </article>
+      </div>
+
+      <div className="statistics-layout lower">
+        <article className="surface statistics-ranking traffic-ranking">
+          <header><div><span className="eyebrow">AKTUELLER MONAT</span><h2>Traffic pro Gerät</h2></div><ArrowDownToLine size={19} /></header>
+          <div className="statistics-bars">
+            {rankedTraffic.map((node) => {
+              const value = (traffic[node.node_id]?.received_bytes || 0) + (traffic[node.node_id]?.sent_bytes || 0);
+              const maximum = Math.max(1, ...rankedTraffic.map((item) => (traffic[item.node_id]?.received_bytes || 0) + (traffic[item.node_id]?.sent_bytes || 0)));
+              return <div key={node.node_id}><span><i className={node.online ? "online" : ""} />{node.display_name}</span><em><b style={{ width: `${(value / maximum) * 100}%` }} /></em><strong>{traffic[node.node_id]?.available ? bytes(value) : "—"}</strong></div>;
+            })}
+          </div>
+        </article>
+        <article className="surface statistics-quality">
+          <header><div><span className="eyebrow">DATENQUALITÄT</span><h2>Erfassung</h2></div><Activity size={19} /></header>
+          <dl><div><dt>Messpunkte gesamt</dt><dd>{summary?.telemetry_points.toLocaleString("de-DE") || "0"}</dd></div><div><dt>Geräte mit Live-Daten</dt><dd>{measured.length} / {nodes.length}</dd></div><div><dt>Offline-Geräte</dt><dd>{summary?.offline_nodes || 0}</dd></div><div><dt>Beta-Tester</dt><dd>{nodes.filter((node) => node.access_role === "beta_tester").length}</dd></div></dl>
+          <p>Mehr Langzeitvergleiche und Zeiträume bauen wir darauf als Nächstes auf.</p>
+        </article>
+      </div>
+
+      <section className="surface statistics-devices">
+        <header><div><span className="eyebrow">FLEET-INVENTAR</span><h2>Geräte im Vergleich</h2></div><Server size={19} /></header>
+        <div className="statistics-device-table">
+          <div className="statistics-table-head"><span>GERÄT</span><span>STATUS</span><span>CPU</span><span>RAM</span><span>NETZWERK</span><span>LETZTER KONTAKT</span></div>
+          {nodes.map((node) => {
+            const metrics = node.latest?.metrics || {};
+            return <div className="statistics-device-row" key={node.node_id}><span><b>{node.display_name}</b><small>{node.platform} · {node.agent_version || "Agent unbekannt"}{node.access_role === "beta_tester" && " · BETA-TESTER"}</small></span><span><StatusDot online={node.online} /></span><span>{node.latest ? `${num(metrics.cpu?.percent).toFixed(1)}%` : "—"}</span><span>{node.latest ? `${num(metrics.memory?.percent).toFixed(1)}%` : "—"}</span><span>{traffic[node.node_id]?.available ? bytes((traffic[node.node_id].received_bytes || 0) + (traffic[node.node_id].sent_bytes || 0)) : "—"}</span><span>{ago(node.last_seen_at)}</span></div>;
+          })}
+          {!nodes.length && <p>Noch keine Geräte in der Fleet.</p>}
+        </div>
+      </section>
     </section>
   );
 }
@@ -2246,7 +2381,7 @@ function App() {
         <footer>
           <ShieldCheck size={14} />
           <span>GESICHERTE VERBINDUNG</span>
-          <b>v0.5.0-beta.43</b>
+          <b>v0.5.0-beta.44</b>
         </footer>
       </aside>
       <div className="mobile-scrim" onClick={() => setSidebar(false)} />
@@ -2318,7 +2453,7 @@ function App() {
               onDismissAlert={dismissAlert}
             />
           ) : page === "statistics" ? (
-            <StatisticsPage />
+            <StatisticsPage nodes={nodes} summary={summary} token={token} />
           ) : page === "alerts" ? (
             <AlertsPage alerts={alerts} />
           ) : page === "onboarding" ? (
