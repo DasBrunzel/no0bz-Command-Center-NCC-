@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+import re
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ncc_server.config import ServerSettings
-from ncc_server.models import AlertPolicy, AlertState, Node, TelemetryPoint, utc_now
+from ncc_server import __version__
+from ncc_server.models import AlertPolicy, AlertState, AuditEvent, Node, TelemetryPoint, utc_now
 from ncc_server.node_service import is_online
 
 
@@ -29,7 +32,7 @@ def evaluate_alerts(session: Session, settings: ServerSettings) -> list[AlertNot
             .limit(1)
         )
         metrics = latest.payload if latest is not None else {}
-        active = _active_alerts(node, metrics, settings, policy)
+        active = _active_alerts(session, node, latest, metrics, settings, policy)
         states = {
             state.kind: state
             for state in session.scalars(select(AlertState).where(AlertState.node_id == node.id))
@@ -89,7 +92,12 @@ def update_alert_policy(session: Session, values: dict[str, int]) -> AlertPolicy
 
 
 def _active_alerts(
-    node: Node, metrics: dict[str, object], settings: ServerSettings, policy: AlertPolicy
+    session: Session,
+    node: Node,
+    latest: TelemetryPoint | None,
+    metrics: dict[str, object],
+    settings: ServerSettings,
+    policy: AlertPolicy,
 ) -> list[tuple[str, str, str]]:
     name = node.display_name
     alerts: list[tuple[str, str, str]] = []
@@ -105,7 +113,110 @@ def _active_alerts(
             severity = "critical" if value >= min(100, threshold + 5) else "warning"
             alerts.append((kind, severity, f"{name}: {label}-Auslastung bei {value:.0f} % ({severity})."))
     _unraid_alerts(node, metrics, alerts)
+    _agent_health_alerts(session, node, latest, settings, alerts)
     return alerts
+
+
+def _agent_health_alerts(
+    session: Session,
+    node: Node,
+    latest: TelemetryPoint | None,
+    settings: ServerSettings,
+    alerts: list[tuple[str, str, str]],
+) -> None:
+    """Detect remote-agent problems from server-observable signals only."""
+    if node.metadata_json.get("source") == "unraid-api":
+        return
+    now = utc_now()
+    if latest is None or _age_seconds(latest.recorded_at, now) > max(60, settings.heartbeat_interval_seconds * 3):
+        alerts.append(
+            (
+                "agent-no-telemetry",
+                "warning",
+                f"{node.display_name}: Agent ist online, liefert aber keine aktuelle Telemetrie.",
+            )
+        )
+    current_beta = _beta_number(__version__)
+    node_beta = _beta_number(node.agent_version or "")
+    if current_beta is not None and node_beta is not None and current_beta - node_beta >= 3:
+        alerts.append(
+            (
+                "agent-outdated",
+                "warning",
+                f"{node.display_name}: Agent {node.agent_version} ist deutlich älter als Server {__version__}.",
+            )
+        )
+    duplicate_count = session.scalar(
+        select(func.count())
+        .select_from(AuditEvent)
+        .where(
+            AuditEvent.actor_id == node.id,
+            AuditEvent.action == "agent.telemetry.duplicate",
+            AuditEvent.occurred_at >= now - timedelta(minutes=10),
+        )
+    ) or 0
+    if duplicate_count >= 2:
+        alerts.append(
+            (
+                "agent-duplicate",
+                "critical",
+                f"{node.display_name}: wiederholte Doppeltelemetrie erkannt – möglicherweise laufen zwei NCC-Agenten.",
+            )
+        )
+    if _recent_network_counter_outlier(session, node.id):
+        alerts.append(
+            (
+                "agent-network-outlier",
+                "warning",
+                f"{node.display_name}: Netzwerkzähler passen wiederholt nicht zur gemeldeten Live-Rate.",
+            )
+        )
+
+
+def _age_seconds(recorded_at: datetime, now: datetime) -> float:
+    if recorded_at.tzinfo is None:
+        recorded_at = recorded_at.replace(tzinfo=timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    return max(0.0, (now - recorded_at).total_seconds())
+
+
+def _beta_number(version: str) -> int | None:
+    match = re.fullmatch(r"0\.5\.0-beta\.(\d+)", version)
+    return int(match.group(1)) if match else None
+
+
+def _recent_network_counter_outlier(session: Session, node_id: str) -> bool:
+    points = session.scalars(
+        select(TelemetryPoint)
+        .where(TelemetryPoint.node_id == node_id)
+        .order_by(TelemetryPoint.recorded_at.desc())
+        .limit(12)
+    ).all()
+    ordered = list(reversed(points))
+    outliers = 0
+    for previous, current in zip(ordered, ordered[1:]):
+        previous_network = _dict(previous.payload.get("network"))
+        current_network = _dict(current.payload.get("network"))
+        elapsed = _age_seconds(previous.recorded_at, current.recorded_at)
+        if elapsed <= 0:
+            continue
+        for counter_key, rate_key in (
+            ("bytes_recv", "download_mbps"),
+            ("bytes_sent", "upload_mbps"),
+        ):
+            previous_value = _number(previous_network.get(counter_key))
+            current_value = _number(current_network.get(counter_key))
+            rate_mbps = _number(current_network.get(rate_key))
+            if previous_value <= 0 or current_value <= 0:
+                continue
+            delta = current_value - previous_value if current_value >= previous_value else current_value
+            allowed = max(8 * 1024**2, rate_mbps * 1_000_000 / 8 * elapsed * 4)
+            if delta > allowed:
+                outliers += 1
+                if outliers >= 2:
+                    return True
+    return False
 
 
 def _unraid_alerts(

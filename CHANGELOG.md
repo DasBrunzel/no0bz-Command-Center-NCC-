@@ -4,6 +4,16 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.5.0-beta.54] - 2026-10-03
+
+### Added
+
+- Serverseitige **Agent-Gesundheitswarnungen** erkennen ohne Zugriff auf das
+  Zielgerät ausbleibende Telemetrie, deutlich veraltete Agent-Versionen,
+  wiederholte Doppeltelemetrie sowie wiederkehrende unplausible Netzwerkzähler.
+- Die Hinweise erscheinen im NCC-Warnungszentrum und werden bei aktivierten
+  Benachrichtigungen auch über Telegram versendet.
+
 ## [0.5.0-beta.53] - 2026-10-03
 
 ### Fixed

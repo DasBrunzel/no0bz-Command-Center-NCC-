@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from datetime import timedelta
 from pathlib import Path
 
 from ncc_server.alert_service import evaluate_alerts, mark_notified
 from ncc_server.config import ServerSettings
 from ncc_server.database import Database
-from ncc_server.models import AlertState, Base, Node, TelemetryPoint, utc_now
+from ncc_server.models import AlertState, AuditEvent, Base, Node, TelemetryPoint, utc_now
 
 
 def test_alerts_notify_once_then_send_a_resolution(tmp_path: Path) -> None:
@@ -70,3 +71,83 @@ def test_unraid_temperature_and_array_alerts_are_actionable(tmp_path: Path) -> N
         evaluate_alerts(session, settings)
         kinds = {alert.kind for alert in session.query(AlertState).all()}
     assert {"unraid-array", "cpu-temperature", "disk-temperature-disk 1", "vm-home assistant", "container-plex"} <= kinds
+
+
+def test_agent_health_alerts_detect_duplicates_old_version_and_missing_telemetry(tmp_path: Path) -> None:
+    database = Database(f"sqlite+pysqlite:///{(tmp_path / 'agent-health.db').as_posix()}")
+    Base.metadata.create_all(database.engine)
+    settings = ServerSettings(database_url="sqlite+pysqlite://", heartbeat_interval_seconds=10)
+    with database.session() as session:
+        node = Node(
+            machine_id="health-node",
+            display_name="Health PC",
+            platform="windows",
+            approved=True,
+            agent_version="0.5.0-beta.40",
+            last_seen_at=utc_now(),
+        )
+        session.add(node)
+        session.flush()
+        session.add(
+            TelemetryPoint(
+                node_id=node.id,
+                recorded_at=utc_now() - timedelta(minutes=2),
+                payload={"cpu": {"percent": 10}},
+            )
+        )
+        session.add_all(
+            [
+                AuditEvent(
+                    actor_type="server",
+                    actor_id=node.id,
+                    action="agent.telemetry.duplicate",
+                ),
+                AuditEvent(
+                    actor_type="server",
+                    actor_id=node.id,
+                    action="agent.telemetry.duplicate",
+                ),
+            ]
+        )
+        session.commit()
+    with database.session() as session:
+        evaluate_alerts(session, settings)
+        kinds = {alert.kind for alert in session.query(AlertState).filter_by(active=True)}
+    assert {"agent-no-telemetry", "agent-outdated", "agent-duplicate"} <= kinds
+
+
+def test_agent_health_alerts_detect_repeated_network_counter_outliers(tmp_path: Path) -> None:
+    database = Database(f"sqlite+pysqlite:///{(tmp_path / 'agent-network-health.db').as_posix()}")
+    Base.metadata.create_all(database.engine)
+    settings = ServerSettings(database_url="sqlite+pysqlite://", heartbeat_interval_seconds=10)
+    now = utc_now()
+    with database.session() as session:
+        node = Node(
+            machine_id="network-health-node",
+            display_name="Network Health PC",
+            platform="windows",
+            approved=True,
+            last_seen_at=now,
+        )
+        session.add(node)
+        session.flush()
+        for offset, received in ((-20, 1_000), (-10, 2 * 1024**3), (0, 4 * 1024**3)):
+            session.add(
+                TelemetryPoint(
+                    node_id=node.id,
+                    recorded_at=now + timedelta(seconds=offset),
+                    payload={
+                        "network": {
+                            "bytes_recv": received,
+                            "bytes_sent": received,
+                            "download_mbps": 0.01,
+                            "upload_mbps": 0.01,
+                        }
+                    },
+                )
+            )
+        session.commit()
+    with database.session() as session:
+        evaluate_alerts(session, settings)
+        kinds = {alert.kind for alert in session.query(AlertState).filter_by(active=True)}
+    assert "agent-network-outlier" in kinds

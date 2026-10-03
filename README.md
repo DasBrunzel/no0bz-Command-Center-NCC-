@@ -1,12 +1,12 @@
 # no0bz Command Center (NCC)
 
-![Version](https://img.shields.io/badge/version-0.5.0--beta.53-ff334f)
+![Version](https://img.shields.io/badge/version-0.5.0--beta.54-ff334f)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776ab)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 Real-Time System Monitor & Local Sync Hub (Python/FastAPI + React).
 
-> **NCC 0.5 befindet sich im Beta-Test.** Die aktuelle Version `0.5.0-beta.53`
+> **NCC 0.5 befindet sich im Beta-Test.** Die aktuelle Version `0.5.0-beta.54`
 > besteht aus einem dauerhaft laufenden Server, GUI-losen Windows-/Linux-Agenten,
 > einer Unraid-API-Integration und einer gemeinsamen Fleet-Weboberfläche. Die
 > NCC-0.4-Starter bleiben ausschließlich als Kompatibilitätsschicht erhalten.
@@ -66,6 +66,11 @@ Die Seite **Statistiken** fasst die gesamte Fleet zusammen: Verfügbarkeit je Ag
 gewichtete CPU- und RAM-Kapazität, GPUs, eine kombinierte Auslastungsrangliste,
 Monatsverkehr sowie einen Live-Gesamtverlauf für Up- und Download. Rohdaten bleiben
 erhalten; die Monatsanzeige beginnt am Monatsersten neu.
+
+Der Server überwacht zudem die **Agent-Gesundheit** unabhängig vom Zugriff auf das
+jeweilige Gerät. Warnungen informieren über fehlende frische Telemetrie, alte
+Agent-Versionen, wiederholte Doppelmeldungen und unplausible Netzwerkzähler. Sie
+erscheinen im Warnungszentrum und können über Telegram zugestellt werden.
 
 Neben den Farbthemes stehen in den Einstellungen drei alternative Dashboard-Layouts
 bereit: **Orbit**, **Blueprint** und **Studio**. Die Auswahl wird nur im jeweiligen

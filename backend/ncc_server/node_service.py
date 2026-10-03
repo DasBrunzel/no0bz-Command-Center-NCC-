@@ -147,6 +147,7 @@ def store_telemetry(
             # IDs but emit the same host snapshot milliseconds apart. Keep the
             # first point so counter-based statistics cannot double-count it.
             duplicates += 1
+            _record_duplicate_telemetry(session, node, point.recorded_at)
             continue
         try:
             with session.begin_nested():
@@ -199,6 +200,31 @@ def _same_telemetry_window(left: datetime, right: datetime) -> bool:
     if right.tzinfo is None:
         right = right.replace(tzinfo=timezone.utc)
     return abs(left - right) <= TELEMETRY_DUPLICATE_WINDOW
+
+
+def _record_duplicate_telemetry(session: Session, node: Node, recorded_at: datetime) -> None:
+    """Keep a rate-limited audit signal for agent-health evaluation."""
+    now = utc_now()
+    recent = session.scalar(
+        select(AuditEvent.id)
+        .where(
+            AuditEvent.actor_id == node.id,
+            AuditEvent.action == "agent.telemetry.duplicate",
+            AuditEvent.occurred_at >= now - timedelta(minutes=1),
+        )
+        .limit(1)
+    )
+    if recent is None:
+        session.add(
+            AuditEvent(
+                actor_type="server",
+                actor_id=node.id,
+                action="agent.telemetry.duplicate",
+                details=json.dumps(
+                    {"recorded_at": recorded_at.isoformat()}, separators=(",", ":")
+                ),
+            )
+        )
 
 
 def _bound_node(session: Session, token: AgentToken) -> Node:
