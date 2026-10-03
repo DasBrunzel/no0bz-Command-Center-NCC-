@@ -4,6 +4,13 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.5.0-beta.51] - 2026-10-03
+
+### Added
+
+- Die Statistikübersicht zeigt nun den gesamten gemeldeten Festplattenspeicher
+  aller Systeme inklusive belegtem Anteil und Gesamtauslastung.
+
 ## [0.5.0-beta.50] - 2026-10-03
 
 ### Added

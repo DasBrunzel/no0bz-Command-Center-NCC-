@@ -2629,7 +2629,7 @@ main {
 .statistics-hero p { color: var(--muted); margin: 0; }
 .statistics-hero-meta { align-items: end; color: var(--muted); display: grid; font: 600 8px JetBrains Mono; gap: 9px; justify-items: end; text-align: right; }
 .statistics-hero-meta svg { color: var(--accent); }
-.statistics-kpis { display: grid; gap: 12px; grid-template-columns: repeat(4, 1fr); }
+.statistics-kpis { display: grid; gap: 12px; grid-template-columns: repeat(5, 1fr); }
 .statistics-kpi { display: grid; min-height: 140px; padding: 17px; position: relative; }
 .statistics-kpi > div { align-items: center; color: var(--muted); display: flex; font: 700 8px JetBrains Mono; gap: 8px; }
 .statistics-kpi > div svg { color: var(--accent); }

@@ -1235,6 +1235,10 @@ function StatisticsPage({
   const totalMemory = measured.reduce((total, node) => total + num(node.latest!.metrics.memory?.total_gb), 0);
   const usedMemory = measured.reduce((total, node) => total + num(node.latest!.metrics.memory?.used_gb), 0);
   const fleetMemory = totalMemory ? (usedMemory / totalMemory) * 100 : 0;
+  const disks = measured.flatMap((node) => Array.isArray(node.latest!.metrics.disks) ? node.latest!.metrics.disks : []);
+  const totalDisk = disks.reduce((total: number, disk: Metrics) => total + num(disk.total_gb), 0);
+  const usedDisk = disks.reduce((total: number, disk: Metrics) => total + num(disk.used_gb), 0);
+  const fleetDisk = totalDisk ? (usedDisk / totalDisk) * 100 : 0;
   const gpus: (Metrics & { nodeName: string })[] = measured.flatMap((node) =>
     Array.isArray(node.latest!.metrics.gpus)
       ? node.latest!.metrics.gpus.map((gpu: Metrics) => ({ ...gpu, nodeName: node.display_name }) as Metrics & { nodeName: string })
@@ -1337,6 +1341,11 @@ function StatisticsPage({
           <div><MonitorCog size={19} /><span>GPU-LAST</span></div>
           <strong>{fleetGpu.toFixed(1)}%</strong>
           <small>{gpus.length} GPU{gpus.length === 1 ? "" : "s"} · {strongestGpu ? `Stärkste: ${strongestGpu.name || strongestGpu.model || strongestGpu.nodeName}` : "Keine GPU erkannt"}</small>
+        </article>
+        <article className="surface statistics-kpi">
+          <div><HardDrive size={19} /><span>FESTPLATTENSPEICHER</span></div>
+          <strong>{fleetDisk.toFixed(1)}%</strong>
+          <small>{usedDisk.toFixed(1)} GB / {totalDisk.toFixed(1)} GB belegt</small>
         </article>
       </div>
 
@@ -2527,7 +2536,7 @@ function App() {
         <footer>
           <ShieldCheck size={14} />
           <span>GESICHERTE VERBINDUNG</span>
-          <b>v0.5.0-beta.50</b>
+          <b>v0.5.0-beta.51</b>
         </footer>
       </aside>
       <div className="mobile-scrim" onClick={() => setSidebar(false)} />
