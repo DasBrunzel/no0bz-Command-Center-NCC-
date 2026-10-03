@@ -89,7 +89,10 @@ type Theme =
   | "amber"
   | "glass"
   | "terminal"
-  | "aurora";
+  | "aurora"
+  | "orbit"
+  | "blueprint"
+  | "studio";
 type Invitation = {
   token_id: string;
   name: string;
@@ -162,6 +165,9 @@ const THEMES: { id: Theme; name: string; color: string }[] = [
   { id: "glass", name: "Glass Command", color: "#79e6ff" },
   { id: "terminal", name: "Terminal Grid", color: "#9cff57" },
   { id: "aurora", name: "Aurora Horizon", color: "#b79cff" },
+  { id: "orbit", name: "Orbit Console", color: "#53d7ff" },
+  { id: "blueprint", name: "Blueprint Dock", color: "#68a7ff" },
+  { id: "studio", name: "Studio Deck", color: "#ff8eb5" },
 ];
 const num = (value: unknown) =>
   typeof value === "number" && Number.isFinite(value) ? value : 0;
@@ -1973,7 +1979,7 @@ function App() {
         <footer>
           <ShieldCheck size={14} />
           <span>GESICHERTE VERBINDUNG</span>
-          <b>v0.5.0-beta.39</b>
+          <b>v0.5.0-beta.40</b>
         </footer>
       </aside>
       <div className="mobile-scrim" onClick={() => setSidebar(false)} />
