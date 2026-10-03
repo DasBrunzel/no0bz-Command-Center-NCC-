@@ -1,21 +1,22 @@
 # no0bz Command Center (NCC)
 
-![Version](https://img.shields.io/badge/version-0.5.0--beta.38-ff334f)
+![Version](https://img.shields.io/badge/version-0.5.0--beta.49-ff334f)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776ab)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 Real-Time System Monitor & Local Sync Hub (Python/FastAPI + React).
 
-> **NCC 0.5 befindet sich im Beta-Test.** Die aktuelle Version `0.5.0-beta.38` besteht
-> aus einem dauerhaft laufenden Server, GUI-losen Agenten und einer gemeinsamen
-> Fleet-Weboberfläche. Bestehende NCC-0.4-Starter bleiben als Kompatibilitätsschicht
-> erhalten.
+> **NCC 0.5 befindet sich im Beta-Test.** Die aktuelle Version `0.5.0-beta.49`
+> besteht aus einem dauerhaft laufenden Server, GUI-losen Windows-/Linux-Agenten,
+> einer Unraid-API-Integration und einer gemeinsamen Fleet-Weboberfläche. Die
+> NCC-0.4-Starter bleiben ausschließlich als Kompatibilitätsschicht erhalten.
 
 ## NCC-0.5-Server und Fleet-Dashboard (Beta)
 
-Der neue Server ist eine separate, GUI-lose Anwendung. Er sammelt seine eigenen
-Serverdaten, nimmt Telemetrie von Windows-, Linux- und mobilen Systemen entgegen und
-stellt das Dashboard zentral bereit. PostgreSQL, Migrationen und Server können mit
+Der Server ist eine separate, GUI-lose Anwendung. Er nimmt Telemetrie von Windows-
+und Linux-Agenten sowie der Unraid-API entgegen und stellt das Dashboard zentral
+über Tailscale oder lokal bereit. Der Server selbst kann bei Bedarf zusätzlich als
+normaler NCC-Agent aufgenommen werden. PostgreSQL, Migrationen und Server können mit
 Docker Compose gemeinsam gestartet werden:
 
 ```powershell
@@ -25,14 +26,11 @@ docker compose up --build
 ```
 
 Danach steht das Dashboard unter <http://127.0.0.1:8350> bereit. Status und
-API-Dokumentation liegen unter `/api/v1/status/live` und `/api/docs`. Lokal ist die
-Oberfläche ohne Token erreichbar. Für LAN, Tailscale oder einen Reverse Proxy muss
-`NCC_SERVER_DASHBOARD_TOKEN` gesetzt und die Loopback-Ausnahme deaktiviert werden.
-Details stehen im [Phase-5-Bericht](docs/phase-5-fleet-ui.md).
-
-Nach der lokalen Installation kann ein sicherer Dashboard-Token mit
-`ncc-dashboard-token` erzeugt werden. Das Werkzeug zeigt ihn genau zur Übernahme in
-die Serverumgebung an und speichert ihn nicht selbst.
+API-Dokumentation liegen unter `/api/v1/status/live` und `/api/docs`.
+Für den normalen Zugriff wird im Dashboard ein einmaliger achtstelliger Admin-Code
+erstellt. Nach dessen Eingabe erhält der Browser eine geschützte Sitzung. Der frühere
+Dashboard-Token ist nur noch ein technischer Rückfallzugang für bestehende
+Installationen und wird nicht für die tägliche Nutzung benötigt.
 
 ### Geräteaufnahme per Browser-Pairing
 
@@ -56,6 +54,29 @@ erstellen sowie keine Geräte, Einladungen oder Zugänge löschen oder widerrufe
 
 Admin-Codes werden nur einmal angezeigt, als Hash gespeichert und erzeugen eine
 HttpOnly-Browsersitzung. Ein Widerruf beendet die zugehörige Sitzung.
+
+### Dashboard, Fleet und Statistiken
+
+Das Dashboard enthält eine Fleet-Übersicht, einen sortierbaren **Fleet Navigator**
+mit frei anlegbaren Gruppen sowie eine Detailansicht für jedes Gerät. Die
+Detailansicht zeigt Betriebssystem, CPU-/GPU-Modell und — soweit erkannt — passende
+Herstellerlogos. Die Navigation und Gruppen können eingeklappt werden.
+
+Die Seite **Statistiken** fasst die gesamte Fleet zusammen: Verfügbarkeit je Agent,
+gewichtete CPU- und RAM-Kapazität, GPUs, eine kombinierte Auslastungsrangliste,
+Monatsverkehr sowie einen Live-Gesamtverlauf für Up- und Download. Rohdaten bleiben
+erhalten; die Monatsanzeige beginnt am Monatsersten neu.
+
+Neben den Farbthemes stehen in den Einstellungen drei alternative Dashboard-Layouts
+bereit: **Orbit**, **Blueprint** und **Studio**. Die Auswahl wird nur im jeweiligen
+Browser gespeichert.
+
+### Unraid
+
+Unraid wird ohne NCC-Agent über die offizielle Unraid-API integriert. NCC zeigt
+Array- und Laufwerksbelegung, Temperaturen soweit verfügbar, VMs und Docker-
+Container an. Laufende Workloads stehen immer oben. Die Unraid-Verbindung wird auf
+dem NCC-Server konfiguriert; der API-Schlüssel wird nicht im Dashboard angezeigt.
 
 ### Neuer Windows-/Linux-Agent
 
@@ -122,11 +143,16 @@ Telemetrie. Fehlende Hardware und optionale Tools werden als nicht verfügbar ge
 ## Screenshot
 
 `docs/assets/dashboard.png` und `docs/assets/demo.gif` sind Platzhalter für einen
-Release-Screenshot und ein kurzes Demo-GIF. Erzeuge sie mit `NCC_DEMO=1`, öffne das
-Dashboard bei 1440 px Breite und erfasse CPU-, Netzwerk- und Node-Kacheln ohne Token
-oder persönliche Daten.
+Release-Screenshot und ein kurzes Demo-GIF. `NCC_DEMO=1` ist ausschließlich für
+Entwickler: Es erzeugt künstliche Testwerte, damit Screenshots keine echten System-
+oder Netzwerkdaten enthalten. Für Installation und normalen Betrieb wird
+`NCC_DEMO=1` nicht benötigt.
 
-## Schnellstart
+## Legacy-Schnellstart (NCC 0.4)
+
+> Dieser Abschnitt dokumentiert nur die erhaltene NCC-0.4-Kompatibilität. Für neue
+> NCC-0.5-Installationen nutze den Server-/Agenten-Dienst und das Browser-Pairing
+> weiter oben.
 
 ### Windows 10/11
 
@@ -200,7 +226,7 @@ Nach dem Import sollte `ncc-token-transfer.txt` auf beiden Geräten gelöscht we
 Der dauerhafte Token liegt in der von Git ausgeschlossenen `.env`. Tailscale-Grants
 sollten TCP-Port 8350 nur für die vorgesehenen Clients freigeben.
 
-### Token-Verwaltung
+### Legacy-Token-Verwaltung
 
 Unter Windows öffnet `scripts\manage_ncc_token.bat` ein Menü. Unter Linux stehen
 folgende Aufrufe zur Verfügung:
@@ -218,10 +244,13 @@ Eine Rotation macht den bisherigen Token sofort ungültig. Danach müssen die ne
 
 ## Funktionen
 
-- Zentraler Server für eigene Serverdaten, Windows-/Linux-Agenten und Unraid-API
+- Zentraler Server für Windows-/Linux-Agenten und die Unraid-API
 - Echtzeit-CPU-, RAM-, Datenträger-, Netzwerk-, Akku-, GPU- und Prozessdaten
-- Fleet Navigator mit Gruppen, Drag-&-Drop-Sortierung und benutzerdefinierten Gruppen
-- Monatsverkehr und dauerhafte Rohdatenbasis für spätere Statistiken
+- Fleet Navigator mit Gruppen, Drag-&-Drop-Sortierung, einklappbaren Bereichen und
+  benutzerdefinierten Gruppen
+- Statistikseite mit Fleet-Kapazität, Verfügbarkeit, Auslastungsrangliste,
+  Monatsverkehr und Live-Gesamtgraph
+- Unraid-Übersicht für Laufwerke, Temperaturen, VMs und Docker-Container
 - Browser-Pairing ohne kopierbare Agent-Tokens
 - Commander-/Beta-Tester-Rollen mit sichtbaren Badges und serverseitigem Schutz
 - Provider-Erkennung, Capability-Report, Timeouts, Cache und exponentieller Backoff
@@ -229,9 +258,9 @@ Eine Rotation macht den bisherigen Token sofort ungültig. Danach müssen die ne
 - Standalone-, Server- und Client-Modus mit Offline-Erkennung
 - abgesicherter Prozess-Kill mit Schutzliste und Audit-Log
 - lokaler Chat-/Prompt-/Datei-Hub mit Upload-Härtung
-- responsive React-Oberfläche mit SVG-Gauges, Netzwerkverläufen und einklappbarer Navigation
-- neun zentral definierte Themes: CachyOS Cyan, Cyber Neon, Dark Matter OLED,
-  Clean Light, Matrix Hacker, Dracula, Nordic Frost, Retro Amber, Nightmare Red
+- responsive React-Oberfläche mit SVG-Gauges, Hardwarelogos, Netzwerkverläufen und
+  einklappbarer Navigation
+- Farbthemes sowie drei vollständige alternative Layouts: Orbit, Blueprint und Studio
 
 ## Konfiguration
 

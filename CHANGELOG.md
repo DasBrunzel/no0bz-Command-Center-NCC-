@@ -4,6 +4,44 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.5.0-beta.49] - 2026-10-03
+
+### Added
+
+- Zentrale **Statistikseite** mit Fleet-Verfügbarkeit, gewichteter CPU- und
+  RAM-Gesamtauslastung, GPU-Übersicht, kombinierter System-Rangliste,
+  Monatsverkehr pro Gerät und Live-Gesamtgraph für den Netzwerkverkehr.
+- Fleet-Übersicht und Navigator mit einklappbarem Seitenmenü, einklappbaren
+  Gerätegruppen, frei platzierbaren Gruppen sowie Gerätenamen und NCC-Versionen.
+- Unraid-Integration für Array-/Laufwerksbelegung, Temperaturen, VMs und Docker-
+  Container. Laufende VMs und Container werden zuerst gezeigt.
+- Drei zusätzliche, strukturell unterschiedliche Dashboard-Layouts (**Orbit**,
+  **Blueprint**, **Studio**) zusätzlich zu den bestehenden Farbthemes.
+- Betriebssystem- sowie CPU-/GPU-Modellanzeige mit Herstellerlogos in der Kachel
+  **Ausgewählter Node**.
+
+### Changed
+
+- Admin-Codes und Browser-Pairing sind der normale Weg zum Dashboard und zur
+  Geräteaufnahme. Interne Agent-Zugänge werden nicht im Dashboard angezeigt.
+- Verfügbarkeit und Netzwerkverkehr sind kompakter dargestellt; die Agentenliste
+  steht direkt in der Verfügbarkeitskachel.
+- Fleet-Warnungen können in der Übersicht einzeln ausgeblendet werden.
+- Die Telemetrie-Navigation wurde durch **Statistiken** ersetzt.
+
+### Fixed
+
+- Hardware-Logos werden als Bestandteil des NccServer-Pakets ausgeliefert und
+  zuverlässig über `/assets/hardware/` bereitgestellt.
+- Dashboard-Fußzeile und alle NCC-Komponenten verwenden konsistent
+  `0.5.0-beta.49`.
+
+### Verified
+
+- Frontend-Produktionsbuild und 75 automatisierte Tests erfolgreich.
+- NccServer auf HorstServer aktualisiert; Readiness, Versions-API, Dashboard und
+  eine ausgelieferte Hardware-Grafik liefern HTTP 200.
+
 ## [0.5.0-beta.38] - 2026-10-03
 
 ### Added
