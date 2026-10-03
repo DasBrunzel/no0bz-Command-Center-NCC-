@@ -11,6 +11,7 @@ from ncc_agent.buffer import TelemetryBuffer
 from ncc_agent.client import AgentClient
 from ncc_agent.config import AgentSettings
 from ncc_agent.identity import load_or_create_machine_id
+from ncc_agent.runner import _is_new_snapshot
 from ncc_server.agent_tokens import issue_agent_token
 from ncc_server.app import create_app
 from ncc_server.config import ServerSettings
@@ -26,6 +27,13 @@ def test_machine_identity_is_stable_and_private(tmp_path: Path) -> None:
     assert (tmp_path / "machine-id").read_text(encoding="utf-8").strip() == first.removeprefix(
         "ncc-"
     )
+
+
+def test_agent_queues_each_collector_snapshot_only_once() -> None:
+    assert _is_new_snapshot(10.0, None)
+    assert _is_new_snapshot(10.1, 10.0)
+    assert not _is_new_snapshot(10.0, 10.0)
+    assert not _is_new_snapshot(9.9, 10.0)
 
 
 def test_invalid_machine_identity_is_not_silently_replaced(tmp_path: Path) -> None:

@@ -4,6 +4,14 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.5.0-beta.56] - 2026-10-03
+
+### Fixed
+
+- Der Agent puffert denselben Hintergrund-Schnappschuss nur noch einmal. Dadurch
+  erzeugen langsame oder versetzt laufende Sammler keine fälschliche
+  Doppeltelemetrie-Warnung mehr.
+
 ## [0.5.0-beta.55] - 2026-10-03
 
 ### Fixed
