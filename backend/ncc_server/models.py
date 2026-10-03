@@ -188,3 +188,12 @@ class AlertPolicy(Base):
     gpu_threshold: Mapped[int] = mapped_column(nullable=False, default=90)
     disk_threshold: Mapped[int] = mapped_column(nullable=False, default=90)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
+class TrafficStatisticsSettings(Base):
+    """The manual start marker for the visible fleet traffic period."""
+
+    __tablename__ = "traffic_statistics_settings"
+
+    id: Mapped[str] = mapped_column(String(16), primary_key=True, default="default")
+    reset_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

@@ -4,6 +4,20 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.5.0-beta.50] - 2026-10-03
+
+### Added
+
+- Commander können die sichtbare **Traffic-Statistik** in den Einstellungen
+  zurücksetzen. Der neue Zeitraum beginnt sofort; Rohtelemetrie und historische
+  Daten werden dabei nicht gelöscht.
+- Migration `20261003_0011` speichert den Reset-Zeitpunkt dauerhaft auf dem Server.
+
+### Security
+
+- Das Zurücksetzen ist serverseitig auf Commander beschränkt und wird im Audit-Log
+  festgehalten.
+
 ## [0.5.0-beta.49] - 2026-10-03
 
 ### Added

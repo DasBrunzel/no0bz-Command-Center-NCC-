@@ -1495,6 +1495,22 @@ main {
   line-height: 1.7;
   max-width: 500px;
 }
+.traffic-reset-card { border-color: color-mix(in srgb, var(--amber) 35%, var(--line)); }
+.traffic-reset-button {
+  align-items: center;
+  background: color-mix(in srgb, var(--amber) 13%, var(--surface2));
+  border: 1px solid color-mix(in srgb, var(--amber) 65%, var(--line));
+  color: var(--amber);
+  cursor: pointer;
+  display: inline-flex;
+  font: 700 10px Inter, system-ui, sans-serif;
+  gap: 8px;
+  margin-top: 9px;
+  min-height: 38px;
+  padding: 0 13px;
+}
+.traffic-reset-button:disabled { cursor: wait; opacity: .65; }
+.traffic-reset-message { color: var(--green); display: block; font-size: 9px; margin-top: 10px; }
 .theme-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

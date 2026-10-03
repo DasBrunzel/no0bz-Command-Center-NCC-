@@ -7,7 +7,15 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ncc_server.config import ServerSettings
-from ncc_server.models import AlertState, AuditEvent, FleetGroup, Node, TelemetryPoint, utc_now
+from ncc_server.models import (
+    AlertState,
+    AuditEvent,
+    FleetGroup,
+    Node,
+    TelemetryPoint,
+    TrafficStatisticsSettings,
+    utc_now,
+)
 from ncc_server.node_service import is_online
 from ncc_server.schemas import (
     FleetAlertResponse,
@@ -134,15 +142,22 @@ def node_monthly_network_usage(
     local_now = current.astimezone()
     period_start = local_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     period_start_utc = period_start.astimezone(timezone.utc)
+    traffic_settings = session.get(TrafficStatisticsSettings, "default")
+    manual_reset = traffic_settings.reset_at if traffic_settings is not None else None
+    if manual_reset is not None and manual_reset.tzinfo is None:
+        # SQLite returns naive values for timezone-aware columns in tests. The
+        # persisted value is UTC, just like PostgreSQL's server-side value.
+        manual_reset = manual_reset.replace(tzinfo=timezone.utc)
+    effective_start = max(period_start_utc, manual_reset) if manual_reset is not None else period_start_utc
     previous = session.scalar(
         select(TelemetryPoint)
-        .where(TelemetryPoint.node_id == node_id, TelemetryPoint.recorded_at < period_start_utc)
+        .where(TelemetryPoint.node_id == node_id, TelemetryPoint.recorded_at < effective_start)
         .order_by(TelemetryPoint.recorded_at.desc())
         .limit(1)
     )
     points = session.scalars(
         select(TelemetryPoint)
-        .where(TelemetryPoint.node_id == node_id, TelemetryPoint.recorded_at >= period_start_utc)
+        .where(TelemetryPoint.node_id == node_id, TelemetryPoint.recorded_at >= effective_start)
         .order_by(TelemetryPoint.recorded_at)
     ).all()
     previous_pair = _network_counters(previous.payload) if previous is not None else None
@@ -158,12 +173,32 @@ def node_monthly_network_usage(
             sent += _counter_delta(previous_pair[1], current_pair[1])
         previous_pair = current_pair
     return NetworkUsageSummary(
-        period_start=period_start_utc,
+        period_start=effective_start,
         received_bytes=received,
         sent_bytes=sent,
         samples=samples,
         available=samples > 0,
     )
+
+
+def reset_network_statistics(session: Session) -> None:
+    """Reset displayed traffic without deleting any raw telemetry."""
+    reset_at = utc_now()
+    settings = session.get(TrafficStatisticsSettings, "default")
+    if settings is None:
+        settings = TrafficStatisticsSettings(id="default", reset_at=reset_at)
+        session.add(settings)
+    else:
+        settings.reset_at = reset_at
+    session.add(
+        AuditEvent(
+            actor_type="dashboard",
+            actor_id=None,
+            action="traffic.statistics.reset",
+            details=json.dumps({"reset_at": reset_at.isoformat()}, separators=(",", ":")),
+        )
+    )
+    session.commit()
 
 
 def _network_counters(payload: dict[str, object]) -> tuple[int, int] | None:

@@ -17,6 +17,7 @@ from ncc_server.fleet_service import (
     node_monthly_network_usage,
     node_telemetry,
     rename_fleet_node,
+    reset_network_statistics,
     update_fleet_layout,
     update_fleet_node_role,
 )
@@ -171,3 +172,12 @@ async def monthly_network_usage(
     if result is None:
         raise HTTPException(status_code=404, detail="node not found")
     return result
+
+
+@router.post(
+    "/network/reset",
+    status_code=204,
+    dependencies=[Depends(require_commander_access)],
+)
+async def reset_network(session: Session = Depends(database_session)) -> None:
+    reset_network_statistics(session)

@@ -229,6 +229,43 @@ def test_monthly_network_usage_uses_counter_deltas_and_handles_resets(tmp_path: 
     assert response.json()["samples"] == 2
 
 
+def test_commander_can_reset_visible_network_statistics_without_deleting_raw_data(tmp_path: Path) -> None:
+    database = make_database(tmp_path / "network-reset.db")
+    online_id, _ = seed(database)
+    settings = ServerSettings(database_url="sqlite+pysqlite://", dashboard_token="dashboard-secret")
+    app = create_app(settings, database)
+    headers = {"X-NCC-Dashboard-Token": "dashboard-secret"}
+    with TestClient(app) as client:
+        assert client.post("/api/v1/fleet/network/reset", headers=headers).status_code == 204
+    reset_time = utc_now()
+    with database.session() as session:
+        session.add_all(
+            [
+                TelemetryPoint(
+                    node_id=online_id,
+                    sample_id="66666666-6666-4666-8666-666666666666",
+                    recorded_at=reset_time + timedelta(seconds=5),
+                    payload={"network": {"bytes_recv": 1000, "bytes_sent": 2000}},
+                ),
+                TelemetryPoint(
+                    node_id=online_id,
+                    sample_id="77777777-7777-4777-8777-777777777777",
+                    recorded_at=reset_time + timedelta(seconds=10),
+                    payload={"network": {"bytes_recv": 1300, "bytes_sent": 2600}},
+                ),
+            ]
+        )
+        session.commit()
+    with TestClient(app) as client:
+        result = client.get(f"/api/v1/fleet/nodes/{online_id}/network/month", headers=headers)
+    assert result.status_code == 200
+    assert result.json()["received_bytes"] == 300
+    assert result.json()["sent_bytes"] == 600
+    with database.session() as session:
+        assert session.query(TelemetryPoint).count() == 4
+        assert session.query(AuditEvent).filter_by(action="traffic.statistics.reset").count() == 1
+
+
 def test_unraid_polling_uses_a_grace_period() -> None:
     node = Node(
         machine_id="unraid:horsttower",

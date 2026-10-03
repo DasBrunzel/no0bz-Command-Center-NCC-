@@ -1359,7 +1359,7 @@ function StatisticsPage({
             <div><span>LIVE · ALLE GERÄTE</span><b>↓ {liveTraffic[liveTraffic.length - 1]?.download.toFixed(1) || "0.0"} · ↑ {liveTraffic[liveTraffic.length - 1]?.upload.toFixed(1) || "0.0"} Mbps</b></div>
             <TrafficHistoryChart values={liveTraffic} />
           </div>
-          <small>Wird aus den Rohdaten berechnet und am Monatsersten neu angezeigt.</small>
+          <small>Wird aus den Rohdaten berechnet und am Monatsersten oder beim manuellen Reset neu angezeigt.</small>
         </article>
       </div>
 
@@ -1583,14 +1583,20 @@ function SettingsPage({
   onToken,
   policy,
   onPolicy,
+  canResetTraffic,
+  onResetTraffic,
 }: {
   theme: Theme;
   onTheme: (v: Theme) => void;
   onToken: () => void;
   policy: AlertPolicy | null;
   onPolicy: (policy: AlertPolicy) => Promise<void>;
+  canResetTraffic: boolean;
+  onResetTraffic: () => Promise<void>;
 }) {
   const [draft, setDraft] = useState<AlertPolicy | null>(policy);
+  const [resettingTraffic, setResettingTraffic] = useState(false);
+  const [trafficResetMessage, setTrafficResetMessage] = useState("");
   useEffect(() => setDraft(policy), [policy]);
   return (
     <div className="settings-page">
@@ -1616,6 +1622,35 @@ function SettingsPage({
           ))}
         </div>
       </section>
+      {canResetTraffic && <section className="surface settings-card traffic-reset-card">
+        <header className="section-head">
+          <div>
+            <span className="eyebrow">STATISTIKEN</span>
+            <h2>Traffic-Statistik</h2>
+          </div>
+          <Network size={19} />
+        </header>
+        <p>
+          Setzt die sichtbaren Monatswerte für alle Geräte auf jetzt zurück. Rohdaten
+          und historische Messwerte bleiben vollständig erhalten.
+        </p>
+        {trafficResetMessage && <small className="traffic-reset-message">{trafficResetMessage}</small>}
+        <button
+          className="traffic-reset-button"
+          disabled={resettingTraffic}
+          onClick={() => {
+            if (!window.confirm("Traffic-Statistik jetzt zurücksetzen? Rohdaten bleiben erhalten.")) return;
+            setResettingTraffic(true);
+            setTrafficResetMessage("");
+            void onResetTraffic()
+              .then(() => setTrafficResetMessage("Traffic-Statistik wurde zurückgesetzt."))
+              .catch(() => setTrafficResetMessage("Zurücksetzen fehlgeschlagen. Bitte erneut versuchen."))
+              .finally(() => setResettingTraffic(false));
+          }}
+        >
+          <RefreshCw size={16} /> {resettingTraffic ? "Wird zurückgesetzt …" : "Traffic-Statistik zurücksetzen"}
+        </button>
+      </section>}
       <section className="surface settings-card">
         <header className="section-head">
           <div>
@@ -2376,6 +2411,13 @@ function App() {
     if (!response.ok) throw new Error("REQUEST");
     setPolicy((await response.json()) as AlertPolicy);
   };
+  const resetTrafficStatistics = async () => {
+    const response = await fetch("/api/v1/fleet/network/reset", {
+      method: "POST",
+      headers: headers(token),
+    });
+    if (!response.ok) throw new Error("REQUEST");
+  };
   const createFleetGroup = async (name: string) => {
     const group = await postJson<FleetGroup>("/api/v1/fleet/groups", token, { name });
     setGroups((current) => [...current, group].sort((left, right) => left.position - right.position || left.name.localeCompare(right.name, "de")));
@@ -2485,7 +2527,7 @@ function App() {
         <footer>
           <ShieldCheck size={14} />
           <span>GESICHERTE VERBINDUNG</span>
-          <b>v0.5.0-beta.49</b>
+          <b>v0.5.0-beta.50</b>
         </footer>
       </aside>
       <div className="mobile-scrim" onClick={() => setSidebar(false)} />
@@ -2575,6 +2617,8 @@ function App() {
               onToken={() => setAuthenticated(false)}
               policy={policy}
               onPolicy={savePolicy}
+              canResetTraffic={canManageAccess}
+              onResetTraffic={resetTrafficStatistics}
             />
           )}
         </main>
