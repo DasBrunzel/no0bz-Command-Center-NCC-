@@ -106,15 +106,27 @@ def _active_alerts(
     cpu = _number(_nested(metrics, "cpu", "percent"))
     memory = _number(_nested(metrics, "memory", "percent"))
     gpu = _number(_nested(metrics, "gpus", 0, "percent"))
+    gaming_active = _gaming_mode_active(node)
     disks = metrics.get("disks")
     disk = max((_number(item.get("percent")) for item in disks if isinstance(item, dict)), default=0.0) if isinstance(disks, list) else 0.0
     for kind, label, value, threshold in (("cpu", "CPU", cpu, policy.cpu_threshold), ("memory", "RAM", memory, policy.memory_threshold), ("gpu", "GPU", gpu, policy.gpu_threshold), ("disk", "Laufwerk", disk, policy.disk_threshold)):
+        if gaming_active and kind in {"cpu", "gpu"}:
+            continue
         if value >= threshold:
             severity = "critical" if value >= min(100, threshold + 5) else "warning"
             alerts.append((kind, severity, f"{name}: {label}-Auslastung bei {value:.0f} % ({severity})."))
     _unraid_alerts(node, metrics, alerts)
     _agent_health_alerts(session, node, latest, settings, alerts)
     return alerts
+
+
+def _gaming_mode_active(node: Node) -> bool:
+    until = node.gaming_mode_until
+    if until is None:
+        return False
+    if until.tzinfo is None:
+        until = until.replace(tzinfo=timezone.utc)
+    return until > utc_now()
 
 
 def _agent_health_alerts(

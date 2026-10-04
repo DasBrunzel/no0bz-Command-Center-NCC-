@@ -73,6 +73,41 @@ def test_unraid_temperature_and_array_alerts_are_actionable(tmp_path: Path) -> N
     assert {"unraid-array", "cpu-temperature", "disk-temperature-disk 1", "vm-home assistant", "container-plex"} <= kinds
 
 
+def test_gaming_mode_pauses_only_cpu_and_gpu_load_alerts(tmp_path: Path) -> None:
+    database = Database(f"sqlite+pysqlite:///{(tmp_path / 'gaming-alerts.db').as_posix()}")
+    Base.metadata.create_all(database.engine)
+    settings = ServerSettings(database_url="sqlite+pysqlite://")
+    with database.session() as session:
+        node = Node(
+            machine_id="gaming-node",
+            display_name="Gaming PC",
+            platform="windows",
+            approved=True,
+            last_seen_at=utc_now(),
+            gaming_mode_until=utc_now() + timedelta(hours=2),
+        )
+        session.add(node)
+        session.flush()
+        session.add(
+            TelemetryPoint(
+                node_id=node.id,
+                recorded_at=utc_now(),
+                payload={
+                    "cpu": {"percent": 97.0},
+                    "memory": {"percent": 96.0},
+                    "gpus": [{"percent": 99.0}],
+                },
+            )
+        )
+        session.commit()
+    with database.session() as session:
+        evaluate_alerts(session, settings)
+        kinds = {alert.kind for alert in session.query(AlertState).filter_by(active=True)}
+    assert "memory" in kinds
+    assert "cpu" not in kinds
+    assert "gpu" not in kinds
+
+
 def test_agent_health_alerts_detect_duplicates_old_version_and_missing_telemetry(tmp_path: Path) -> None:
     database = Database(f"sqlite+pysqlite:///{(tmp_path / 'agent-health.db').as_posix()}")
     Base.metadata.create_all(database.engine)

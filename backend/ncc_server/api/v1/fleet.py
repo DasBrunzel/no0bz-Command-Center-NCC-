@@ -19,6 +19,7 @@ from ncc_server.fleet_service import (
     node_telemetry,
     rename_fleet_node,
     reset_network_statistics,
+    set_fleet_gaming_mode,
     update_fleet_layout,
     update_fleet_node_role,
 )
@@ -32,6 +33,7 @@ from ncc_server.schemas import (
     FleetNodeRenameRequest,
     FleetNodeResponse,
     FleetNodeRoleUpdateRequest,
+    FleetGamingModeRequest,
     FleetSummaryResponse,
     FleetTelemetryPoint,
     NetworkUsageSummary,
@@ -154,6 +156,23 @@ async def update_node_role(
         raise HTTPException(status_code=404, detail="node not found")
     response = fleet_node(session, result.id, request.app.state.server_settings)
     if response is None:  # pragma: no cover - result was loaded above
+        raise HTTPException(status_code=404, detail="node not found")
+    return response
+
+
+@router.put(
+    "/nodes/{node_id}/gaming-mode",
+    response_model=FleetNodeResponse,
+    dependencies=[Depends(require_commander_access)],
+)
+async def set_gaming_mode(
+    node_id: str, payload: FleetGamingModeRequest, request: Request, session: Session = Depends(database_session)
+) -> FleetNodeResponse:
+    result = set_fleet_gaming_mode(session, node_id, payload.minutes)
+    if result is None:
+        raise HTTPException(status_code=404, detail="node not found")
+    response = fleet_node(session, result.id, request.app.state.server_settings)
+    if response is None:  # pragma: no cover
         raise HTTPException(status_code=404, detail="node not found")
     return response
 

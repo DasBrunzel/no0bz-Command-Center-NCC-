@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -137,6 +137,21 @@ def fleet_node(
 ) -> FleetNodeResponse | None:
     node = session.get(Node, node_id)
     return _node_response(session, node, settings) if node is not None else None
+
+
+def set_fleet_gaming_mode(session: Session, node_id: str, minutes: int) -> Node | None:
+    node = session.get(Node, node_id)
+    if node is None:
+        return None
+    now = utc_now()
+    node.gaming_mode_until = now + timedelta(minutes=minutes) if minutes else None
+    node.updated_at = now
+    session.add(AuditEvent(
+        actor_type="dashboard", actor_id=node.id, action="node.gaming-mode.updated",
+        details=json.dumps({"minutes": minutes, "until": node.gaming_mode_until.isoformat() if node.gaming_mode_until else None}),
+    ))
+    session.commit()
+    return node
 
 
 def node_telemetry(
@@ -408,6 +423,7 @@ def _node_response(
         metadata=node.metadata_json,
         created_at=node.created_at,
         last_seen_at=node.last_seen_at,
+        gaming_mode_until=node.gaming_mode_until,
         fleet_group_id=node.fleet_group_id or _default_group_for(node),
         fleet_position=node.fleet_position,
         latest=_telemetry_response(latest) if latest is not None else None,

@@ -107,6 +107,7 @@ class FleetNodeResponse(BaseModel):
     metadata: dict[str, object]
     created_at: datetime
     last_seen_at: datetime | None
+    gaming_mode_until: datetime | None
     fleet_group_id: str
     fleet_position: int
     latest: FleetTelemetryPoint | None
@@ -192,6 +193,10 @@ class FleetNodeRenameRequest(BaseModel):
 
 class FleetNodeRoleUpdateRequest(BaseModel):
     access_role: Literal["commander", "beta_tester"]
+
+
+class FleetGamingModeRequest(BaseModel):
+    minutes: int = Field(ge=0, le=480)
 
 
 class FleetChatMessageCreateRequest(BaseModel):

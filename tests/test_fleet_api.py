@@ -182,6 +182,21 @@ def test_fleet_api_is_protected_and_returns_latest_metrics(tmp_path: Path) -> No
         assert role.status_code == 200
         assert role.json()["access_role"] == "beta_tester"
 
+        gaming = client.put(
+            f"/api/v1/fleet/nodes/{online_id}/gaming-mode",
+            headers=headers,
+            json={"minutes": 120},
+        )
+        assert gaming.status_code == 200
+        assert gaming.json()["gaming_mode_until"] is not None
+        stopped_gaming = client.put(
+            f"/api/v1/fleet/nodes/{online_id}/gaming-mode",
+            headers=headers,
+            json={"minutes": 0},
+        )
+        assert stopped_gaming.status_code == 200
+        assert stopped_gaming.json()["gaming_mode_until"] is None
+
         forgotten = client.delete(f"/api/v1/fleet/nodes/{online_id}", headers=headers)
         assert forgotten.status_code == 204
         assert client.get(f"/api/v1/fleet/nodes/{online_id}", headers=headers).status_code == 404

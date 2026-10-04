@@ -4,6 +4,15 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.5.0-beta.59] - 2026-10-04
+
+### Added
+
+- Ein manueller, pro Gerät zeitlich begrenzter **Gaming-Modus** bereitet NCC
+  auf die spätere automatische Spielerkennung von NCC 0.6 vor. Während er aktiv
+  ist, pausieren ausschließlich CPU- und GPU-Lastwarnungen für das gewählte
+  Gerät; Offline-, Temperatur-, Speicher- und sonstige Warnungen bleiben aktiv.
+
 ## [0.5.0-beta.58] - 2026-10-03
 
 ### Added

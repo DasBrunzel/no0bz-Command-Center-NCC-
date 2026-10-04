@@ -43,6 +43,7 @@ class Node(Base):
         DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False
     )
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    gaming_mode_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     fleet_group_id: Mapped[str | None] = mapped_column(ForeignKey("fleet_groups.id", ondelete="SET NULL"))
     fleet_position: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     fleet_group: Mapped[FleetGroup | None] = relationship(back_populates="nodes")

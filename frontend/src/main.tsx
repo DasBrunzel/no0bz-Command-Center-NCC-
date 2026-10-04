@@ -16,6 +16,7 @@ import {
   Cpu,
   Download,
   FileText,
+  Gamepad2,
   HardDrive,
   KeyRound,
   LayoutDashboard,
@@ -65,6 +66,7 @@ type Node = {
   metadata: Record<string, unknown>;
   created_at: string;
   last_seen_at: string | null;
+  gaming_mode_until: string | null;
   fleet_group_id: string;
   fleet_position: number;
   latest: Telemetry | null;
@@ -913,7 +915,8 @@ function NodeOverview({
 }) {
   const [forgetting, setForgetting] = useState(false),
     [renaming, setRenaming] = useState(false),
-    [updatingRole, setUpdatingRole] = useState(false);
+    [updatingRole, setUpdatingRole] = useState(false),
+    [updatingGaming, setUpdatingGaming] = useState(false);
   if (!node)
     return (
       <section className="surface empty-stage">
@@ -932,6 +935,17 @@ function NodeOverview({
     network = m.network || {},
     processes = m.processes || [],
     isUnraid = node.metadata.source === "unraid-api";
+  const gamingActive = !!node.gaming_mode_until && new Date(node.gaming_mode_until).getTime() > Date.now();
+  const updateGamingMode = async (minutes: number) => {
+    setUpdatingGaming(true);
+    const dashboardToken = localStorage.getItem("ncc-dashboard-token") || "";
+    const response = await fetch(`/api/v1/fleet/nodes/${node.node_id}/gaming-mode`, {
+      method: "PUT", headers: { ...headers(dashboardToken), "Content-Type": "application/json" }, body: JSON.stringify({ minutes }),
+    });
+    if (response.ok) { window.location.reload(); return; }
+    setUpdatingGaming(false);
+    window.alert("Der Gaming-Modus konnte nicht geändert werden.");
+  };
   const forget = async () => {
     if (
       !window.confirm(
@@ -1171,6 +1185,9 @@ function NodeOverview({
         </div>
       )}
       <div className="node-actions">
+        {!isUnraid && canDelete && <button className={`gaming-mode ${gamingActive ? "active" : ""}`} disabled={updatingGaming} onClick={() => void updateGamingMode(gamingActive ? 0 : 120)}>
+          <Gamepad2 size={15} />{updatingGaming ? "Wird gesetzt …" : gamingActive ? `Gaming aktiv bis ${new Date(node.gaming_mode_until!).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}` : "Gaming-Modus · 2 Std."}
+        </button>}
         <button
           className="rename-node"
           disabled={renaming}
@@ -2641,7 +2658,7 @@ function App() {
         <footer>
           <ShieldCheck size={14} />
           <span>GESICHERTE VERBINDUNG</span>
-          <b>v0.5.0-beta.58</b>
+          <b>v0.5.0-beta.59</b>
         </footer>
       </aside>
       <div className="mobile-scrim" onClick={() => setSidebar(false)} />
