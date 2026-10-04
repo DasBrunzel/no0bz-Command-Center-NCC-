@@ -4,6 +4,14 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.5.0-beta.61] - 2026-10-05
+
+### Added
+
+- Linux-Server erhalten einen persistenten, abgeschotteten Datenbereich für
+  Chat-Anhänge sowie eine systemd-gestützte PostgreSQL-Sicherung: täglich um
+  03:30 Uhr, mit 14 Tagen Aufbewahrung.
+
 ## [0.5.0-beta.60] - 2026-10-04
 
 ### Changed

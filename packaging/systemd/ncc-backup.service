@@ -1,0 +1,19 @@
+[Unit]
+Description=no0bz Command Center PostgreSQL backup
+Documentation=https://github.com/DasBrunzel/no0bz-Command-Center-NCC-
+After=postgresql.service
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/opt/no0bz/ncc/backup_ncc_postgres.sh --retention-days 14
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LockPersonality=true
+RestrictSUIDSGID=true
+ReadWritePaths=/var/lib/no0bz/ncc/backups

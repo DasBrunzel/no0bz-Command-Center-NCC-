@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily no0bz Command Center PostgreSQL backup
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+Persistent=true
+RandomizedDelaySec=15m
+Unit=ncc-backup.service
+
+[Install]
+WantedBy=timers.target

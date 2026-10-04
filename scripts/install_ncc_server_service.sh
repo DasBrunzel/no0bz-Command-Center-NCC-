@@ -35,6 +35,7 @@ if [ ! -f "$config_dir/server.env" ]; then
     printf 'NCC_SERVER_DATABASE_URL="%s"\n' "$database_url"
     printf 'NCC_SERVER_DASHBOARD_TOKEN="%s"\n' "$dashboard_token"
     printf 'NCC_SERVER_DASHBOARD_ALLOW_LOOPBACK_WITHOUT_TOKEN=0\n'
+    printf 'NCC_SERVER_CHAT_UPLOAD_DIR=/var/lib/ncc/chat_uploads\n'
   } > "$config_dir/server.env"
   echo "[NCC] Dashboard-Token (jetzt sicher notieren): $dashboard_token"
   echo "[NCC] Der Token wurde außerdem geschützt in $config_dir/server.env gespeichert."
@@ -45,6 +46,10 @@ chown root:ncc "$config_dir/server.env"
 chmod 0640 "$config_dir/server.env"
 
 install -m 0644 "$root/packaging/systemd/ncc-server.service" /etc/systemd/system/ncc-server.service
+install -m 0644 "$root/packaging/systemd/ncc-backup.service" /etc/systemd/system/ncc-backup.service
+install -m 0644 "$root/packaging/systemd/ncc-backup.timer" /etc/systemd/system/ncc-backup.timer
+install -m 0750 "$root/scripts/backup_ncc_postgres.sh" "$prefix/backup_ncc_postgres.sh"
 systemctl daemon-reload
 systemctl enable --now ncc-server.service
-echo "[NCC] Server-Dienst installiert. Status: systemctl status ncc-server"
+systemctl enable --now ncc-backup.timer
+echo "[NCC] Server-Dienst und tägliches Backup (14 Tage) installiert. Status: systemctl status ncc-server"
