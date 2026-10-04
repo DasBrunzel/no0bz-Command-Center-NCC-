@@ -967,6 +967,17 @@ main {
   color: var(--muted);
   font-size: 8px;
 }
+.hero-side {
+  align-items: flex-end;
+  display: grid;
+  gap: 10px;
+  justify-items: end;
+}
+.node-actions-in-hero {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 420px;
+}
 .node-hardware {
   align-items: center;
   display: flex;
@@ -1963,6 +1974,20 @@ main {
   .hero {
     align-items: flex-start;
     gap: 12px;
+    flex-wrap: wrap;
+  }
+  .hero-side {
+    align-items: stretch;
+    justify-items: stretch;
+    width: 100%;
+  }
+  .node-actions-in-hero {
+    justify-content: stretch;
+    max-width: none;
+    width: 100%;
+  }
+  .node-actions-in-hero button {
+    flex: 1 1 145px;
   }
   .node-hardware {
     display: none;
@@ -2077,6 +2102,20 @@ main {
   font: 700 7px JetBrains Mono;
   letter-spacing: .04em;
   margin-top: 3px;
+  padding: 2px 4px;
+  width: max-content;
+}
+.fleet-gaming-badge {
+  align-items: center;
+  background: color-mix(in srgb, var(--accent) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 50%, var(--line));
+  border-radius: 4px;
+  color: var(--accent);
+  display: inline-flex;
+  font: 700 7px JetBrains Mono;
+  gap: 3px;
+  letter-spacing: .04em;
+  margin-top: 2px;
   padding: 2px 4px;
   width: max-content;
 }

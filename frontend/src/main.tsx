@@ -565,6 +565,9 @@ function Fleet({
                     <strong>{node.display_name}</strong>
                     <span>{node.platform} · {node.agent_version || "Agent unbekannt"}</span>
                     {node.access_role === "beta_tester" && <small className="fleet-beta-badge">BETA-TESTER</small>}
+                    {!!node.gaming_mode_until && new Date(node.gaming_mode_until).getTime() > Date.now() && (
+                      <small className="fleet-gaming-badge"><Gamepad2 size={10} /> GAMING AKTIV</small>
+                    )}
                   </div>
                   <StatusDot online={node.online} />
                 </button>
@@ -1058,9 +1061,42 @@ function NodeOverview({
             <span>{gpuModel}</span>
           </div>}
         </div>
-        <div className="hero-status">
-          <StatusDot online={node.online} />
-          <small>{ago(node.last_seen_at)}</small>
+        <div className="hero-side">
+          <div className="hero-status">
+            <StatusDot online={node.online} />
+            <small>{ago(node.last_seen_at)}</small>
+          </div>
+          <div className="node-actions node-actions-in-hero">
+            {!isUnraid && canDelete && <button className={`gaming-mode ${gamingActive ? "active" : ""}`} disabled={updatingGaming} onClick={() => void updateGamingMode(gamingActive ? 0 : 120)}>
+              <Gamepad2 size={15} />{updatingGaming ? "Wird gesetzt …" : gamingActive ? `Gaming aktiv bis ${new Date(node.gaming_mode_until!).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}` : "Gaming-Modus · 2 Std."}
+            </button>}
+            <button
+              className="rename-node"
+              disabled={renaming}
+              onClick={() => void rename()}
+            >
+              {renaming ? "Wird umbenannt …" : "Gerät umbenennen"}
+            </button>
+            {canDelete && <button
+              className="node-role"
+              disabled={updatingRole}
+              onClick={() => void toggleRole()}
+            >
+              {updatingRole
+                ? "Rolle wird geändert …"
+                : node.access_role === "beta_tester"
+                  ? "Zu Commander machen"
+                  : "Als Beta-Tester markieren"}
+            </button>}
+            {canDelete && <button
+              className="forget-node"
+              disabled={forgetting}
+              onClick={() => void forget()}
+            >
+              <Trash2 size={15} />
+              {forgetting ? "Gerät wird entfernt …" : "Gerät vergessen"}
+            </button>}
+          </div>
         </div>
       </div>
       <div className={`gauge-grid ${isUnraid ? "unraid-gauge-grid" : ""}`}>
@@ -1184,37 +1220,6 @@ function NodeOverview({
           </article>
         </div>
       )}
-      <div className="node-actions">
-        {!isUnraid && canDelete && <button className={`gaming-mode ${gamingActive ? "active" : ""}`} disabled={updatingGaming} onClick={() => void updateGamingMode(gamingActive ? 0 : 120)}>
-          <Gamepad2 size={15} />{updatingGaming ? "Wird gesetzt …" : gamingActive ? `Gaming aktiv bis ${new Date(node.gaming_mode_until!).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}` : "Gaming-Modus · 2 Std."}
-        </button>}
-        <button
-          className="rename-node"
-          disabled={renaming}
-          onClick={() => void rename()}
-        >
-          {renaming ? "Wird umbenannt …" : "Gerät umbenennen"}
-        </button>
-        {canDelete && <button
-          className="node-role"
-          disabled={updatingRole}
-          onClick={() => void toggleRole()}
-        >
-          {updatingRole
-            ? "Rolle wird geändert …"
-            : node.access_role === "beta_tester"
-              ? "Zu Commander machen"
-              : "Als Beta-Tester markieren"}
-        </button>}
-        {canDelete && <button
-          className="forget-node"
-          disabled={forgetting}
-          onClick={() => void forget()}
-        >
-          <Trash2 size={15} />
-          {forgetting ? "Gerät wird entfernt …" : "Gerät vergessen"}
-        </button>}
-      </div>
     </section>
   );
 }
@@ -2658,7 +2663,7 @@ function App() {
         <footer>
           <ShieldCheck size={14} />
           <span>GESICHERTE VERBINDUNG</span>
-          <b>v0.5.0-beta.59</b>
+          <b>v0.5.0-beta.60</b>
         </footer>
       </aside>
       <div className="mobile-scrim" onClick={() => setSidebar(false)} />

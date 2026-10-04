@@ -4,6 +4,15 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.5.0-beta.60] - 2026-10-04
+
+### Changed
+
+- Der aktive Gaming-Modus ist im Fleet Navigator direkt auf der jeweiligen
+  Geräte-Kachel sichtbar.
+- Die Geräteaktionen – Gaming-Modus, Umbenennen, Rolle und Vergessen – liegen
+  nun passend im Kopf der ausgewählten Node statt am Seitenende.
+
 ## [0.5.0-beta.59] - 2026-10-04
 
 ### Added
