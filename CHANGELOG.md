@@ -4,6 +4,13 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.5.0-beta.62] - 2026-10-05
+
+### Fixed
+
+- Die tägliche Linux-PostgreSQL-Sicherung verwendet nun eine POSIX-kompatible
+  Verarbeitung der Datenbank-URL und läuft dadurch zuverlässig unter systemd.
+
 ## [0.5.0-beta.61] - 2026-10-05
 
 ### Added

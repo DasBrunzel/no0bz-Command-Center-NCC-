@@ -23,7 +23,7 @@ set +a
 
 database_url=${NCC_SERVER_DATABASE_URL:-}
 [ -n "$database_url" ] || { echo "NCC_SERVER_DATABASE_URL is missing." >&2; exit 1; }
-database_url=${database_url/postgresql+psycopg:/postgresql:}
+database_url=$(printf '%s' "$database_url" | sed 's#^postgresql+psycopg:#postgresql:#')
 
 umask 077
 install -d -m 0700 "$backup_root"
