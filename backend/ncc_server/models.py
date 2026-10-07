@@ -7,6 +7,7 @@ from sqlalchemy import (
     JSON,
     Boolean,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -43,6 +44,14 @@ class Node(Base):
         DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False
     )
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Availability is accumulated by the server's health loop.  It deliberately
+    # lives independently of raw telemetry retention so the fleet ranking stays
+    # meaningful over the lifetime of a node.
+    availability_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    availability_last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    availability_online_seconds: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    availability_current_streak_seconds: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    availability_record_seconds: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
     gaming_mode_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     fleet_group_id: Mapped[str | None] = mapped_column(ForeignKey("fleet_groups.id", ondelete="SET NULL"))
     fleet_position: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

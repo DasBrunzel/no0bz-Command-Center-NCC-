@@ -66,6 +66,9 @@ type Node = {
   metadata: Record<string, unknown>;
   created_at: string;
   last_seen_at: string | null;
+  availability_percent: number;
+  availability_started_at: string | null;
+  uptime_record_seconds: number;
   gaming_mode_until: string | null;
   fleet_group_id: string;
   fleet_position: number;
@@ -203,6 +206,16 @@ const ago = (value: string | null) => {
   if (seconds < 3600) return `Vor ${Math.floor(seconds / 60)} Min.`;
   if (seconds < 86400) return `Vor ${Math.floor(seconds / 3600)} Std.`;
   return new Date(value).toLocaleDateString("de-DE");
+};
+const duration = (value: number) => {
+  const seconds = Math.max(0, Math.floor(value));
+  if (seconds < 60) return "unter 1 Min.";
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (days) return `${days} T ${hours} Std.`;
+  if (hours) return `${hours} Std. ${minutes} Min.`;
+  return `${minutes} Min.`;
 };
 const headers = (token: string): Record<string, string> =>
   token ? { "X-NCC-Dashboard-Token": token } : {};
@@ -1235,30 +1248,41 @@ function StatisticsPage({
 }) {
   const [traffic, setTraffic] = useState<Record<string, NetworkUsageSummary>>({});
   const [trafficHistory, setTrafficHistory] = useState<Record<string, Telemetry[]>>({});
+  // The fleet itself is refreshed every five seconds.  Statistics requests may
+  // take longer on a growing database, therefore use a stable node key and a
+  // slower independent polling loop instead of cancelling every response.
+  const trafficNodeKey = nodes.map((node) => node.node_id).sort().join("|");
+  const trafficNodes = useMemo(
+    () => [...nodes].sort((left, right) => left.node_id.localeCompare(right.node_id)),
+    [trafficNodeKey],
+  );
   useEffect(() => {
     let current = true;
-    Promise.all(
-      nodes.map(async (node) => {
-        const [monthly, history] = await Promise.all([
-          getJson<NetworkUsageSummary>(`/api/v1/fleet/nodes/${node.node_id}/network/month`, token),
-          getJson<Telemetry[]>(`/api/v1/fleet/nodes/${node.node_id}/telemetry?limit=48`, token),
-        ]);
-        return [node.node_id, monthly, history] as const;
-      }),
-    )
-      .then((entries) => {
+    const loadTraffic = async () => {
+      try {
+        const entries = await Promise.all(
+          trafficNodes.map(async (node) => {
+            const [monthly, history] = await Promise.all([
+              getJson<NetworkUsageSummary>(`/api/v1/fleet/nodes/${node.node_id}/network/month`, token),
+              getJson<Telemetry[]>(`/api/v1/fleet/nodes/${node.node_id}/telemetry?limit=48`, token),
+            ]);
+            return [node.node_id, monthly, history] as const;
+          }),
+        );
         if (!current) return;
         setTraffic(Object.fromEntries(entries.map(([nodeId, monthly]) => [nodeId, monthly])));
         setTrafficHistory(Object.fromEntries(entries.map(([nodeId, , history]) => [nodeId, history])));
-      })
-      .catch(() => {
+      } catch {
         if (current) {
           setTraffic({});
           setTrafficHistory({});
         }
-      });
-    return () => { current = false; };
-  }, [nodes, token]);
+      }
+    };
+    void loadTraffic();
+    const refresh = window.setInterval(() => void loadTraffic(), 30_000);
+    return () => { current = false; window.clearInterval(refresh); };
+  }, [trafficNodes, token]);
 
   const measured = nodes.filter((node) => node.latest);
   const cpuThreads = (metrics: Metrics) => Math.max(1, num(metrics.cpu?.logical_cores || metrics.cpu?.threads));
@@ -1295,8 +1319,8 @@ function StatisticsPage({
     ? Math.round((summary.online_nodes / summary.total_nodes) * 100)
     : 0;
   const availability = [...nodes]
-    .map((node) => ({ node, value: node.online ? 100 : 0 }))
-    .sort((left, right) => right.value - left.value || left.node.display_name.localeCompare(right.node.display_name, "de"));
+    .map((node) => ({ node, value: num(node.availability_percent) }))
+    .sort((left, right) => right.value - left.value || right.node.uptime_record_seconds - left.node.uptime_record_seconds || left.node.display_name.localeCompare(right.node.display_name, "de"));
   const rankedLoad = [...measured]
     .map((node) => {
       const metrics = node.latest!.metrics;
@@ -1357,9 +1381,9 @@ function StatisticsPage({
         <article className="surface statistics-kpi availability">
           <div><Wifi size={19} /><span>VERFÜGBARKEIT</span></div>
           <div className="statistics-availability-content">
-            <div className="statistics-availability-total"><strong>{percentOnline}%</strong><small>{summary?.online_nodes || 0} von {summary?.total_nodes || 0} Agenten online</small></div>
+            <div className="statistics-availability-total"><strong>{percentOnline}%</strong><small>{summary?.online_nodes || 0} von {summary?.total_nodes || 0} jetzt online</small></div>
             <div className="statistics-availability-list">
-              {availability.map(({ node, value }) => <span key={node.node_id}><b>{node.display_name}</b><em className={node.online ? "online" : ""}>{value}%</em></span>)}
+              {availability.map(({ node, value }) => <span key={node.node_id}><b>{node.display_name}</b><em className={node.online ? "online" : ""}>{value.toFixed(1)}% <small>Rekord {duration(node.uptime_record_seconds)}</small></em></span>)}
             </div>
           </div>
         </article>
@@ -2663,7 +2687,7 @@ function App() {
         <footer>
           <ShieldCheck size={14} />
           <span>GESICHERTE VERBINDUNG</span>
-          <b>v0.5.0-beta.63</b>
+          <b>v0.5.0-beta.64</b>
         </footer>
       </aside>
       <div className="mobile-scrim" onClick={() => setSidebar(false)} />

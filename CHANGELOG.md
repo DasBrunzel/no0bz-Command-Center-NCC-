@@ -4,6 +4,19 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.5.0-beta.64] - 2026-10-07
+
+### Fixed
+
+- Die Netzwerkstatistik wird nicht mehr durch den fünfsekündlichen Live-Refresh
+  abgebrochen. Traffic pro Gerät und der Gesamtverkehr laden unabhängig und
+  aktualisieren sich anschließend kontrolliert.
+
+### Added
+
+- Die Verfügbarkeits-Rangliste wird dauerhaft serverseitig erfasst. Sie zeigt
+  die beobachtete Verfügbarkeit je System sowie dessen längsten Uptime-Rekord.
+
 ## [0.5.0-beta.63] - 2026-10-07
 
 ### Fixed

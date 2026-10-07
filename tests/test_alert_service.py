@@ -3,10 +3,23 @@ from __future__ import annotations
 from datetime import timedelta
 from pathlib import Path
 
-from ncc_server.alert_service import evaluate_alerts, mark_notified
+from ncc_server.alert_service import _track_availability, evaluate_alerts, mark_notified
 from ncc_server.config import ServerSettings
 from ncc_server.database import Database
 from ncc_server.models import AlertState, AuditEvent, Base, Node, TelemetryPoint, utc_now
+
+
+def test_availability_tracks_total_online_time_and_longest_record() -> None:
+    started = utc_now()
+    node = Node(machine_id="availability-node", display_name="Availability PC", platform="linux")
+    _track_availability(node, True, started)
+    _track_availability(node, True, started + timedelta(seconds=30))
+    _track_availability(node, False, started + timedelta(seconds=60))
+
+    assert node.availability_started_at == started
+    assert node.availability_online_seconds == 30
+    assert node.availability_current_streak_seconds == 0
+    assert node.availability_record_seconds == 30
 
 
 def test_alerts_notify_once_then_send_a_resolution(tmp_path: Path) -> None:

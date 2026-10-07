@@ -2723,8 +2723,9 @@ main {
 .statistics-availability-list { border-left: 1px solid color-mix(in srgb, var(--line) 75%, transparent); display: grid; gap: 6px; padding-left: 12px; }
 .statistics-availability-list span { align-items: center; display: flex; font: 700 8px JetBrains Mono; gap: 8px; justify-content: space-between; }
 .statistics-availability-list b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.statistics-availability-list em { color: var(--danger); font-style: normal; }
+.statistics-availability-list em { color: var(--danger); display: flex; flex: 0 0 auto; font-style: normal; gap: 5px; white-space: nowrap; }
 .statistics-availability-list em.online { color: var(--green); }
+.statistics-availability-list em small { color: var(--muted); font: 600 7px JetBrains Mono; }
 .statistics-kpi:not(.availability) small { line-height: 1.45; margin-top: 2px; }
 .statistics-note { color: var(--muted); display: block; font-size: 8px; line-height: 1.45; margin-top: 17px; }
 .traffic-live-mini { border-top: 1px solid color-mix(in srgb, var(--line) 75%, transparent); margin-top: 13px; padding-top: 9px; }

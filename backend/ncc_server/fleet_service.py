@@ -423,11 +423,30 @@ def _node_response(
         metadata=node.metadata_json,
         created_at=node.created_at,
         last_seen_at=node.last_seen_at,
+        availability_percent=_availability_percent(node),
+        availability_started_at=node.availability_started_at,
+        uptime_record_seconds=round(node.availability_record_seconds),
         gaming_mode_until=node.gaming_mode_until,
         fleet_group_id=node.fleet_group_id or _default_group_for(node),
         fleet_position=node.fleet_position,
         latest=_telemetry_response(latest) if latest is not None else None,
     )
+
+
+def _availability_percent(node: Node, now: datetime | None = None) -> float:
+    """Return observed availability since NCC started tracking this node."""
+    started = node.availability_started_at
+    if started is None:
+        return 0.0
+    if started.tzinfo is None:
+        started = started.replace(tzinfo=timezone.utc)
+    current = now or utc_now()
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+    elapsed = max(0.0, (current - started).total_seconds())
+    if elapsed <= 0:
+        return 0.0
+    return round(min(100.0, max(0.0, node.availability_online_seconds / elapsed * 100)), 1)
 
 
 def _default_group_for(node: Node) -> str:

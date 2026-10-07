@@ -107,6 +107,9 @@ class FleetNodeResponse(BaseModel):
     metadata: dict[str, object]
     created_at: datetime
     last_seen_at: datetime | None
+    availability_percent: float
+    availability_started_at: datetime | None
+    uptime_record_seconds: int
     gaming_mode_until: datetime | None
     fleet_group_id: str
     fleet_position: int

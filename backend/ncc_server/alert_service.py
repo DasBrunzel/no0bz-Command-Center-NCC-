@@ -24,7 +24,10 @@ def evaluate_alerts(session: Session, settings: ServerSettings) -> list[AlertNot
     notifications: list[AlertNotification] = []
     policy = get_alert_policy(session)
     nodes = session.scalars(select(Node)).all()
+    now = utc_now()
     for node in nodes:
+        online = is_online(node, settings.node_offline_after_seconds)
+        _track_availability(node, online, now)
         latest = session.scalar(
             select(TelemetryPoint)
             .where(TelemetryPoint.node_id == node.id)
@@ -63,6 +66,35 @@ def evaluate_alerts(session: Session, settings: ServerSettings) -> list[AlertNot
                 )
     session.commit()
     return notifications
+
+
+def _track_availability(node: Node, online: bool, now: datetime) -> None:
+    """Accumulate observed online time and the longest uninterrupted streak.
+
+    A health evaluation runs every 30 seconds.  Large gaps (for example while
+    the service itself was stopped) are capped to two evaluations, so NCC never
+    invents hours of uptime it could not observe.
+    """
+    if node.availability_started_at is None:
+        node.availability_started_at = now
+    previous = node.availability_last_checked_at
+    node.availability_last_checked_at = now
+    if previous is None:
+        return
+    if previous.tzinfo is None:
+        previous = previous.replace(tzinfo=timezone.utc)
+    elapsed = min(60.0, max(0.0, (now - previous).total_seconds()))
+    if online:
+        node.availability_online_seconds = (node.availability_online_seconds or 0.0) + elapsed
+        node.availability_current_streak_seconds = (
+            node.availability_current_streak_seconds or 0.0
+        ) + elapsed
+        node.availability_record_seconds = max(
+            node.availability_record_seconds or 0.0,
+            node.availability_current_streak_seconds,
+        )
+    else:
+        node.availability_current_streak_seconds = 0.0
 
 
 def mark_notified(session: Session, alert_id: str, state: str) -> None:
