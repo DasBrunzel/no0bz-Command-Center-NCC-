@@ -17,6 +17,9 @@ from ncc_server.node_service import is_online
 class AlertNotification:
     alert_id: str
     state: str
+    severity: str
+    node_name: str
+    kind: str
     message: str
 
 
@@ -53,7 +56,11 @@ def evaluate_alerts(session: Session, settings: ServerSettings) -> list[AlertNot
                 state.resolved_at = None
                 state.updated_at = utc_now()
             if settings.telegram_enabled and state.last_notified_state != "active":
-                notifications.append(AlertNotification(state.id, "active", message))
+                notifications.append(
+                    AlertNotification(
+                        state.id, "active", severity, node.display_name, kind, message
+                    )
+                )
         for state in states.values():
             if not state.active:
                 continue
@@ -62,7 +69,14 @@ def evaluate_alerts(session: Session, settings: ServerSettings) -> list[AlertNot
             state.resolved_at = state.updated_at
             if state.last_notified_state == "active":
                 notifications.append(
-                    AlertNotification(state.id, "resolved", f"Entwarnung: {state.message}")
+                    AlertNotification(
+                        state.id,
+                        "resolved",
+                        state.severity,
+                        node.display_name,
+                        state.kind,
+                        state.message,
+                    )
                 )
     session.commit()
     return notifications

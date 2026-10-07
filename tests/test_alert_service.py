@@ -7,6 +7,8 @@ from ncc_server.alert_service import _track_availability, evaluate_alerts, mark_
 from ncc_server.config import ServerSettings
 from ncc_server.database import Database
 from ncc_server.models import AlertState, AuditEvent, Base, Node, TelemetryPoint, utc_now
+from ncc_server.alert_service import AlertNotification
+from ncc_server.telegram import format_telegram_alert
 
 
 def test_availability_tracks_total_online_time_and_longest_record() -> None:
@@ -20,6 +22,24 @@ def test_availability_tracks_total_online_time_and_longest_record() -> None:
     assert node.availability_online_seconds == 30
     assert node.availability_current_streak_seconds == 0
     assert node.availability_record_seconds == 30
+
+
+def test_telegram_alert_format_is_readable_and_escapes_node_names() -> None:
+    rendered = format_telegram_alert(
+        AlertNotification(
+            "alert-1",
+            "active",
+            "critical",
+            "Tower <1>",
+            "offline",
+            "Tower <1>: ist offline.",
+        ),
+        now=utc_now(),
+    )
+    assert "🔴 <b>NCC KRITISCHE WARNUNG</b>" in rendered
+    assert "Tower &lt;1&gt;" in rendered
+    assert "Verbindung verloren" in rendered
+    assert "ist offline." in rendered
 
 
 def test_alerts_notify_once_then_send_a_resolution(tmp_path: Path) -> None:

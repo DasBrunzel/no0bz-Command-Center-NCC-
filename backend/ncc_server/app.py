@@ -91,7 +91,7 @@ async def _alert_loop(database: Database, settings: ServerSettings) -> None:
             with database.session() as session:
                 notifications = evaluate_alerts(session, settings)
             for notification in notifications:
-                if await send_telegram_alert(settings, notification.message):
+                if await send_telegram_alert(settings, notification):
                     with database.session() as session:
                         mark_notified(session, notification.alert_id, notification.state)
         except Exception as exc:

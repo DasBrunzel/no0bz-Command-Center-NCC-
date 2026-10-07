@@ -4,6 +4,14 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.5.0-beta.65] - 2026-10-07
+
+### Changed
+
+- Telegram-Warnungen sind jetzt strukturierte, lesbare Meldungen mit
+  Warnstufe, System, Ereignis, Detailtext, Zeitstempel und passender
+  Entwarnung. Sonderzeichen in Gerätenamen werden sicher dargestellt.
+
 ## [0.5.0-beta.64] - 2026-10-07
 
 ### Fixed
