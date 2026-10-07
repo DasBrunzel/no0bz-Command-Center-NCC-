@@ -4,6 +4,14 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.5.0-beta.63] - 2026-10-07
+
+### Fixed
+
+- Ein im Fleet-Dashboard umbenannter Agent behält seinen Namen jetzt dauerhaft.
+  Agent-Updates und erneute Anmeldungen aktualisieren nur noch technische
+  Metadaten, niemals den gespeicherten Dashboard-Namen.
+
 ## [0.5.0-beta.62] - 2026-10-05
 
 ### Fixed

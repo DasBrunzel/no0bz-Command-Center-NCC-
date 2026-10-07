@@ -72,7 +72,9 @@ def enroll_node(
                 ),
             )
         )
-    node.display_name = payload.display_name
+    # The dashboard owns the persisted display name. Re-enrollment is normal
+    # after an agent update, so it must only refresh agent metadata and never
+    # overwrite a name the user selected in the dashboard.
     node.platform = payload.platform
     node.access_role = token.access_role
     node.agent_version = payload.agent_version

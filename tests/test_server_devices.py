@@ -126,6 +126,38 @@ def test_token_enrollment_and_heartbeat_are_persistent(tmp_path: Path) -> None:
     reopened.dispose()
 
 
+def test_reenrollment_preserves_a_dashboard_selected_display_name(tmp_path: Path) -> None:
+    database = make_database(tmp_path / "custom-name.db")
+    _, plaintext = issue(database)
+    app = create_app(ServerSettings(database_url="sqlite+pysqlite://"), database)
+    headers = {"Authorization": f"Bearer {plaintext}"}
+
+    with TestClient(app) as client:
+        enrolled = client.post("/api/v1/nodes/enroll", json=enrollment_payload(), headers=headers)
+        assert enrolled.status_code == 200
+        node_id = enrolled.json()["node_id"]
+
+    # Use the service directly to keep the enrollment test focused on the
+    # persisted dashboard choice rather than dashboard authentication.
+    from ncc_server.fleet_service import rename_fleet_node
+
+    with database.session() as session:
+        assert rename_fleet_node(session, node_id, "My Gaming PC") is not None
+
+    changed_payload = enrollment_payload()
+    changed_payload["display_name"] = "DESKTOP-AGENT"
+    changed_payload["agent_version"] = "0.5.0-beta.63"
+    with TestClient(app) as client:
+        reenrolled = client.post("/api/v1/nodes/enroll", json=changed_payload, headers=headers)
+        assert reenrolled.status_code == 200
+
+    with database.session() as session:
+        node = session.get(Node, node_id)
+        assert node is not None
+        assert node.display_name == "My Gaming PC"
+        assert node.agent_version == "0.5.0-beta.63"
+
+
 def test_invalid_expired_and_revoked_tokens_are_rejected(tmp_path: Path) -> None:
     database = make_database(tmp_path / "auth.db")
     active_id, active = issue(database)
