@@ -4,6 +4,15 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.5.0-beta.66] - 2026-10-07
+
+### Added
+
+- Einstellungen enthalten jetzt einen geschützten Telegram-Bereich: Versand
+  an-/ausschalten, Überschriften und Fußzeile anpassen sowie eine echte
+  Testnachricht senden. Bot-Token und Chat-ID bleiben ausschließlich auf dem
+  Server.
+
 ## [0.5.0-beta.65] - 2026-10-07
 
 ### Changed

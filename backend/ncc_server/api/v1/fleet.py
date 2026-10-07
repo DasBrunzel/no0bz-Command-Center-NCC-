@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from ncc.security import limited
 from sqlalchemy.orm import Session
 
-from ncc_server.alert_service import get_alert_policy, update_alert_policy
+from ncc_server.alert_service import AlertNotification, get_alert_policy, update_alert_policy
 from ncc_server.auth import database_session, require_commander_access, require_dashboard_access
 from ncc_server.fleet_service import (
     create_fleet_group,
@@ -37,6 +37,14 @@ from ncc_server.schemas import (
     FleetSummaryResponse,
     FleetTelemetryPoint,
     NetworkUsageSummary,
+    TelegramSettingsResponse,
+    TelegramSettingsUpdateRequest,
+)
+from ncc_server.telegram import (
+    get_telegram_settings,
+    send_telegram_alert,
+    telegram_is_configured,
+    update_telegram_settings,
 )
 
 router = APIRouter(
@@ -104,6 +112,59 @@ async def set_alert_policy(
 ) -> AlertPolicyResponse:
     policy = update_alert_policy(session, payload.model_dump())
     return AlertPolicyResponse.model_validate(policy, from_attributes=True)
+
+
+def _telegram_response(settings, preferences) -> TelegramSettingsResponse:  # type: ignore[no-untyped-def]
+    return TelegramSettingsResponse(
+        configured=telegram_is_configured(settings),
+        enabled=preferences.enabled,
+        warning_title=preferences.warning_title,
+        critical_title=preferences.critical_title,
+        resolved_title=preferences.resolved_title,
+        footer=preferences.footer,
+    )
+
+
+@router.get("/telegram", response_model=TelegramSettingsResponse)
+async def telegram_settings(
+    request: Request, session: Session = Depends(database_session)
+) -> TelegramSettingsResponse:
+    return _telegram_response(request.app.state.server_settings, get_telegram_settings(session))
+
+
+@router.put(
+    "/telegram",
+    response_model=TelegramSettingsResponse,
+    dependencies=[Depends(require_commander_access)],
+)
+async def set_telegram_settings(
+    payload: TelegramSettingsUpdateRequest,
+    request: Request,
+    session: Session = Depends(database_session),
+) -> TelegramSettingsResponse:
+    preferences = update_telegram_settings(session, payload.model_dump())
+    return _telegram_response(request.app.state.server_settings, preferences)
+
+
+@router.post("/telegram/test", dependencies=[Depends(require_commander_access)])
+async def test_telegram(
+    request: Request, session: Session = Depends(database_session)
+) -> dict[str, bool]:
+    settings = request.app.state.server_settings
+    preferences = get_telegram_settings(session)
+    if not telegram_is_configured(settings):
+        raise HTTPException(status_code=503, detail="Telegram ist auf dem Server nicht konfiguriert")
+    sent = await send_telegram_alert(
+        settings,
+        AlertNotification(
+            "telegram-test", "active", "warning", "NCC Dashboard", "telegram-test",
+            "Dies ist eine Testnachricht aus den NCC-Einstellungen.",
+        ),
+        preferences,
+    )
+    if not sent:
+        raise HTTPException(status_code=502, detail="Telegram-Test konnte nicht zugestellt werden")
+    return {"sent": True}
 
 
 @router.get("/nodes/{node_id}", response_model=FleetNodeResponse)

@@ -182,6 +182,31 @@ class AlertPolicyUpdateRequest(AlertPolicyResponse):
         return value
 
 
+class TelegramSettingsResponse(BaseModel):
+    configured: bool
+    enabled: bool
+    warning_title: str
+    critical_title: str
+    resolved_title: str
+    footer: str
+
+
+class TelegramSettingsUpdateRequest(BaseModel):
+    enabled: bool
+    warning_title: str = Field(min_length=1, max_length=128)
+    critical_title: str = Field(min_length=1, max_length=128)
+    resolved_title: str = Field(min_length=1, max_length=128)
+    footer: str = Field(min_length=1, max_length=256)
+
+    @field_validator("warning_title", "critical_title", "resolved_title", "footer")
+    @classmethod
+    def normalize_text(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        if not normalized:
+            raise ValueError("Text darf nicht leer sein")
+        return normalized
+
+
 class FleetNodeRenameRequest(BaseModel):
     display_name: str = Field(min_length=1, max_length=128)
 

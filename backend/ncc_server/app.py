@@ -16,7 +16,7 @@ from ncc_server.alert_service import evaluate_alerts, mark_notified
 from ncc_server.api.v1 import router as v1_router
 from ncc_server.config import ServerSettings, get_server_settings
 from ncc_server.database import Database
-from ncc_server.telegram import send_telegram_alert
+from ncc_server.telegram import get_telegram_settings, send_telegram_alert
 from ncc_server.unraid_service import collect_unraid
 
 STATIC_DIR = Path(__file__).with_name("static")
@@ -90,8 +90,9 @@ async def _alert_loop(database: Database, settings: ServerSettings) -> None:
         try:
             with database.session() as session:
                 notifications = evaluate_alerts(session, settings)
+                telegram_settings = get_telegram_settings(session)
             for notification in notifications:
-                if await send_telegram_alert(settings, notification):
+                if telegram_settings.enabled and await send_telegram_alert(settings, notification, telegram_settings):
                     with database.session() as session:
                         mark_notified(session, notification.alert_id, notification.state)
         except Exception as exc:

@@ -165,6 +165,14 @@ type AlertPolicy = {
   gpu_threshold: number;
   disk_threshold: number;
 };
+type TelegramSettings = {
+  configured: boolean;
+  enabled: boolean;
+  warning_title: string;
+  critical_title: string;
+  resolved_title: string;
+  footer: string;
+};
 type ChatAttachment = { name: string; content_type: string; size: number; url: string };
 type ChatMessage = { message_id: string; sender_node_id: string | null; sender_name: string; body: string; body_format: "plain" | "markdown"; attachment: ChatAttachment | null; created_at: string };
 type ChatParticipant = { node_id: string; display_name: string; platform: string; online: boolean };
@@ -1735,6 +1743,10 @@ function SettingsPage({
   onToken,
   policy,
   onPolicy,
+  telegram,
+  onTelegram,
+  onTelegramTest,
+  canManageTelegram,
   canResetTraffic,
   onResetTraffic,
 }: {
@@ -1743,13 +1755,21 @@ function SettingsPage({
   onToken: () => void;
   policy: AlertPolicy | null;
   onPolicy: (policy: AlertPolicy) => Promise<void>;
+  telegram: TelegramSettings | null;
+  onTelegram: (settings: TelegramSettings) => Promise<void>;
+  onTelegramTest: () => Promise<void>;
+  canManageTelegram: boolean;
   canResetTraffic: boolean;
   onResetTraffic: () => Promise<void>;
 }) {
   const [draft, setDraft] = useState<AlertPolicy | null>(policy);
+  const [telegramDraft, setTelegramDraft] = useState<TelegramSettings | null>(telegram);
+  const [telegramMessage, setTelegramMessage] = useState("");
+  const [testingTelegram, setTestingTelegram] = useState(false);
   const [resettingTraffic, setResettingTraffic] = useState(false);
   const [trafficResetMessage, setTrafficResetMessage] = useState("");
   useEffect(() => setDraft(policy), [policy]);
+  useEffect(() => setTelegramDraft(telegram), [telegram]);
   return (
     <div className="settings-page">
       <section className="surface settings-card">
@@ -1848,6 +1868,25 @@ function SettingsPage({
           </form>
         )}
       </section>
+      {canManageTelegram && telegramDraft && <section className="surface settings-card telegram-settings-card">
+        <header className="section-head">
+          <div>
+            <span className="eyebrow">BENACHRICHTIGUNGEN</span>
+            <h2>Telegram</h2>
+          </div>
+          <Send size={19} />
+        </header>
+        <p>{telegramDraft.configured ? "Der Bot ist serverseitig verbunden. Zugangsdaten bleiben geschützt auf HorstNexus und sind hier nicht sichtbar." : "Telegram ist auf dem Server noch nicht eingerichtet. Bot-Token und Chat-ID müssen weiterhin sicher auf HorstNexus hinterlegt werden."}</p>
+        <form className="telegram-settings" onSubmit={(event) => { event.preventDefault(); setTelegramMessage(""); void onTelegram(telegramDraft).then(() => setTelegramMessage("Telegram-Einstellungen gespeichert.")).catch(() => setTelegramMessage("Speichern fehlgeschlagen.")); }}>
+          <label className="telegram-enabled"><input type="checkbox" checked={telegramDraft.enabled} onChange={(event) => setTelegramDraft({ ...telegramDraft, enabled: event.target.checked })} /><span><b>Telegram-Benachrichtigungen aktiv</b><small>Unterbricht den Versand, ohne Bot-Zugangsdaten zu verändern.</small></span></label>
+          <label>Überschrift · Warnung<input maxLength={128} value={telegramDraft.warning_title} onChange={(event) => setTelegramDraft({ ...telegramDraft, warning_title: event.target.value })} /></label>
+          <label>Überschrift · Kritisch<input maxLength={128} value={telegramDraft.critical_title} onChange={(event) => setTelegramDraft({ ...telegramDraft, critical_title: event.target.value })} /></label>
+          <label>Überschrift · Entwarnung<input maxLength={128} value={telegramDraft.resolved_title} onChange={(event) => setTelegramDraft({ ...telegramDraft, resolved_title: event.target.value })} /></label>
+          <label>Fußzeile<input maxLength={256} value={telegramDraft.footer} onChange={(event) => setTelegramDraft({ ...telegramDraft, footer: event.target.value })} /><small>Platzhalter: {"{version}"} und {"{time}"}.</small></label>
+          {telegramMessage && <small className="traffic-reset-message">{telegramMessage}</small>}
+          <div className="telegram-actions"><button className="primary" type="submit">Telegram speichern</button><button type="button" disabled={testingTelegram || !telegramDraft.configured} onClick={() => { setTestingTelegram(true); setTelegramMessage(""); void onTelegramTest().then(() => setTelegramMessage("Testnachricht wurde an Telegram gesendet.")).catch(() => setTelegramMessage("Telegram-Test fehlgeschlagen.")).finally(() => setTestingTelegram(false)); }}><Send size={15} /> {testingTelegram ? "Sende …" : "Testnachricht senden"}</button></div>
+        </form>
+      </section>}
       <section className="surface settings-card">
         <header className="section-head">
           <div>
@@ -2409,6 +2448,7 @@ function App() {
     [invitations, setInvitations] = useState<Invitation[]>([]),
     [alerts, setAlerts] = useState<AlertRecord[]>([]),
     [policy, setPolicy] = useState<AlertPolicy | null>(null),
+    [telegram, setTelegram] = useState<TelegramSettings | null>(null),
     [selectedId, setSelectedId] = useState(""),
     [points, setPoints] = useState<Telemetry[]>([]),
     [monthlyNetwork, setMonthlyNetwork] = useState<NetworkUsageSummary | null>(null);
@@ -2435,6 +2475,7 @@ function App() {
           nextInvitations,
           nextAlerts,
           nextPolicy,
+          nextTelegram,
           nextAccess,
         ] = await Promise.all([
           getJson<Node[]>("/api/v1/fleet/nodes", token),
@@ -2443,6 +2484,7 @@ function App() {
           getJson<Invitation[]>("/api/v1/agent-invitations", token),
           getJson<AlertRecord[]>("/api/v1/fleet/alerts", token),
           getJson<AlertPolicy>("/api/v1/fleet/alert-policy", token),
+          getJson<TelegramSettings>("/api/v1/fleet/telegram", token),
           getJson<DashboardAccess>("/api/v1/admin-codes/access", token),
         ]);
         setNodes(nextNodes);
@@ -2460,6 +2502,7 @@ function App() {
           return next;
         });
         setPolicy(nextPolicy);
+        setTelegram(nextTelegram);
         setAccessRole(nextAccess.access_role);
         setAuthenticated(true);
         setAuthError(false);
@@ -2562,6 +2605,28 @@ function App() {
     });
     if (!response.ok) throw new Error("REQUEST");
     setPolicy((await response.json()) as AlertPolicy);
+  };
+  const saveTelegram = async (nextTelegram: TelegramSettings) => {
+    const response = await fetch("/api/v1/fleet/telegram", {
+      method: "PUT",
+      headers: { ...headers(token), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        enabled: nextTelegram.enabled,
+        warning_title: nextTelegram.warning_title,
+        critical_title: nextTelegram.critical_title,
+        resolved_title: nextTelegram.resolved_title,
+        footer: nextTelegram.footer,
+      }),
+    });
+    if (!response.ok) throw new Error("REQUEST");
+    setTelegram((await response.json()) as TelegramSettings);
+  };
+  const testTelegram = async () => {
+    const response = await fetch("/api/v1/fleet/telegram/test", {
+      method: "POST",
+      headers: headers(token),
+    });
+    if (!response.ok) throw new Error("REQUEST");
   };
   const resetTrafficStatistics = async () => {
     const response = await fetch("/api/v1/fleet/network/reset", {
@@ -2687,7 +2752,7 @@ function App() {
         <footer>
           <ShieldCheck size={14} />
           <span>GESICHERTE VERBINDUNG</span>
-          <b>v0.5.0-beta.65</b>
+          <b>v0.5.0-beta.66</b>
         </footer>
       </aside>
       <div className="mobile-scrim" onClick={() => setSidebar(false)} />
@@ -2779,6 +2844,10 @@ function App() {
               onToken={() => setAuthenticated(false)}
               policy={policy}
               onPolicy={savePolicy}
+              telegram={telegram}
+              onTelegram={saveTelegram}
+              onTelegramTest={testTelegram}
+              canManageTelegram={canManageAccess}
               canResetTraffic={canManageAccess}
               onResetTraffic={resetTrafficStatistics}
             />

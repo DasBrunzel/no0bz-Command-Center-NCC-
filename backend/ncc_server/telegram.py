@@ -8,6 +8,8 @@ import httpx
 from ncc_server import __version__
 from ncc_server.alert_service import AlertNotification
 from ncc_server.config import ServerSettings
+from ncc_server.models import TelegramNotificationSettings, utc_now
+from sqlalchemy.orm import Session
 
 
 _KIND_LABELS = {
@@ -25,22 +27,60 @@ _KIND_LABELS = {
 }
 
 
-def format_telegram_alert(notification: AlertNotification, now: datetime | None = None) -> str:
+def telegram_is_configured(settings: ServerSettings) -> bool:
+    return bool(
+        settings.telegram_enabled
+        and settings.telegram_bot_token.get_secret_value()
+        and settings.telegram_chat_id.strip()
+    )
+
+
+def get_telegram_settings(session: Session) -> TelegramNotificationSettings:
+    preferences = session.get(TelegramNotificationSettings, "default")
+    if preferences is None:
+        preferences = TelegramNotificationSettings(id="default")
+        session.add(preferences)
+        session.commit()
+    return preferences
+
+
+def update_telegram_settings(
+    session: Session, values: dict[str, object]
+) -> TelegramNotificationSettings:
+    preferences = get_telegram_settings(session)
+    for name, value in values.items():
+        setattr(preferences, name, value)
+    preferences.updated_at = utc_now()
+    session.commit()
+    session.refresh(preferences)
+    return preferences
+
+
+def format_telegram_alert(
+    notification: AlertNotification,
+    preferences: TelegramNotificationSettings | None = None,
+    now: datetime | None = None,
+) -> str:
     """Render one concise, readable Telegram HTML notification."""
     timestamp = (now or datetime.now().astimezone()).strftime("%d.%m.%Y · %H:%M")
     resolved = notification.state == "resolved"
     if resolved:
-        heading = "✅ <b>NCC ENTWARNUNG</b>"
+        title = preferences.resolved_title if preferences else "NCC ENTWARNUNG"
+        heading = f"✅ <b>{escape(title)}</b>"
         priority = "Behoben"
     elif notification.severity == "critical":
-        heading = "🔴 <b>NCC KRITISCHE WARNUNG</b>"
+        title = preferences.critical_title if preferences else "NCC KRITISCHE WARNUNG"
+        heading = f"🔴 <b>{escape(title)}</b>"
         priority = "Kritisch"
     else:
-        heading = "🟠 <b>NCC WARNUNG</b>"
+        title = preferences.warning_title if preferences else "NCC WARNUNG"
+        heading = f"🟠 <b>{escape(title)}</b>"
         priority = "Warnung"
     event = _KIND_LABELS.get(notification.kind, notification.kind.replace("-", " ").title())
     prefix = f"{notification.node_name}: "
     detail = notification.message.removeprefix(prefix)
+    footer = preferences.footer if preferences else "NCC {version}"
+    footer = footer.replace("{version}", __version__).replace("{time}", timestamp)
     return "\n".join(
         (
             heading,
@@ -50,15 +90,19 @@ def format_telegram_alert(notification: AlertNotification, now: datetime | None 
             f"⚑ <b>Status:</b> {priority}",
             f"💬 {escape(detail)}",
             "",
-            f"🕒 {timestamp} · NCC {__version__}",
+            f"🕒 {escape(footer)}",
         )
     )
 
 
-async def send_telegram_alert(settings: ServerSettings, notification: AlertNotification) -> bool:
+async def send_telegram_alert(
+    settings: ServerSettings,
+    notification: AlertNotification,
+    preferences: TelegramNotificationSettings | None = None,
+) -> bool:
     token = settings.telegram_bot_token.get_secret_value()
     chat_id = settings.telegram_chat_id.strip()
-    if not settings.telegram_enabled or not token or not chat_id:
+    if not telegram_is_configured(settings):
         return False
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -66,7 +110,7 @@ async def send_telegram_alert(settings: ServerSettings, notification: AlertNotif
                 f"https://api.telegram.org/bot{token}/sendMessage",
                 json={
                     "chat_id": chat_id,
-                    "text": format_telegram_alert(notification),
+                    "text": format_telegram_alert(notification, preferences),
                     "parse_mode": "HTML",
                     "disable_web_page_preview": True,
                 },

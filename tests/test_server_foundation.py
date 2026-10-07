@@ -55,6 +55,7 @@ def test_foundation_metadata_contains_persistent_entities() -> None:
         "fleet_groups",
         "nodes",
         "telemetry_points",
+        "telegram_notification_settings",
         "traffic_statistics_settings",
         "users",
     }

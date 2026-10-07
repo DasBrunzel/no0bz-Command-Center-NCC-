@@ -200,6 +200,20 @@ class AlertPolicy(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
 
+class TelegramNotificationSettings(Base):
+    """Dashboard-editable presentation preferences; credentials stay in server.env."""
+
+    __tablename__ = "telegram_notification_settings"
+
+    id: Mapped[str] = mapped_column(String(16), primary_key=True, default="default")
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    warning_title: Mapped[str] = mapped_column(String(128), nullable=False, default="NCC WARNUNG")
+    critical_title: Mapped[str] = mapped_column(String(128), nullable=False, default="NCC KRITISCHE WARNUNG")
+    resolved_title: Mapped[str] = mapped_column(String(128), nullable=False, default="NCC ENTWARNUNG")
+    footer: Mapped[str] = mapped_column(String(256), nullable=False, default="NCC {version}")
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
 class TrafficStatisticsSettings(Base):
     """The manual start marker for the visible fleet traffic period."""
 
