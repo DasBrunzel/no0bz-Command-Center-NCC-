@@ -1,5 +1,9 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+use serde::Deserialize;
+use std::collections::BTreeMap;
+use std::fs;
+use std::path::Path;
 
 /// Stable, unambiguous metadata bound to a staged release archive.
 ///
@@ -33,6 +37,30 @@ pub fn verify_release_signature(
         &signature,
     )
     .map_err(|_| "release signature verification failed".to_owned())
+}
+
+#[derive(Deserialize)]
+struct TrustedKeys {
+    keys: BTreeMap<String, String>,
+}
+
+pub fn verify_trusted_release_signature(
+    core_root: &Path,
+    key_id: &str,
+    version: &str,
+    sha256: &str,
+    size_bytes: u64,
+    signature_base64: &str,
+) -> Result<(), String> {
+    let path = core_root.join("config").join("trusted-keys.json");
+    let raw = fs::read(path).map_err(|_| "trusted key configuration is unavailable")?;
+    let trusted: TrustedKeys =
+        serde_json::from_slice(&raw).map_err(|_| "invalid trusted key configuration")?;
+    let public_key = trusted
+        .keys
+        .get(key_id)
+        .ok_or("release key is not trusted")?;
+    verify_release_signature(version, sha256, size_bytes, public_key, signature_base64)
 }
 
 #[cfg(test)]

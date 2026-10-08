@@ -3,6 +3,7 @@ mod signature;
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use signature::verify_trusted_release_signature;
 use std::env;
 use std::fs;
 use std::io::Read;
@@ -104,6 +105,8 @@ fn stage(root: &Path, args: &[String]) -> Result<()> {
     let version = valid_version(&value(args, "--version")?)?;
     let expected_hash = value(args, "--sha256")?.to_ascii_lowercase();
     let expected_size: u64 = value(args, "--size")?.parse().map_err(display)?;
+    let key_id = value(args, "--key-id")?;
+    let signature = value(args, "--signature")?;
     let source = PathBuf::from(source);
     let metadata = fs::metadata(&source).map_err(display)?;
     if metadata.len() != expected_size {
@@ -116,6 +119,7 @@ fn stage(root: &Path, args: &[String]) -> Result<()> {
     {
         return Err("artifact SHA-256 does not match manifest".to_owned());
     }
+    verify_trusted_release_signature(root, &key_id, &version, &hash, expected_size, &signature)?;
     let destination = root.join("payloads").join(version).join("payload.archive");
     let parent = destination.parent().ok_or("payload path has no parent")?;
     fs::create_dir_all(parent).map_err(display)?;
@@ -240,12 +244,48 @@ fn display(error: impl std::fmt::Display) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
+    use ed25519_dalek::{Signer, SigningKey};
     use std::fs;
 
     fn args(root: &Path, rest: &[&str]) -> Vec<String> {
         let mut result = vec!["--state-dir".to_owned(), root.display().to_string()];
         result.extend(rest.iter().map(|value| (*value).to_owned()));
         result
+    }
+
+    fn stage_args(root: &Path, source: &Path, version: &str, hash: &str, size: u64) -> Vec<String> {
+        let signing_key = SigningKey::from_bytes(&[9_u8; 32]);
+        let public_key = STANDARD.encode(signing_key.verifying_key().as_bytes());
+        let config = root.join("config");
+        fs::create_dir_all(&config).unwrap();
+        fs::write(
+            config.join("trusted-keys.json"),
+            format!(r#"{{"keys":{{"test-key":"{public_key}"}}}}"#),
+        )
+        .unwrap();
+        let signature = STANDARD.encode(
+            signing_key
+                .sign(signature::release_statement(version, hash, size).as_bytes())
+                .to_bytes(),
+        );
+        vec![
+            "--state-dir".to_owned(),
+            root.display().to_string(),
+            "stage".to_owned(),
+            "--source".to_owned(),
+            source.display().to_string(),
+            "--version".to_owned(),
+            version.to_owned(),
+            "--sha256".to_owned(),
+            hash.to_owned(),
+            "--size".to_owned(),
+            size.to_string(),
+            "--key-id".to_owned(),
+            "test-key".to_owned(),
+            "--signature".to_owned(),
+            signature,
+        ]
     }
 
     #[test]
@@ -255,21 +295,7 @@ mod tests {
         fs::create_dir_all(&root).unwrap();
         fs::write(&source, b"first").unwrap();
         let hash = sha256(&source).unwrap();
-        run(args(
-            &root,
-            &[
-                "stage",
-                "--source",
-                &source.display().to_string(),
-                "--version",
-                "0.6.0-beta.1",
-                "--sha256",
-                &hash,
-                "--size",
-                "5",
-            ],
-        ))
-        .unwrap();
+        run(stage_args(&root, &source, "0.6.0-beta.1", &hash, 5)).unwrap();
         run(args(&root, &["activate", "--version", "0.6.0-beta.1"])).unwrap();
         run(args(
             &root,
@@ -278,21 +304,7 @@ mod tests {
         .unwrap();
         fs::write(&source, b"second").unwrap();
         let hash = sha256(&source).unwrap();
-        run(args(
-            &root,
-            &[
-                "stage",
-                "--source",
-                &source.display().to_string(),
-                "--version",
-                "0.6.0-beta.2",
-                "--sha256",
-                &hash,
-                "--size",
-                "6",
-            ],
-        ))
-        .unwrap();
+        run(stage_args(&root, &source, "0.6.0-beta.2", &hash, 6)).unwrap();
         run(args(&root, &["activate", "--version", "0.6.0-beta.2"])).unwrap();
         run(args(
             &root,
