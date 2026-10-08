@@ -62,6 +62,16 @@ class ManagedProcess:
         process = self.process
         if process is None or process.poll() is not None:
             return
+        if sys.platform == "win32":
+            # Core owns its payload child. SCM terminates only the direct Core
+            # process, so terminate its process tree to avoid orphaned payloads.
+            subprocess.run(
+                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                check=False,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+            return
         process.terminate()
         try:
             process.wait(timeout=15)
