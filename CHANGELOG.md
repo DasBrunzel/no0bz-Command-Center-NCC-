@@ -4,6 +4,24 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.6.0-beta.1] - 2026-10-08
+
+### Added
+
+- Neuer, noch nicht installierter Rust-Prototyp `ncc-core` für NCC 0.6.
+- Sichere Zustandsmaschine für Payload-Staging, Aktivierung, Health-Prüfung und
+  automatischen Rollback auf die vorherige Payload-Version.
+- SHA-256- und Ed25519-Prüfung für Release-Artefakte; Staging akzeptiert nur
+  Signaturen lokal vertrauenswürdiger Public Keys.
+- Geheimnisfreier lokaler Health-Vertrag für Payloads sowie ein harmloser
+  Test-Payload für künftige Core-/Rollback-Tests.
+
+### Changed
+
+- Entwicklungszweig und Python-Paketversion auf `0.6.0-beta.1` angehoben.
+- NCC 0.5-Server, bestehende Agenten, Pairings und Produktivinstallationen werden
+  durch die 0.6-Vorarbeit nicht gestartet, ersetzt oder migriert.
+
 ## [0.5.0-beta.70] - 2026-10-08
 
 ### Fixed

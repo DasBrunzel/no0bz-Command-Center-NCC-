@@ -1,12 +1,15 @@
 # no0bz Command Center (NCC)
 
-![Version](https://img.shields.io/badge/version-0.5.0--beta.70-ff334f)
+![Version](https://img.shields.io/badge/version-0.6.0--beta.1-ff334f)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776ab)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 Real-Time System Monitor & Local Sync Hub (Python/FastAPI + React).
 
-> **NCC 0.5 befindet sich im Beta-Test.** Die aktuelle Version `0.5.0-beta.70`
+> **NCC 0.6 befindet sich in der Beta-Vorbereitung.** Die aktuelle Entwicklungs-
+> version `0.6.0-beta.1` ergänzt NCC 0.5 um einen isolierten, kompilierten Core.
+> Der produktive Server und die bestehenden Agenten bleiben vorerst auf dem
+> bewährten 0.5-Pfad.
 > besteht aus einem dauerhaft laufenden Server, GUI-losen Windows-/Linux-Agenten,
 > einer Unraid-API-Integration und einer gemeinsamen Fleet-Weboberfläche. Die
 > NCC-0.4-Starter bleiben ausschließlich als Kompatibilitätsschicht erhalten.
