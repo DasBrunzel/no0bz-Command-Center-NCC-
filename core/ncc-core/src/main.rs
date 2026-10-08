@@ -269,6 +269,18 @@ fn extract_payload(root: &Path, version: &str) -> Result<()> {
             fs::create_dir_all(parent).map_err(display)?;
             let mut target = fs::File::create(destination).map_err(display)?;
             std::io::copy(&mut entry, &mut target).map_err(display)?;
+            // ZIP does not automatically restore executable bits.  Preserve a
+            // payload's Unix mode so the same signed archive format can run
+            // under systemd on Linux as well as under Windows.
+            #[cfg(unix)]
+            if let Some(mode) = entry.unix_mode() {
+                use std::os::unix::fs::PermissionsExt;
+                fs::set_permissions(
+                    temporary.join(enclosed),
+                    fs::Permissions::from_mode(mode),
+                )
+                .map_err(display)?;
+            }
         }
     }
     if !temporary.join("payload.json").is_file() {

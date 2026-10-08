@@ -1,0 +1,21 @@
+[Unit]
+Description=no0bz Command Center Core
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ncc
+Group=ncc
+EnvironmentFile=/etc/ncc/core.env
+ExecStart=/opt/no0bz/ncc/core/ncc-core service
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/ncc-core /var/lib/ncc-agent
+
+[Install]
+WantedBy=multi-user.target
