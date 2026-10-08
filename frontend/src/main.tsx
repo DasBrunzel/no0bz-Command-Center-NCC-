@@ -752,7 +752,7 @@ function OrbitDashboard({
         <article className="orbit-stat gpu"><MonitorCog size={18} /><span>GRAPHICS</span><strong>{num(gpu.percent).toFixed(0)}%</strong><small>{gpu.name || "Keine GPU-Daten"}</small></article>
         <article className="orbit-network">
           <header><Network size={17} /><span>DATENSTROM</span><b>↓ {num(network.download_mbps).toFixed(1)} · ↑ {num(network.upload_mbps).toFixed(1)} Mbps</b></header>
-          <Sparkline points={points} metric={(point) => num(point.network?.download_mbps)} maxValue={Math.max(10, ...points.map((point) => num(point.metrics.network?.download_mbps)))} color="var(--blue)" />
+          <Sparkline points={points} metric={(point) => num(point.metrics.network?.download_mbps)} maxValue={Math.max(10, ...points.map((point) => num(point.metrics.network?.download_mbps)))} color="var(--blue)" />
           <small>{monthlyNetwork?.available ? `Monat: ${metric(monthlyNetwork.received_bytes / 1024 ** 3, 1)} GB empfangen · ${metric(monthlyNetwork.sent_bytes / 1024 ** 3, 1)} GB gesendet` : "Monatsverkehr wird aufgebaut"}</small>
         </article>
         <article className="orbit-disks">
@@ -797,8 +797,8 @@ function BlueprintDashboard({
         </div>
         <article className="blueprint-network">
           <header><Network size={18} /><span>NETWORK ROUTE</span><b>{network.interface || "Automatisch"}</b></header>
-          <div><span>DOWN <strong>{num(network.download_mbps).toFixed(1)} Mbps</strong></span><Sparkline points={points} metric={(point) => num(point.network?.download_mbps)} maxValue={Math.max(10, ...points.map((point) => num(point.metrics.network?.download_mbps)))} color="var(--blue)" /></div>
-          <div><span>UP <strong>{num(network.upload_mbps).toFixed(1)} Mbps</strong></span><Sparkline points={points} metric={(point) => num(point.network?.upload_mbps)} maxValue={Math.max(10, ...points.map((point) => num(point.metrics.network?.upload_mbps)))} color="var(--purple)" /></div>
+          <div><span>DOWN <strong>{num(network.download_mbps).toFixed(1)} Mbps</strong></span><Sparkline points={points} metric={(point) => num(point.metrics.network?.download_mbps)} maxValue={Math.max(10, ...points.map((point) => num(point.metrics.network?.download_mbps)))} color="var(--blue)" /></div>
+          <div><span>UP <strong>{num(network.upload_mbps).toFixed(1)} Mbps</strong></span><Sparkline points={points} metric={(point) => num(point.metrics.network?.upload_mbps)} maxValue={Math.max(10, ...points.map((point) => num(point.metrics.network?.upload_mbps)))} color="var(--purple)" /></div>
           <footer>{monthlyNetwork?.available ? `${metric(monthlyNetwork.received_bytes / 1024 ** 3, 1)} GB ↓ / ${metric(monthlyNetwork.sent_bytes / 1024 ** 3, 1)} GB ↑ in diesem Monat` : "Monatszähler wird aufgebaut"}</footer>
         </article>
         <div className="blueprint-lower">
@@ -833,7 +833,7 @@ function StudioDashboard({
         <article className="studio-feature"><span>CPU LOAD</span><strong>{num(cpu.percent).toFixed(0)}<small>%</small></strong><p>{typeof cpu.temperature_c === "number" ? `${metric(cpu.temperature_c, 0)} °C aktuell` : "Temperatur nicht verfügbar"}</p><div className="studio-bars">{Array.isArray(cpu.per_core) && cpu.per_core.slice(0, 16).map((value: unknown, index: number) => <i key={index} style={{ height: `${Math.max(8, num(value))}%` }} />)}</div></article>
         <article className="studio-feature memory"><span>MEMORY</span><strong>{num(memory.percent).toFixed(0)}<small>%</small></strong><p>{metric(memory.used_gb)} GB von {metric(memory.total_gb)} GB genutzt</p><div className="studio-meter"><i style={{ width: `${Math.min(100, num(memory.percent))}%` }} /></div></article>
         <article className="studio-feature graphics"><span>GRAPHICS</span><strong>{num(gpu.percent).toFixed(0)}<small>%</small></strong><p>{gpu.name || "Keine GPU-Telemetrie"}</p><div className="studio-meter"><i style={{ width: `${Math.min(100, num(gpu.percent))}%` }} /></div></article>
-        <article className="studio-traffic"><header><span>NETWORK STORY</span><b>↓ {num(network.download_mbps).toFixed(1)} Mbps</b></header><Sparkline points={points} metric={(point) => num(point.network?.download_mbps)} maxValue={Math.max(10, ...points.map((point) => num(point.metrics.network?.download_mbps)))} color="var(--blue)" /><footer>{monthlyNetwork?.available ? `${metric(monthlyNetwork.received_bytes / 1024 ** 3, 1)} GB diesen Monat empfangen` : "Verkehr wird erfasst"}</footer></article>
+        <article className="studio-traffic"><header><span>NETWORK STORY</span><b>↓ {num(network.download_mbps).toFixed(1)} Mbps</b></header><Sparkline points={points} metric={(point) => num(point.metrics.network?.download_mbps)} maxValue={Math.max(10, ...points.map((point) => num(point.metrics.network?.download_mbps)))} color="var(--blue)" /><footer>{monthlyNetwork?.available ? `${metric(monthlyNetwork.received_bytes / 1024 ** 3, 1)} GB diesen Monat empfangen` : "Verkehr wird erfasst"}</footer></article>
         <article className="studio-library"><header><HardDrive size={17} /><span>DEVICE LIBRARY</span></header>{(m.disks || []).slice(0, 4).map((disk: Metrics, index: number) => <div key={`${disk.mount}-${index}`}><b>{disk.mount || disk.name || `Disk ${index + 1}`}</b><span>{num(disk.percent).toFixed(0)}% belegt</span><i><em style={{ width: `${Math.min(100, num(disk.percent))}%` }} /></i></div>)}{!(m.disks || []).length && <p>Keine Laufwerksdaten</p>}</article>
       </div>
     </section>
@@ -1159,7 +1159,7 @@ function NodeOverview({
               <small>DOWNLOAD-VERLAUF <b>↓ {num(network.download_mbps).toFixed(1)} Mbps</b></small>
               <Sparkline
                 points={points}
-                metric={(point) => num(point.network?.download_mbps)}
+                metric={(point) => num(point.metrics.network?.download_mbps)}
                 maxValue={Math.max(10, ...points.map((point) => num(point.metrics.network?.download_mbps)))}
                 color="var(--blue)"
               />
@@ -1168,7 +1168,7 @@ function NodeOverview({
               <small>UPLOAD-VERLAUF <b>↑ {num(network.upload_mbps).toFixed(1)} Mbps</b></small>
               <Sparkline
                 points={points}
-                metric={(point) => num(point.network?.upload_mbps)}
+                metric={(point) => num(point.metrics.network?.upload_mbps)}
                 maxValue={Math.max(10, ...points.map((point) => num(point.metrics.network?.upload_mbps)))}
                 color="var(--purple)"
               />
@@ -2752,7 +2752,7 @@ function App() {
         <footer>
           <ShieldCheck size={14} />
           <span>GESICHERTE VERBINDUNG</span>
-          <b>v0.5.0-beta.67</b>
+          <b>v0.5.0-beta.68</b>
         </footer>
       </aside>
       <div className="mobile-scrim" onClick={() => setSidebar(false)} />

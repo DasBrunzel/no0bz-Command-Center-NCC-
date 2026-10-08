@@ -4,6 +4,14 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.5.0-beta.68] - 2026-10-08
+
+### Fixed
+
+- Alle Netzwerkdiagramme lesen Telemetrie wieder korrekt aus `metrics.network`.
+  Verläufe für Download und Upload werden dadurch je ausgewähltem Gerät
+  angezeigt, statt leer oder mit Nullwerten zu erscheinen.
+
 ## [0.5.0-beta.67] - 2026-10-08
 
 ### Fixed
