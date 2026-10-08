@@ -22,6 +22,9 @@ $config = Join-Path $configRoot "core.env"
 & icacls.exe $config /inheritance:r /grant:r '*S-1-5-18:F' '*S-1-5-32-544:F' | Out-Null
 $python = Join-Path $root "venv\Scripts\python.exe"
 if (-not (Test-Path $python)) { throw "NCC Dienst-Python fehlt: $python" }
+$projectRoot = Split-Path -Parent $PSScriptRoot
+& $python -m pip install --upgrade $projectRoot
+if ($LASTEXITCODE -ne 0) { throw "NCC Dienstumgebung konnte nicht auf die Core-Version aktualisiert werden." }
 $existing = Get-Service NccCore -ErrorAction SilentlyContinue
 & $python -m ncc_service.windows core --startup auto $(if ($existing) { "update" } else { "install" })
 if ($LASTEXITCODE -ne 0) { throw "NccCore konnte nicht registriert werden." }

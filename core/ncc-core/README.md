@@ -1,19 +1,18 @@
-# ncc-core (0.6-Prototyp)
+# ncc-core (0.6)
 
-Der Rust-Prototyp implementiert ausschließlich die lokale Update-Zustandsmaschine:
-Artefakt mit SHA-256 prüfen, in einen versionsbezogenen Ordner stagen, aktivieren und
-bei einem fehlenden Health-Signal zurückrollen. Er ist **noch kein Windows-Dienst**
-und wird von NCC 0.5 nicht gestartet.
+Der Rust-Core implementiert die lokale Update-Zustandsmaschine: Ein signiertes
+Payload-Archiv wird per SHA-256 und Ed25519 geprüft, sicher in ein
+versionsbezogenes Verzeichnis entpackt, bewusst aktiviert und beim fehlenden
+Health-Signal zurückgerollt. Der separate Windows-Dienst heißt `NccCore`; er
+startet ausschließlich einen zuvor aktivierten Payload und ersetzt den
+bestehenden NCC-0.5-Agenten nicht.
 
 ```powershell
 cargo test --manifest-path core/ncc-core/Cargo.toml
 ```
 
-Der Prototyp enthält bereits die Ed25519-Prüflogik für einen exakt an Version,
-SHA-256 und Größe gebundenen Release-Statement. Als Nächstes wird sie an den
-Staging-Befehl und eine vertrauenswürdige Public-Key-Liste gebunden. Private
-Signaturschlüssel gehören nicht in dieses Repository und werden erst vor einem
-veröffentlichten 0.6-Release eingerichtet.
+Die Ed25519-Prüfung ist an Version, SHA-256 und Artefaktgröße gebunden. Private
+Signaturschlüssel gehören nie in dieses Repository.
 
 Ein Payload meldet seinen erfolgreichen Start künftig über eine lokale,
 geheimnisfreie Datei mit folgendem Inhalt an Core:
@@ -23,4 +22,9 @@ geheimnisfreie Datei mit folgendem Inhalt an Core:
 ```
 
 Nur die aktive Version mit Status `ready` gilt als gesund; jede andere Antwort führt
-nach Ablauf des späteren 90-Sekunden-Fensters zum Rollback.
+nach Ablauf des konfigurierten Zeitfensters zum Rollback.
+
+Für die erste, parallele und harmlose Windows-Abnahme existiert
+`scripts/start_ncc_core_test_migration.ps1`. Es installiert nur `NccCore` und einen
+lokalen Test-Payload. Der NCC-0.5-Agent, seine Konfiguration, Pairing-Daten und
+Telemetrie bleiben unangetastet.

@@ -7,10 +7,16 @@ use std::time::{Duration, Instant};
 
 /// Starts an already staged payload without a shell. Core will later supply only
 /// a release-local executable and fixed arguments.
-pub fn start(executable: &Path, arguments: &[String], state_dir: &Path) -> Result<Child, String> {
+pub fn start(
+    executable: &Path,
+    arguments: &[String],
+    state_dir: &Path,
+    version: &str,
+) -> Result<Child, String> {
     Command::new(executable)
         .args(arguments)
         .env("NCC_CORE_STATE_DIR", state_dir)
+        .env("NCC_TEST_PAYLOAD_VERSION", version)
         .spawn()
         .map_err(|error| format!("could not start payload: {error}"))
 }

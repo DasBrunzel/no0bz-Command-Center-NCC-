@@ -122,13 +122,22 @@ fn run_payload(root: &Path, args: &[String]) -> Result<()> {
             provided
         }
     };
-    let mut child = payload::start(&executable, &arguments, &state_dir)?;
+    let mut child = payload::start(&executable, &arguments, &state_dir, &version)?;
     let ready = payload::wait_for_ready(
         &state_dir,
         &version,
         std::time::Duration::from_secs(timeout),
     )?;
     if ready {
+        report_health(
+            root,
+            &[
+                "--version".to_owned(),
+                version.clone(),
+                "--healthy".to_owned(),
+                "true".to_owned(),
+            ],
+        )?;
         let status = child.wait().map_err(display)?;
         return Err(format!("payload exited after readiness: {status}"));
     }
