@@ -21,7 +21,7 @@ MAX_BACKOFF_SECONDS = 60.0
 
 
 class AgentRunner:
-    def __init__(self, settings: AgentSettings) -> None:
+    def __init__(self, settings: AgentSettings, *, agent_version: str | None = None) -> None:
         self.settings = settings
         self.machine_id = load_or_create_machine_id(settings.data_dir)
         self.buffer = TelemetryBuffer(
@@ -40,7 +40,10 @@ class AgentRunner:
             settings.collection_interval_seconds,
             self.machine_id,
         )
-        self.client = AgentClient(settings, self.machine_id, self.buffer)
+        self.client = AgentClient(
+            settings, self.machine_id, self.buffer,
+            **({"agent_version": agent_version} if agent_version else {}),
+        )
         saved_token = load_token(settings.data_dir)
         if saved_token:
             self.client.set_token(saved_token)

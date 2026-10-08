@@ -32,7 +32,7 @@ def _write_health(status: str) -> None:
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    runner = AgentRunner(AgentSettings())
+    runner = AgentRunner(AgentSettings(), agent_version=__version__)
 
     def stop_payload(*_: object) -> None:
         _write_health("stopping")

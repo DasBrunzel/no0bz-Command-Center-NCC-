@@ -147,7 +147,7 @@ def _active_alerts(
 ) -> list[tuple[str, str, str]]:
     name = node.display_name
     alerts: list[tuple[str, str, str]] = []
-    if not is_online(node, settings.node_offline_after_seconds):
+    if not is_online(node, settings.node_offline_after_seconds) and not _physical_device_online(session, node, settings):
         return [("offline", "critical", f"{name} ist offline.")]
     cpu = _number(_nested(metrics, "cpu", "percent"))
     memory = _number(_nested(metrics, "memory", "percent"))
@@ -164,6 +164,15 @@ def _active_alerts(
     _unraid_alerts(node, metrics, alerts)
     _agent_health_alerts(session, node, latest, settings, alerts)
     return alerts
+
+
+def _physical_device_online(session: Session, node: Node, settings: ServerSettings) -> bool:
+    if not node.physical_device_id:
+        return False
+    siblings = session.scalars(
+        select(Node).where(Node.physical_device_id == node.physical_device_id, Node.id != node.id)
+    ).all()
+    return any(is_online(sibling, settings.node_offline_after_seconds) for sibling in siblings)
 
 
 def _gaming_mode_active(node: Node) -> bool:

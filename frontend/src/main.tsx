@@ -72,6 +72,8 @@ type Node = {
   gaming_mode_until: string | null;
   fleet_group_id: string;
   fleet_position: number;
+  physical_device_id: string | null;
+  physical_device_name: string | null;
   latest: Telemetry | null;
 };
 type FleetGroup = { group_id: string; name: string; position: number };
@@ -511,9 +513,16 @@ function Fleet({
       .toLowerCase()
       .includes(query.toLowerCase()),
   );
+  const representativeNodes = (source: Node[]) => Array.from(source.reduce((result, node) => {
+    const key = node.physical_device_id || node.node_id;
+    const current = result.get(key);
+    // A dualboot machine appears once. Prefer the currently running OS.
+    if (!current || (node.online && !current.online)) result.set(key, node);
+    return result;
+  }, new Map<string, Node>()).values());
   const grouped = groups.map((group) => ({
     ...group,
-    nodes: filtered.filter((node) => node.fleet_group_id === group.group_id).sort((left, right) => left.fleet_position - right.fleet_position || left.display_name.localeCompare(right.display_name, "de")),
+    nodes: representativeNodes(filtered.filter((node) => node.fleet_group_id === group.group_id)).sort((left, right) => left.fleet_position - right.fleet_position || left.display_name.localeCompare(right.display_name, "de")),
   }));
   const fullGrouped = groups.map((group) => ({
     ...group,
@@ -583,7 +592,7 @@ function Fleet({
                     <Server size={17} />
                   </div>
                   <div className="node-copy">
-                    <strong>{node.display_name}</strong>
+                    <strong>{node.physical_device_name || node.display_name}</strong>
                     <span>{node.platform} · {node.agent_version || "Agent unbekannt"}</span>
                     {node.access_role === "beta_tester" && <small className="fleet-beta-badge">BETA-TESTER</small>}
                     {!!node.gaming_mode_until && new Date(node.gaming_mode_until).getTime() > Date.now() && (

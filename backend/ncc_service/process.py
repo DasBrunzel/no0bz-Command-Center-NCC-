@@ -68,3 +68,32 @@ class ManagedProcess:
         except subprocess.TimeoutExpired:
             process.kill()
             process.wait(timeout=5)
+
+
+class ManagedExecutable(ManagedProcess):
+    """Service-hosted, non-shell executable with configuration-file environment."""
+
+    def __init__(self, executable: Path, arguments: list[str], config_path: Path, log_path: Path) -> None:
+        super().__init__("", config_path, log_path)
+        self.executable = executable
+        self.arguments = arguments
+
+    def run(self) -> int:
+        environment = load_environment_file(self.config_path)
+        self.log_path.parent.mkdir(parents=True, exist_ok=True)
+        if not self.executable.is_file():
+            raise FileNotFoundError(f"NCC executable missing: {self.executable}")
+        creation_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        with self.log_path.open("ab", buffering=0) as output:
+            self.process = subprocess.Popen(  # noqa: S603 - installer-owned executable only
+                [str(self.executable), *self.arguments], stdin=subprocess.DEVNULL,
+                stdout=output, stderr=subprocess.STDOUT, env=environment,
+                creationflags=creation_flags,
+            )
+            while not self.stop_event.wait(0.5):
+                code = self.process.poll()
+                if code is not None:
+                    logging.error("NCC executable exited with code %d", code)
+                    return code
+            self._terminate()
+            return 0

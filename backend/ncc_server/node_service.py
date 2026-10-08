@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ncc_server.models import AgentToken, AuditEvent, Node, TelemetryPoint, utc_now
+from ncc_server.models import AgentToken, AuditEvent, Node, PhysicalDevice, TelemetryPoint, utc_now
 from ncc_server.schemas import (
     NodeEnrollmentRequest,
     NodeHeartbeatRequest,
@@ -79,6 +79,7 @@ def enroll_node(
     node.access_role = token.access_role
     node.agent_version = payload.agent_version
     node.metadata_json = dict(payload.metadata)
+    _sync_physical_device(session, node, payload.metadata)
     node.last_seen_at = now
     node.updated_at = now
     token.last_used_at = now
@@ -102,6 +103,7 @@ def record_heartbeat(
     now = utc_now()
     node.agent_version = payload.agent_version
     node.metadata_json = dict(payload.metadata)
+    _sync_physical_device(session, node, payload.metadata)
     node.last_seen_at = now
     node.updated_at = now
     token.last_used_at = now
@@ -239,3 +241,16 @@ def _bound_node(session: Session, token: AgentToken) -> Node:
     if node is None:
         raise TokenNotEnrolledError
     return node
+
+
+def _sync_physical_device(session: Session, node: Node, metadata: dict[str, object]) -> None:
+    """Link dual-boot agents by a privacy-preserving hardware fingerprint."""
+    fingerprint = metadata.get("hardware_fingerprint")
+    if not isinstance(fingerprint, str) or len(fingerprint) != 64:
+        return
+    device = session.scalar(select(PhysicalDevice).where(PhysicalDevice.hardware_fingerprint == fingerprint))
+    if device is None:
+        device = PhysicalDevice(display_name=node.display_name, hardware_fingerprint=fingerprint)
+        session.add(device)
+        session.flush()
+    node.physical_device_id = device.id

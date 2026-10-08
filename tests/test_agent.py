@@ -85,11 +85,14 @@ def test_agent_enrolls_and_flushes_buffer_without_exposing_token(tmp_path: Path)
         "ncc-12345678-1234-4234-8234-123456789abc",
         buffer,
         transport=httpx.MockTransport(handler),
+        agent_version="0.6.0-beta.1",
     )
 
     assert client.enroll() == 14
     client.heartbeat()
     assert client.flush() == 1
+    assert json.loads(requests[0].content)["agent_version"] == "0.6.0-beta.1"
+    assert json.loads(requests[1].content)["agent_version"] == "0.6.0-beta.1"
     assert buffer.count() == 0
     assert all(request.headers["authorization"] == "Bearer ncc_agent_super-secret" for request in requests)
     assert "super-secret" not in repr(settings)

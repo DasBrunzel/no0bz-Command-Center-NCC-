@@ -57,9 +57,31 @@ fn run(args: Vec<String>) -> Result<()> {
         "activate" => activate(&state_dir, &remaining[1..])?,
         "health" => report_health(&state_dir, &remaining[1..])?,
         "run-payload" => run_payload(&state_dir, &remaining[1..])?,
+        "service" => run_service(&state_dir)?,
         _ => return Err("expected status, stage, activate, health or run-payload".to_owned()),
     }
     Ok(())
+}
+
+/// Windows/systemd hosts invoke this fixed command.  Its inputs are environment
+/// variables from a local ACL-protected config file; it never evaluates a shell.
+fn run_service(root: &Path) -> Result<()> {
+    let executable = env::var("NCC_CORE_PAYLOAD_EXECUTABLE")
+        .map_err(|_| "NCC_CORE_PAYLOAD_EXECUTABLE is required".to_owned())?;
+    let version = env::var("NCC_CORE_PAYLOAD_VERSION")
+        .map_err(|_| "NCC_CORE_PAYLOAD_VERSION is required".to_owned())?;
+    let timeout = env::var("NCC_CORE_HEALTH_TIMEOUT_SECONDS").unwrap_or_else(|_| "30".to_owned());
+    run_payload(
+        root,
+        &[
+            "--version".to_owned(),
+            version,
+            "--executable".to_owned(),
+            executable,
+            "--timeout-seconds".to_owned(),
+            timeout,
+        ],
+    )
 }
 
 fn run_payload(root: &Path, args: &[String]) -> Result<()> {
@@ -70,14 +92,20 @@ fn run_payload(root: &Path, args: &[String]) -> Result<()> {
     if state.active_payload.as_deref() != Some(&version) {
         return Err("payload version is not active".to_owned());
     }
-    let mut child = payload::start(&executable, &[])?;
+    let state_dir = root.join("state");
+    let health_file = state_dir.join("payload-health.json");
+    // A health record is only valid for the process launched below.
+    let _ = fs::remove_file(&health_file);
+    let arguments = values(args, "--argument");
+    let mut child = payload::start(&executable, &arguments, &state_dir)?;
     let ready = payload::wait_for_ready(
-        &root.join("state"),
+        &state_dir,
         &version,
         std::time::Duration::from_secs(timeout),
     )?;
     if ready {
-        return Ok(());
+        let status = child.wait().map_err(display)?;
+        return Err(format!("payload exited after readiness: {status}"));
     }
     let _ = child.kill();
     report_health(
@@ -91,8 +119,15 @@ fn run_payload(root: &Path, args: &[String]) -> Result<()> {
     )
 }
 
+fn values(args: &[String], key: &str) -> Vec<String> {
+    args.windows(2)
+        .filter(|pair| pair[0] == key)
+        .map(|pair| pair[1].clone())
+        .collect()
+}
+
 fn parse_state_dir(args: Vec<String>) -> Result<(PathBuf, Vec<String>)> {
-    let mut state_dir = None;
+    let mut state_dir = env::var_os("NCC_CORE_STATE_DIR").map(PathBuf::from);
     let mut remaining = Vec::new();
     let mut values = args.into_iter();
     while let Some(value) = values.next() {

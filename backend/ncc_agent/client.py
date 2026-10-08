@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import hashlib
 import platform
 import socket
+import subprocess
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -22,10 +25,12 @@ class AgentClient:
         machine_id: str,
         buffer: TelemetryBuffer,
         transport: httpx.BaseTransport | None = None,
+        agent_version: str = __version__,
     ) -> None:
         self.settings = settings
         self.machine_id = machine_id
         self.buffer = buffer
+        self.agent_version = agent_version
         self.server_url = settings.validated_server_url()
         self._headers: dict[str, str] = {}
         self.set_token(settings.token.get_secret_value())
@@ -56,7 +61,7 @@ class AgentClient:
                 "machine_id": self.machine_id,
                 "display_name": (self.settings.display_name or socket.gethostname())[:128],
                 "platform": _platform_name(),
-                "agent_version": __version__,
+                "agent_version": self.agent_version,
                 "metadata": _host_metadata(),
             },
         )
@@ -78,7 +83,7 @@ class AgentClient:
                 "machine_id": self.machine_id,
                 "display_name": (self.settings.display_name or socket.gethostname())[:128],
                 "platform": _platform_name(),
-                "agent_version": __version__,
+                "agent_version": self.agent_version,
                 "metadata": _host_metadata(),
             },
         )
@@ -88,7 +93,7 @@ class AgentClient:
         self._request(
             "POST",
             "/api/v1/nodes/heartbeat",
-            json={"agent_version": __version__, "metadata": _host_metadata()},
+            json={"agent_version": self.agent_version, "metadata": _host_metadata()},
         )
 
     def flush(self, max_batches: int = 10) -> int:
@@ -146,7 +151,29 @@ def _platform_name() -> str:
 
 
 def _host_metadata() -> dict[str, str]:
-    return {
+    metadata = {
         "architecture": platform.machine() or "unknown",
         "os_release": platform.release() or "unknown",
     }
+    fingerprint = _hardware_fingerprint()
+    if fingerprint:
+        # Send only a one-way identifier, never the DMI UUID / Windows UUID.
+        metadata["hardware_fingerprint"] = fingerprint
+    return metadata
+
+
+def _hardware_fingerprint() -> str | None:
+    try:
+        if platform.system().lower() == "windows":
+            raw = subprocess.check_output(
+                ["powershell", "-NoProfile", "-NonInteractive", "-Command", "(Get-CimInstance Win32_ComputerSystemProduct).UUID"],
+                text=True, stderr=subprocess.DEVNULL, timeout=3,
+            ).strip()
+        else:
+            raw = Path("/sys/class/dmi/id/product_uuid").read_text(encoding="utf-8").strip()
+    except (OSError, subprocess.SubprocessError):
+        return None
+    normalized = raw.lower().replace("-", "").strip()
+    if not normalized or set(normalized) == {"0"}:
+        return None
+    return hashlib.sha256(normalized.encode("ascii", "ignore")).hexdigest()

@@ -355,7 +355,7 @@ def _reported_rate_limit(payload: dict[str, object], field: str, elapsed_seconds
 
 
 def fleet_summary(session: Session, settings: ServerSettings) -> FleetSummaryResponse:
-    nodes = session.scalars(select(Node)).all()
+    nodes = _logical_nodes(session.scalars(select(Node)).all(), settings)
     online = sum(is_online(node, settings.node_offline_after_seconds) for node in nodes)
     pending = sum(not node.approved for node in nodes)
     points = session.scalar(select(func.count()).select_from(TelemetryPoint)) or 0
@@ -367,6 +367,17 @@ def fleet_summary(session: Session, settings: ServerSettings) -> FleetSummaryRes
         telemetry_points=points,
         server_time=utc_now(),
     )
+
+
+def _logical_nodes(nodes: list[Node], settings: ServerSettings) -> list[Node]:
+    """Count a dualboot device once, selecting its live OS when possible."""
+    selected: dict[str, Node] = {}
+    for node in nodes:
+        key = node.physical_device_id or node.id
+        current = selected.get(key)
+        if current is None or (is_online(node, settings.node_offline_after_seconds) and not is_online(current, settings.node_offline_after_seconds)):
+            selected[key] = node
+    return list(selected.values())
 
 
 def forget_fleet_node(session: Session, node_id: str) -> bool:

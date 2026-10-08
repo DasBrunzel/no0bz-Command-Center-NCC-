@@ -14,7 +14,7 @@ if sys.platform == "win32":
 else:
     servicemanager = win32event = win32service = win32serviceutil = None
 
-from ncc_service.process import ManagedProcess
+from ncc_service.process import ManagedExecutable, ManagedProcess
 
 
 def service_root() -> Path:
@@ -81,22 +81,40 @@ if sys.platform == "win32":
         _config_name = "server.env"
         _log_name = "server.log"
 
+    class CoreWindowsService(_BaseNccService):
+        _svc_name_ = "NccCore"
+        _svc_display_name_ = "no0bz Command Center Core"
+        _svc_description_ = "Starts and supervises the versioned NCC telemetry payload."
+        _module = ""
+        _config_name = "core.env"
+        _log_name = "core.log"
+
+        def __init__(self, args: list[str]) -> None:
+            win32serviceutil.ServiceFramework.__init__(self, args)
+            self._stop_handle = win32event.CreateEvent(None, 0, 0, None)
+            root = service_root()
+            self._managed = ManagedExecutable(
+                root / "core" / "ncc-core.exe", ["service"],
+                root / "config" / self._config_name, root / "logs" / self._log_name,
+            )
+
 else:
     AgentWindowsService: Any = None
     ServerWindowsService: Any = None
+    CoreWindowsService: Any = None
 
 
 def main(argv: list[str] | None = None) -> None:
     arguments = list(sys.argv[1:] if argv is None else argv)
     if sys.platform != "win32":
         raise SystemExit("NCC Windows services can only be managed on Windows")
-    if not arguments or arguments[0] not in {"agent", "server"}:
+    if not arguments or arguments[0] not in {"agent", "server", "core"}:
         raise SystemExit(
-            "usage: python -m ncc_service.windows {agent|server} "
+            "usage: python -m ncc_service.windows {agent|server|core} "
             "[install|update|remove|start|stop|restart|debug]"
         )
     component = arguments.pop(0)
-    service_class: Any = AgentWindowsService if component == "agent" else ServerWindowsService
+    service_class: Any = {"agent": AgentWindowsService, "server": ServerWindowsService, "core": CoreWindowsService}[component]
     win32serviceutil.HandleCommandLine(
         service_class,
         serviceClassString=f"ncc_service.windows.{service_class.__name__}",
