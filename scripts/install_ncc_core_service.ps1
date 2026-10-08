@@ -13,6 +13,11 @@ if (-not (Test-Path -LiteralPath $CoreExecutable)) { throw "NccCore executable n
 $root = Join-Path $env:ProgramData "no0bz\NCC"
 $coreRoot = Join-Path $root "core"
 $configRoot = Join-Path $root "config"
+$existingService = Get-Service -Name NccCore -ErrorAction SilentlyContinue
+if ($existingService -and $existingService.Status -ne 'Stopped') {
+    Stop-Service -Name NccCore -Force
+    $existingService.WaitForStatus('Stopped', [TimeSpan]::FromSeconds(20))
+}
 New-Item -ItemType Directory -Force -Path $coreRoot, $configRoot, (Join-Path $root "core-state"), (Join-Path $root "logs") | Out-Null
 Copy-Item -LiteralPath $CoreExecutable -Destination (Join-Path $coreRoot "ncc-core.exe") -Force
 $config = Join-Path $configRoot "core.env"
