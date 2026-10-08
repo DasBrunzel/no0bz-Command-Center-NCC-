@@ -1,4 +1,5 @@
 mod health;
+mod payload;
 mod signature;
 
 use serde::{Deserialize, Serialize};
