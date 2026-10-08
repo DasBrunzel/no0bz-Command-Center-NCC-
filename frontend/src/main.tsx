@@ -74,7 +74,24 @@ type Node = {
   fleet_position: number;
   physical_device_id: string | null;
   physical_device_name: string | null;
+  update_channel: "beta" | "stable";
+  pending_release_id: string | null;
   latest: Telemetry | null;
+};
+type AgentRelease = {
+  release_id: string;
+  payload_version: string;
+  channel: "beta" | "stable";
+  platform: "windows" | "linux";
+  architecture: string;
+  artifact_url: string;
+  sha256: string;
+  size_bytes: number;
+  signature_key_id: string;
+  signature_value: string;
+  minimum_core_version: string | null;
+  released_at: string;
+  assigned_nodes: number;
 };
 type FleetGroup = { group_id: string; name: string; position: number };
 type FleetPlacement = { node_id: string; group_id: string; position: number };
@@ -484,6 +501,8 @@ function Fleet({
   onCreateGroup,
   onLayout,
   canDelete,
+  releases,
+  token,
   dismissedAlerts,
   onDismissAlert,
 }: {
@@ -499,6 +518,8 @@ function Fleet({
   onCreateGroup: (name: string) => Promise<void>;
   onLayout: (placements: FleetPlacement[]) => Promise<void>;
   canDelete: boolean;
+  releases: AgentRelease[];
+  token: string;
   dismissedAlerts: Set<string>;
   onDismissAlert: (id: string) => void;
 }) {
@@ -613,7 +634,7 @@ function Fleet({
         </div>}
       </section>
       <div className="fleet-stage">
-        <NodeOverview node={selected} points={points} monthlyNetwork={monthlyNetwork} canDelete={canDelete} />
+        <NodeOverview node={selected} points={points} monthlyNetwork={monthlyNetwork} canDelete={canDelete} releases={releases} token={token} />
       </div>
     </>
   );
@@ -940,16 +961,21 @@ function NodeOverview({
   points,
   monthlyNetwork,
   canDelete,
+  releases,
+  token,
 }: {
   node: Node | null;
   points: Telemetry[];
   monthlyNetwork: NetworkUsageSummary | null;
   canDelete: boolean;
+  releases: AgentRelease[];
+  token: string;
 }) {
   const [forgetting, setForgetting] = useState(false),
     [renaming, setRenaming] = useState(false),
     [updatingRole, setUpdatingRole] = useState(false),
-    [updatingGaming, setUpdatingGaming] = useState(false);
+    [updatingGaming, setUpdatingGaming] = useState(false),
+    [updatingRelease, setUpdatingRelease] = useState(false);
   if (!node)
     return (
       <section className="surface empty-stage">
@@ -1045,6 +1071,40 @@ function NodeOverview({
     setUpdatingRole(false);
     window.alert("Die Geräte-Rolle konnte nicht geändert werden.");
   };
+  const compatibleReleases = releases.filter((release) => release.platform === node.platform);
+  const pendingRelease = releases.find((release) => release.release_id === node.pending_release_id) || null;
+  const assignRelease = async () => {
+    const candidates = compatibleReleases.filter((release) => release.channel === node.update_channel);
+    if (!candidates.length && !pendingRelease) {
+      window.alert(`Für ${node.platform} im ${node.update_channel.toUpperCase()}-Kanal ist noch kein Release registriert.`);
+      return;
+    }
+    const choices = candidates.map((release) => `${release.release_id} · ${release.payload_version}`).join("\n");
+    const answer = window.prompt(`Release-ID freigeben (leer = Freigabe zurücknehmen):\n${choices}`, pendingRelease?.release_id || "");
+    if (answer === null) return;
+    const releaseId = answer.trim() || null;
+    if (releaseId && !candidates.some((release) => release.release_id === releaseId)) {
+      window.alert("Diese Release-ID passt nicht zu Plattform und Update-Kanal dieses Nodes.");
+      return;
+    }
+    setUpdatingRelease(true);
+    const response = await fetch(`/api/v1/fleet/nodes/${node.node_id}/release`, {
+      method: "PUT", headers: { ...headers(token), "Content-Type": "application/json" }, body: JSON.stringify({ release_id: releaseId }),
+    });
+    if (response.ok) { window.location.reload(); return; }
+    setUpdatingRelease(false);
+    window.alert("Update-Freigabe konnte nicht geändert werden.");
+  };
+  const changeUpdateChannel = async () => {
+    const channel = node.update_channel === "beta" ? "stable" : "beta";
+    setUpdatingRelease(true);
+    const response = await fetch(`/api/v1/fleet/nodes/${node.node_id}/update-channel`, {
+      method: "PUT", headers: { ...headers(token), "Content-Type": "application/json" }, body: JSON.stringify({ channel }),
+    });
+    if (response.ok) { window.location.reload(); return; }
+    setUpdatingRelease(false);
+    window.alert("Update-Kanal konnte nicht geändert werden.");
+  };
   const cpuTemperature =
     typeof cpu.temperature_c === "number"
       ? `${num(cpu.temperature_c).toFixed(0)} °C CPU-Temperatur`
@@ -1117,6 +1177,12 @@ function NodeOverview({
                 : node.access_role === "beta_tester"
                   ? "Zu Commander machen"
                   : "Als Beta-Tester markieren"}
+            </button>}
+            {canDelete && !isUnraid && <button className="node-role" disabled={updatingRelease} onClick={() => void changeUpdateChannel()}>
+              {updatingRelease ? "Wird gesetzt …" : `Update-Kanal: ${node.update_channel.toUpperCase()}`}
+            </button>}
+            {canDelete && !isUnraid && <button className="node-role" disabled={updatingRelease} onClick={() => void assignRelease()}>
+              <Download size={15} />{pendingRelease ? `Update freigegeben: ${pendingRelease.payload_version}` : "Update bewusst freigeben"}
             </button>}
             {canDelete && <button
               className="forget-node"
@@ -1778,6 +1844,9 @@ function SettingsPage({
   canManageTelegram,
   canResetTraffic,
   onResetTraffic,
+  releases,
+  onRegisterRelease,
+  canManageReleases,
 }: {
   theme: Theme;
   onTheme: (v: Theme) => void;
@@ -1790,6 +1859,9 @@ function SettingsPage({
   canManageTelegram: boolean;
   canResetTraffic: boolean;
   onResetTraffic: () => Promise<void>;
+  releases: AgentRelease[];
+  onRegisterRelease: (manifest: Record<string, unknown>) => Promise<void>;
+  canManageReleases: boolean;
 }) {
   const [draft, setDraft] = useState<AlertPolicy | null>(policy);
   const [telegramDraft, setTelegramDraft] = useState<TelegramSettings | null>(telegram);
@@ -1797,6 +1869,8 @@ function SettingsPage({
   const [testingTelegram, setTestingTelegram] = useState(false);
   const [resettingTraffic, setResettingTraffic] = useState(false);
   const [trafficResetMessage, setTrafficResetMessage] = useState("");
+  const [releaseManifest, setReleaseManifest] = useState("");
+  const [releaseMessage, setReleaseMessage] = useState("");
   useEffect(() => setDraft(policy), [policy]);
   useEffect(() => setTelegramDraft(telegram), [telegram]);
   return (
@@ -1851,6 +1925,16 @@ function SettingsPage({
         >
           <RefreshCw size={16} /> {resettingTraffic ? "Wird zurückgesetzt …" : "Traffic-Statistik zurücksetzen"}
         </button>
+      </section>}
+      {canManageReleases && <section className="surface settings-card">
+        <header className="section-head"><div><span className="eyebrow">0.6 UPDATE-VERTEILUNG</span><h2>Signierte Payload-Releases</h2></div><Download size={19} /></header>
+        <p>Füge ausschließlich das vom Payload-Build erzeugte Manifest ein. Ein Release wird nie automatisch verteilt: Erst die bewusste Freigabe am einzelnen Node stellt es für dessen Core bereit.</p>
+        <form className="telegram-settings" onSubmit={(event) => { event.preventDefault(); setReleaseMessage(""); try { const manifest = JSON.parse(releaseManifest) as Record<string, unknown>; void onRegisterRelease(manifest).then(() => { setReleaseManifest(""); setReleaseMessage("Signiertes Release registriert."); }).catch(() => setReleaseMessage("Manifest konnte nicht registriert werden.")); } catch { setReleaseMessage("Das Manifest ist kein gültiges JSON."); } }}>
+          <label>Release-Manifest<textarea value={releaseManifest} onChange={(event) => setReleaseManifest(event.target.value)} placeholder='{"schema_version":1,…}' rows={5} /></label>
+          {releaseMessage && <small className="traffic-reset-message">{releaseMessage}</small>}
+          <button className="primary" type="submit" disabled={!releaseManifest.trim()}>Signiertes Release registrieren</button>
+        </form>
+        <div className="settings-release-list">{releases.map((release) => <p key={release.release_id}><b>{release.payload_version}</b> · {release.platform}/{release.architecture} · {release.channel.toUpperCase()} · {release.assigned_nodes} freigegeben</p>)}{!releases.length && <p>Noch kein Release registriert.</p>}</div>
       </section>}
       <section className="surface settings-card">
         <header className="section-head">
@@ -2476,6 +2560,7 @@ function App() {
     [summary, setSummary] = useState<Summary | null>(null),
     [invitations, setInvitations] = useState<Invitation[]>([]),
     [alerts, setAlerts] = useState<AlertRecord[]>([]),
+    [releases, setReleases] = useState<AgentRelease[]>([]),
     [policy, setPolicy] = useState<AlertPolicy | null>(null),
     [telegram, setTelegram] = useState<TelegramSettings | null>(null),
     [selectedId, setSelectedId] = useState(""),
@@ -2505,6 +2590,7 @@ function App() {
           nextAlerts,
           nextPolicy,
           nextTelegram,
+          nextReleases,
           nextAccess,
         ] = await Promise.all([
           getJson<Node[]>("/api/v1/fleet/nodes", token),
@@ -2514,6 +2600,7 @@ function App() {
           getJson<AlertRecord[]>("/api/v1/fleet/alerts", token),
           getJson<AlertPolicy>("/api/v1/fleet/alert-policy", token),
           getJson<TelegramSettings>("/api/v1/fleet/telegram", token),
+          getJson<AgentRelease[]>("/api/v1/releases", token),
           getJson<DashboardAccess>("/api/v1/admin-codes/access", token),
         ]);
         setNodes(nextNodes);
@@ -2532,6 +2619,7 @@ function App() {
         });
         setPolicy(nextPolicy);
         setTelegram(nextTelegram);
+        setReleases(nextReleases);
         setAccessRole(nextAccess.access_role);
         setAuthenticated(true);
         setAuthError(false);
@@ -2663,6 +2751,10 @@ function App() {
       headers: headers(token),
     });
     if (!response.ok) throw new Error("REQUEST");
+  };
+  const registerRelease = async (manifest: Record<string, unknown>) => {
+    const created = await postJson<AgentRelease>("/api/v1/releases", token, { manifest });
+    setReleases((current) => [created, ...current.filter((item) => item.release_id !== created.release_id)]);
   };
   const clearAllAlerts = async () => {
     const response = await fetch("/api/v1/fleet/alerts/clear", { method: "POST", headers: headers(token) });
@@ -2849,6 +2941,8 @@ function App() {
               onCreateGroup={createFleetGroup}
               onLayout={saveFleetLayout}
               canDelete={canManageAccess}
+              releases={releases}
+              token={token}
               dismissedAlerts={dismissedAlertIds}
               onDismissAlert={dismissAlert}
             />
@@ -2879,6 +2973,9 @@ function App() {
               canManageTelegram={canManageAccess}
               canResetTraffic={canManageAccess}
               onResetTraffic={resetTrafficStatistics}
+              releases={releases}
+              onRegisterRelease={registerRelease}
+              canManageReleases={canManageAccess}
             />
           )}
         </main>

@@ -26,6 +26,7 @@ from ncc_server.fleet_service import (
     update_fleet_layout,
     update_fleet_node_role,
 )
+from ncc_server.release_service import assign_release, update_node_channel
 from ncc_server.schemas import (
     AlertPolicyResponse,
     AlertPolicyUpdateRequest,
@@ -34,9 +35,11 @@ from ncc_server.schemas import (
     FleetGroupCreateRequest,
     FleetGroupResponse,
     FleetLayoutUpdateRequest,
+    FleetNodeReleaseAssignmentRequest,
     FleetNodeRenameRequest,
     FleetNodeResponse,
     FleetNodeRoleUpdateRequest,
+    FleetNodeUpdateChannelRequest,
     FleetSummaryResponse,
     FleetTelemetryPoint,
     NetworkUsageSummary,
@@ -270,6 +273,22 @@ async def set_gaming_mode(
     if response is None:  # pragma: no cover
         raise HTTPException(status_code=404, detail="node not found")
     return response
+
+
+@router.put("/nodes/{node_id}/release", status_code=204, dependencies=[Depends(require_commander_access)])
+async def set_release_for_node(
+    node_id: str, payload: FleetNodeReleaseAssignmentRequest, session: Session = Depends(database_session)
+) -> None:
+    if not assign_release(session, node_id, payload.release_id):
+        raise HTTPException(status_code=404, detail="node or compatible release not found")
+
+
+@router.put("/nodes/{node_id}/update-channel", status_code=204, dependencies=[Depends(require_commander_access)])
+async def set_update_channel_for_node(
+    node_id: str, payload: FleetNodeUpdateChannelRequest, session: Session = Depends(database_session)
+) -> None:
+    if not update_node_channel(session, node_id, payload.channel):
+        raise HTTPException(status_code=404, detail="node not found")
 
 
 @router.get("/nodes/{node_id}/telemetry", response_model=list[FleetTelemetryPoint])

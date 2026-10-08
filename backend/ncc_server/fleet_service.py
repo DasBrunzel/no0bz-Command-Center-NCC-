@@ -470,6 +470,8 @@ def _node_response(
         physical_device_name=node.physical_device.display_name if node.physical_device else None,
         fleet_group_id=node.fleet_group_id or _default_group_for(node),
         fleet_position=node.fleet_position,
+        update_channel=node.update_channel,  # type: ignore[arg-type]
+        pending_release_id=node.pending_release_id,
         latest=_telemetry_response(latest) if latest is not None else None,
     )
 

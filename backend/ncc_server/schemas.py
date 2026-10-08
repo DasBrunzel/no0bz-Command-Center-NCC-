@@ -115,6 +115,8 @@ class FleetNodeResponse(BaseModel):
     physical_device_name: str | None
     fleet_group_id: str
     fleet_position: int
+    update_channel: Literal["beta", "stable"]
+    pending_release_id: str | None
     latest: FleetTelemetryPoint | None
 
 
@@ -238,6 +240,36 @@ class FleetNodeRoleUpdateRequest(BaseModel):
 
 class FleetGamingModeRequest(BaseModel):
     minutes: int = Field(ge=0, le=480)
+
+
+class AgentReleaseManifestCreateRequest(BaseModel):
+    """Manifest produced by build_ncc_payload.ps1; the binary stays at HTTPS URL."""
+
+    manifest: dict[str, object]
+
+
+class AgentReleaseResponse(BaseModel):
+    release_id: str
+    payload_version: str
+    channel: Literal["beta", "stable"]
+    platform: Literal["windows", "linux"]
+    architecture: str
+    artifact_url: str
+    sha256: str
+    size_bytes: int
+    signature_key_id: str
+    signature_value: str
+    minimum_core_version: str | None
+    released_at: datetime
+    assigned_nodes: int = 0
+
+
+class FleetNodeReleaseAssignmentRequest(BaseModel):
+    release_id: str | None = Field(default=None, min_length=1, max_length=36)
+
+
+class FleetNodeUpdateChannelRequest(BaseModel):
+    channel: Literal["beta", "stable"]
 
 
 class FleetChatMessageCreateRequest(BaseModel):

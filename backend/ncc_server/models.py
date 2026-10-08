@@ -68,6 +68,10 @@ class Node(Base):
     )
     fleet_group_id: Mapped[str | None] = mapped_column(ForeignKey("fleet_groups.id", ondelete="SET NULL"))
     fleet_position: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    update_channel: Mapped[str] = mapped_column(String(16), default="beta", nullable=False)
+    pending_release_id: Mapped[str | None] = mapped_column(
+        ForeignKey("agent_releases.id", ondelete="SET NULL")
+    )
     fleet_group: Mapped[FleetGroup | None] = relationship(back_populates="nodes")
     physical_device: Mapped[PhysicalDevice | None] = relationship(back_populates="nodes")
     telemetry: Mapped[list[TelemetryPoint]] = relationship(
@@ -86,6 +90,30 @@ class FleetGroup(Base):
     position: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
     nodes: Mapped[list[Node]] = relationship(back_populates="fleet_group")
+
+
+class AgentRelease(Base):
+    """A signed, externally hosted Core payload manifest approved by NCC."""
+
+    __tablename__ = "agent_releases"
+    __table_args__ = (
+        UniqueConstraint("payload_version", "channel", "platform", "architecture", name="ux_agent_release_target"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    payload_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    channel: Mapped[str] = mapped_column(String(16), nullable=False)
+    platform: Mapped[str] = mapped_column(String(32), nullable=False)
+    architecture: Mapped[str] = mapped_column(String(32), nullable=False)
+    artifact_url: Mapped[str] = mapped_column(String(2048), nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    signature_key_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    signature_value: Mapped[str] = mapped_column(Text, nullable=False)
+    minimum_core_version: Mapped[str | None] = mapped_column(String(64))
+    manifest_json: Mapped[dict[str, object]] = mapped_column(JSON, default=dict, nullable=False)
+    released_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
 
 class TelemetryPoint(Base):
