@@ -5,6 +5,7 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .pytest-*/
+.ncc-test-temp/
 .mypy_cache/
 .ruff_cache/
 .pnpm-store/

@@ -44,7 +44,7 @@ ignore = ["E501", "B008"]
 [tool.mypy]
 python_version = "3.10"
 strict = true
-packages = ["ncc", "ncc_agent", "ncc_server", "ncc_service"]
+packages = ["ncc", "ncc_agent", "ncc_core", "ncc_server", "ncc_service"]
 mypy_path = "backend"
 
 [tool.pytest.ini_options]

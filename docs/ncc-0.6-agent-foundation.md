@@ -81,6 +81,15 @@ festgelegt.
 
 Das Manifest enthält keine Tokens, Pairing-IDs oder Geräteinformationen.
 
+## Referenzimplementierung
+
+Die repository-interne Referenz unter `backend/ncc_core` implementiert bereits die
+entscheidenden, plattformneutralen Zustandsübergänge: Artefakt per Hash prüfen,
+stagen, als `awaiting_health` aktivieren und nach einem fehlerhaften
+Gesundheitsnachweis zurückrollen. Sie wird von NCC 0.5 weder importiert noch als
+Dienst installiert. Ihre Tests bilden den Vertrag ab, den der spätere kompilierte
+Core erfüllen muss.
+
 ## Gesundheitsvertrag und Rollback
 
 Nach dem Umschalten startet Core den neuen Payload und erwartet innerhalb von 90
