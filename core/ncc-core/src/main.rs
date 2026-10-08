@@ -42,7 +42,21 @@ impl Default for CoreState {
 }
 
 fn main() {
-    if let Err(error) = run(env::args().skip(1).collect()) {
+    // Signature verification can exceed the small default Windows main-thread
+    // stack on some MSVC builds. Run the complete command on a bounded larger
+    // worker stack so malformed releases produce an error, never a crash.
+    let args: Vec<String> = env::args().skip(1).collect();
+    let outcome = std::thread::Builder::new()
+        .name("ncc-core".to_owned())
+        .stack_size(8 * 1024 * 1024)
+        .spawn(move || run(args))
+        .map_err(display)
+        .and_then(|worker| {
+            worker
+                .join()
+                .map_err(|_| "NCC Core worker panicked".to_owned())
+        });
+    if let Err(error) = outcome.and_then(|result| result) {
         eprintln!("ncc-core: {error}");
         std::process::exit(2);
     }

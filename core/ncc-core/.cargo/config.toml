@@ -1,0 +1,5 @@
+[target.x86_64-pc-windows-msvc]
+# ed25519-dalek's verification path needs more than the Windows executable
+# default main-thread stack on current MSVC toolchains.  Service binaries must
+# not crash while validating an otherwise valid signed release.
+rustflags = ["-C", "link-arg=/STACK:8388608"]
