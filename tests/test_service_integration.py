@@ -12,7 +12,6 @@ from ncc_service.doctor import run_checks, validate_url
 from ncc_service.environment import load_environment_file
 from ncc_service.migrate import upgrade
 from ncc_service.process import child_python_executable
-from pydantic import SecretStr
 from sqlalchemy import create_engine, text
 
 
@@ -164,10 +163,12 @@ def test_unraid_configuration_reads_key_without_printing_it() -> None:
 
 
 def test_unraid_settings_support_legacy_setup_key_names() -> None:
-    settings = ServerSettings(
-        unraid_url="http://100.88.247.35/graphql",
-        unraid_api_key=SecretStr("secret"),
-        unraid_display_name="horsttower",
+    settings = ServerSettings.model_validate(
+        {
+            "NCC_UNRAID_URL": "http://100.88.247.35/graphql",
+            "NCC_UNRAID_API_KEY": "secret",
+            "NCC_UNRAID_DISPLAY_NAME": "horsttower",
+        }
     )
     assert settings.unraid_url == "http://100.88.247.35/graphql"
     assert settings.unraid_api_key.get_secret_value() == "secret"
