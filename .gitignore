@@ -22,5 +22,6 @@ backend/*.egg-info/
 *.tsbuildinfo
 dist/
 build/
+target/
 *.spec
 
