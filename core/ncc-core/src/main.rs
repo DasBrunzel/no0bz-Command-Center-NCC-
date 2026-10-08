@@ -99,20 +99,7 @@ struct PayloadDescriptor {
 
 fn payload_descriptor(root: &Path, version: &str) -> Result<PayloadDescriptor> {
     let payload_root = root.join("payloads").join(version).join("files");
-    let descriptor: PayloadDescriptorFile =
-        serde_json::from_slice(&fs::read(payload_root.join("payload.json")).map_err(display)?)
-            .map_err(display)?;
-    let executable = payload_root.join(&descriptor.executable);
-    if descriptor.executable.is_empty()
-        || !executable.is_file()
-        || !executable.starts_with(&payload_root)
-    {
-        return Err("payload descriptor executable is invalid".to_owned());
-    }
-    Ok(PayloadDescriptor {
-        executable,
-        arguments: descriptor.arguments,
-    })
+    payload_descriptor_from(&payload_root)
 }
 
 fn run_payload(root: &Path, args: &[String]) -> Result<()> {
@@ -273,11 +260,17 @@ fn payload_descriptor_from(payload_root: &Path) -> Result<PayloadDescriptor> {
     let descriptor: PayloadDescriptorFile =
         serde_json::from_slice(&fs::read(payload_root.join("payload.json")).map_err(display)?)
             .map_err(display)?;
-    let executable = payload_root.join(&descriptor.executable);
+    let executable_path = Path::new(&descriptor.executable);
     if descriptor.executable.is_empty()
-        || !executable.is_file()
-        || !executable.starts_with(payload_root)
+        || executable_path.is_absolute()
+        || !executable_path
+            .components()
+            .all(|component| matches!(component, std::path::Component::Normal(_)))
     {
+        return Err("payload descriptor executable is invalid".to_owned());
+    }
+    let executable = payload_root.join(executable_path);
+    if !executable.is_file() {
         return Err("payload descriptor executable is invalid".to_owned());
     }
     Ok(PayloadDescriptor {
@@ -291,7 +284,8 @@ fn activate(root: &Path, args: &[String]) -> Result<()> {
     if !root
         .join("payloads")
         .join(&version)
-        .join("payload.archive")
+        .join("files")
+        .join("payload.json")
         .is_file()
     {
         return Err("payload is not staged".to_owned());
