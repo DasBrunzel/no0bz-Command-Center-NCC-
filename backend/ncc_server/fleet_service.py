@@ -12,6 +12,7 @@ from ncc_server.models import (
     AuditEvent,
     FleetGroup,
     Node,
+    PhysicalDevice,
     TelemetryPoint,
     TrafficStatisticsSettings,
     utc_now,
@@ -49,6 +50,33 @@ def create_fleet_group(session: Session, name: str) -> FleetGroupResponse:
     session.add(group)
     session.commit()
     return FleetGroupResponse(group_id=group.id, name=group.name, position=group.position)
+
+
+def list_physical_devices(session: Session) -> list[PhysicalDevice]:
+    return list(session.scalars(select(PhysicalDevice).order_by(PhysicalDevice.display_name)).all())
+
+
+def create_physical_device(session: Session, display_name: str, node_ids: list[str]) -> PhysicalDevice | None:
+    nodes = session.scalars(select(Node).where(Node.id.in_(node_ids))).all()
+    if len(nodes) != len(set(node_ids)):
+        return None
+    device = PhysicalDevice(display_name=display_name)
+    session.add(device)
+    session.flush()
+    for node in nodes:
+        node.physical_device_id = device.id
+    session.commit()
+    session.refresh(device)
+    return device
+
+
+def detach_physical_device_node(session: Session, device_id: str, node_id: str) -> bool:
+    node = session.get(Node, node_id)
+    if node is None or node.physical_device_id != device_id:
+        return False
+    node.physical_device_id = None
+    session.commit()
+    return True
 
 
 def update_fleet_layout(session: Session, placements: list[FleetLayoutPlacement]) -> bool:
@@ -427,6 +455,8 @@ def _node_response(
         availability_started_at=node.availability_started_at,
         uptime_record_seconds=round(node.availability_record_seconds),
         gaming_mode_until=node.gaming_mode_until,
+        physical_device_id=node.physical_device_id,
+        physical_device_name=node.physical_device.display_name if node.physical_device else None,
         fleet_group_id=node.fleet_group_id or _default_group_for(node),
         fleet_position=node.fleet_position,
         latest=_telemetry_response(latest) if latest is not None else None,

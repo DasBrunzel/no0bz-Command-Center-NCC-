@@ -9,12 +9,15 @@ from ncc_server.auth import database_session, require_commander_access, require_
 from ncc_server.fleet_service import (
     clear_active_alerts,
     create_fleet_group,
+    create_physical_device,
+    detach_physical_device_node,
     fleet_node,
     fleet_summary,
     forget_fleet_node,
     list_fleet_alerts,
     list_fleet_groups,
     list_fleet_nodes,
+    list_physical_devices,
     node_monthly_network_usage,
     node_telemetry,
     rename_fleet_node,
@@ -37,6 +40,8 @@ from ncc_server.schemas import (
     FleetSummaryResponse,
     FleetTelemetryPoint,
     NetworkUsageSummary,
+    PhysicalDeviceCreateRequest,
+    PhysicalDeviceResponse,
     TelegramSettingsResponse,
     TelegramSettingsUpdateRequest,
 )
@@ -71,6 +76,35 @@ async def nodes(
 @router.get("/groups", response_model=list[FleetGroupResponse])
 async def groups(session: Session = Depends(database_session)) -> list[FleetGroupResponse]:
     return list_fleet_groups(session)
+
+
+def _physical_device_response(device) -> PhysicalDeviceResponse:  # type: ignore[no-untyped-def]
+    return PhysicalDeviceResponse(
+        device_id=device.id, display_name=device.display_name, node_ids=[node.id for node in device.nodes]
+    )
+
+
+@router.get("/physical-devices", response_model=list[PhysicalDeviceResponse])
+async def physical_devices(session: Session = Depends(database_session)) -> list[PhysicalDeviceResponse]:
+    return [_physical_device_response(device) for device in list_physical_devices(session)]
+
+
+@router.post("/physical-devices", response_model=PhysicalDeviceResponse, status_code=201,
+             dependencies=[Depends(require_commander_access)])
+async def create_device(
+    payload: PhysicalDeviceCreateRequest, session: Session = Depends(database_session)
+) -> PhysicalDeviceResponse:
+    device = create_physical_device(session, payload.display_name, payload.node_ids)
+    if device is None:
+        raise HTTPException(status_code=404, detail="node not found")
+    return _physical_device_response(device)
+
+
+@router.delete("/physical-devices/{device_id}/nodes/{node_id}", status_code=204,
+               dependencies=[Depends(require_commander_access)])
+async def detach_device_node(device_id: str, node_id: str, session: Session = Depends(database_session)) -> None:
+    if not detach_physical_device_node(session, device_id, node_id):
+        raise HTTPException(status_code=404, detail="physical device or node not found")
 
 
 @router.post("/groups", response_model=FleetGroupResponse, status_code=201)

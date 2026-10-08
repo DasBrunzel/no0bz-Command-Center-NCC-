@@ -26,6 +26,16 @@ class Base(DeclarativeBase):
     pass
 
 
+class PhysicalDevice(Base):
+    __tablename__ = "physical_devices"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    display_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    hardware_fingerprint: Mapped[str | None] = mapped_column(String(128), unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    nodes: Mapped[list[Node]] = relationship(back_populates="physical_device")
+
+
 class Node(Base):
     __tablename__ = "nodes"
 
@@ -53,9 +63,13 @@ class Node(Base):
     availability_current_streak_seconds: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
     availability_record_seconds: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
     gaming_mode_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    physical_device_id: Mapped[str | None] = mapped_column(
+        ForeignKey("physical_devices.id", ondelete="SET NULL")
+    )
     fleet_group_id: Mapped[str | None] = mapped_column(ForeignKey("fleet_groups.id", ondelete="SET NULL"))
     fleet_position: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     fleet_group: Mapped[FleetGroup | None] = relationship(back_populates="nodes")
+    physical_device: Mapped[PhysicalDevice | None] = relationship(back_populates="nodes")
     telemetry: Mapped[list[TelemetryPoint]] = relationship(
         back_populates="node", cascade="all, delete-orphan"
     )

@@ -111,6 +111,8 @@ class FleetNodeResponse(BaseModel):
     availability_started_at: datetime | None
     uptime_record_seconds: int
     gaming_mode_until: datetime | None
+    physical_device_id: str | None
+    physical_device_name: str | None
     fleet_group_id: str
     fleet_position: int
     latest: FleetTelemetryPoint | None
@@ -120,6 +122,17 @@ class FleetGroupResponse(BaseModel):
     group_id: str
     name: str
     position: int
+
+
+class PhysicalDeviceCreateRequest(BaseModel):
+    display_name: str = Field(min_length=1, max_length=128)
+    node_ids: list[str] = Field(min_length=1, max_length=16)
+
+
+class PhysicalDeviceResponse(BaseModel):
+    device_id: str
+    display_name: str
+    node_ids: list[str]
 
 
 class FleetGroupCreateRequest(BaseModel):
