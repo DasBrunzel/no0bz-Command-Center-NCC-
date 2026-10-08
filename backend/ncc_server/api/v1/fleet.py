@@ -7,8 +7,8 @@ from sqlalchemy.orm import Session
 from ncc_server.alert_service import AlertNotification, get_alert_policy, update_alert_policy
 from ncc_server.auth import database_session, require_commander_access, require_dashboard_access
 from ncc_server.fleet_service import (
-    create_fleet_group,
     clear_active_alerts,
+    create_fleet_group,
     fleet_node,
     fleet_summary,
     forget_fleet_node,
@@ -27,13 +27,13 @@ from ncc_server.schemas import (
     AlertPolicyResponse,
     AlertPolicyUpdateRequest,
     FleetAlertResponse,
+    FleetGamingModeRequest,
     FleetGroupCreateRequest,
     FleetGroupResponse,
     FleetLayoutUpdateRequest,
     FleetNodeRenameRequest,
     FleetNodeResponse,
     FleetNodeRoleUpdateRequest,
-    FleetGamingModeRequest,
     FleetSummaryResponse,
     FleetTelemetryPoint,
     NetworkUsageSummary,

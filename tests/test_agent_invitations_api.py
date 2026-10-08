@@ -8,6 +8,7 @@ from ncc_server.app import create_app
 from ncc_server.config import ServerSettings
 from ncc_server.database import Database
 from ncc_server.models import AgentToken, AuditEvent, Base
+from pydantic import SecretStr
 
 
 def make_database(path: Path) -> Database:
@@ -21,7 +22,7 @@ def test_dashboard_can_issue_list_and_revoke_invitations(tmp_path: Path) -> None
     app = create_app(
         ServerSettings(
             database_url="sqlite+pysqlite://",
-            dashboard_token="dashboard-secret",
+            dashboard_token=SecretStr("dashboard-secret"),
             dashboard_allow_loopback_without_token=False,
         ),
         database,
@@ -76,7 +77,7 @@ def test_dashboard_can_issue_list_and_revoke_invitations(tmp_path: Path) -> None
 def test_invitation_without_expiry_is_supported(tmp_path: Path) -> None:
     database = make_database(tmp_path / "never-expires.db")
     app = create_app(
-        ServerSettings(database_url="sqlite+pysqlite://", dashboard_token="dashboard-secret"),
+        ServerSettings(database_url="sqlite+pysqlite://", dashboard_token=SecretStr("dashboard-secret")),
         database,
     )
     with TestClient(app) as client:

@@ -3,11 +3,15 @@ from __future__ import annotations
 from datetime import timedelta
 from pathlib import Path
 
-from ncc_server.alert_service import _track_availability, evaluate_alerts, mark_notified
+from ncc_server.alert_service import (
+    AlertNotification,
+    _track_availability,
+    evaluate_alerts,
+    mark_notified,
+)
 from ncc_server.config import ServerSettings
 from ncc_server.database import Database
 from ncc_server.models import AlertState, AuditEvent, Base, Node, TelemetryPoint, utc_now
-from ncc_server.alert_service import AlertNotification
 from ncc_server.telegram import format_telegram_alert
 
 

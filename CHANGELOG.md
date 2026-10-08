@@ -4,6 +4,17 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.5.0-beta.67] - 2026-10-08
+
+### Fixed
+
+- Stabilitätsprüfung vereinheitlicht: der Integrationstest prüft jetzt die
+  aktuelle Datenbankmigration `20261007_0015`.
+- Strikte Typprüfung für Dashboard-Sitzungen, Agent-Token und Testkonfiguration
+  ergänzt; ungültige Geheimnis-Typen werden früh erkannt.
+- Alert-Auswertung und Testcode sind bereinigt, sodass Ruff, mypy und die
+  Python-Kompilierung ohne Befunde laufen.
+
 ## [0.5.0-beta.66] - 2026-10-07
 
 ### Added

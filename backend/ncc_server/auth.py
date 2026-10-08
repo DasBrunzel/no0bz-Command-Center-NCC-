@@ -4,7 +4,7 @@ import hashlib
 import hmac
 import ipaddress
 from collections.abc import Iterator
-from typing import Literal
+from typing import Literal, cast
 
 from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy import select
@@ -42,7 +42,9 @@ def require_dashboard_access(
     session_token = request.cookies.get("ncc_dashboard_session", "")
     if session_token:
         with request.app.state.database.session() as session:
-            access_role = session.scalar(
+            access_role = cast(
+                str | None,
+                session.scalar(
                 select(AdminCode.access_role)
                 .join(DashboardSession, DashboardSession.code_id == AdminCode.id)
                 .where(
@@ -52,9 +54,12 @@ def require_dashboard_access(
                 .where(DashboardSession.revoked_at.is_(None))
                 .where(DashboardSession.expires_at > utc_now())
                 .where(AdminCode.revoked_at.is_(None))
+                ),
             )
-            if access_role in {"commander", "beta_tester"}:
-                return access_role
+            if access_role == "commander":
+                return "commander"
+            if access_role == "beta_tester":
+                return "beta_tester"
     settings = request.app.state.server_settings
     configured = settings.dashboard_token.get_secret_value()
     supplied = x_ncc_dashboard_token or _bearer_token(authorization) or ""

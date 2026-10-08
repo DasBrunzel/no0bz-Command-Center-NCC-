@@ -1,14 +1,14 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-import re
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ncc_server.config import ServerSettings
 from ncc_server import __version__
+from ncc_server.config import ServerSettings
 from ncc_server.models import AlertPolicy, AlertState, AuditEvent, Node, TelemetryPoint, utc_now
 from ncc_server.node_service import is_online
 
@@ -253,7 +253,7 @@ def _recent_network_counter_outlier(session: Session, node_id: str) -> bool:
     ).all()
     ordered = list(reversed(points))
     outliers = 0
-    for previous, current in zip(ordered, ordered[1:]):
+    for previous, current in zip(ordered, ordered[1:], strict=False):
         previous_network = _dict(previous.payload.get("network"))
         current_network = _dict(current.payload.get("network"))
         elapsed = _age_seconds(previous.recorded_at, current.recorded_at)

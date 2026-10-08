@@ -7,6 +7,7 @@ from ncc_server.app import create_app
 from ncc_server.config import ServerSettings
 from ncc_server.database import Database
 from ncc_server.models import AgentToken, Base, Node
+from pydantic import SecretStr
 
 
 def make_database(path: Path) -> Database:
@@ -30,7 +31,7 @@ def pairing_payload() -> dict[str, object]:
 def test_dashboard_approves_pairing_and_agent_claims_internal_token(tmp_path: Path) -> None:
     database = make_database(tmp_path / "pairing.db")
     app = create_app(
-        ServerSettings(database_url="sqlite+pysqlite://", dashboard_token="dashboard-secret"),
+        ServerSettings(database_url="sqlite+pysqlite://", dashboard_token=SecretStr("dashboard-secret")),
         database,
     )
     dashboard = {"X-NCC-Dashboard-Token": "dashboard-secret"}
@@ -65,7 +66,7 @@ def test_dashboard_approves_pairing_and_agent_claims_internal_token(tmp_path: Pa
 def test_pairing_never_exposes_its_secret_to_dashboard(tmp_path: Path) -> None:
     database = make_database(tmp_path / "pairing-list.db")
     app = create_app(
-        ServerSettings(database_url="sqlite+pysqlite://", dashboard_token="dashboard-secret"),
+        ServerSettings(database_url="sqlite+pysqlite://", dashboard_token=SecretStr("dashboard-secret")),
         database,
     )
     payload = pairing_payload()
@@ -82,7 +83,7 @@ def test_pairing_never_exposes_its_secret_to_dashboard(tmp_path: Path) -> None:
 def test_pairing_rebinds_an_existing_machine_and_revokes_its_old_credential(tmp_path: Path) -> None:
     database = make_database(tmp_path / "pairing-rebind.db")
     app = create_app(
-        ServerSettings(database_url="sqlite+pysqlite://", dashboard_token="dashboard-secret"),
+        ServerSettings(database_url="sqlite+pysqlite://", dashboard_token=SecretStr("dashboard-secret")),
         database,
     )
     dashboard = {"X-NCC-Dashboard-Token": "dashboard-secret"}
@@ -114,16 +115,16 @@ def test_pairing_rebinds_an_existing_machine_and_revokes_its_old_credential(tmp_
         assert claimed.status_code == 200
 
     with database.session() as session:
-        old_token = session.get(AgentToken, old_token_id)
+        old_token_after = session.get(AgentToken, old_token_id)
         rebound = session.query(AgentToken).filter(AgentToken.token_hash != "old-token-hash").one()
-        assert old_token is not None and old_token.revoked_at is not None
+        assert old_token_after is not None and old_token_after.revoked_at is not None
         assert rebound.node_id == node_id
 
 
 def test_beta_dashboard_approval_marks_the_claimed_node(tmp_path: Path) -> None:
     database = make_database(tmp_path / "pairing-beta-role.db")
     app = create_app(
-        ServerSettings(database_url="sqlite+pysqlite://", dashboard_token="dashboard-secret"),
+        ServerSettings(database_url="sqlite+pysqlite://", dashboard_token=SecretStr("dashboard-secret")),
         database,
     )
     payload = pairing_payload()

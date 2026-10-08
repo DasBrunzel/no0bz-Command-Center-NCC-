@@ -17,6 +17,7 @@ from ncc_server.models import (
     utc_now,
 )
 from ncc_server.node_service import is_online
+from pydantic import SecretStr
 
 
 def make_database(path: Path) -> Database:
@@ -71,7 +72,7 @@ def test_fleet_api_is_protected_and_returns_latest_metrics(tmp_path: Path) -> No
     online_id, _ = seed(database)
     settings = ServerSettings(
         database_url="sqlite+pysqlite://",
-        dashboard_token="dashboard-secret",
+        dashboard_token=SecretStr("dashboard-secret"),
         dashboard_allow_loopback_without_token=False,
         chat_upload_dir=tmp_path / "chat-uploads",
     )
@@ -255,7 +256,9 @@ def test_monthly_network_usage_uses_counter_deltas_and_handles_resets(tmp_path: 
         )
         session.commit()
     app = create_app(
-        ServerSettings(database_url="sqlite+pysqlite://", dashboard_token="dashboard-secret"),
+        ServerSettings(
+            database_url="sqlite+pysqlite://", dashboard_token=SecretStr("dashboard-secret")
+        ),
         database,
     )
     with TestClient(app) as client:
@@ -272,7 +275,9 @@ def test_monthly_network_usage_uses_counter_deltas_and_handles_resets(tmp_path: 
 def test_commander_can_reset_visible_network_statistics_without_deleting_raw_data(tmp_path: Path) -> None:
     database = make_database(tmp_path / "network-reset.db")
     online_id, _ = seed(database)
-    settings = ServerSettings(database_url="sqlite+pysqlite://", dashboard_token="dashboard-secret")
+    settings = ServerSettings(
+        database_url="sqlite+pysqlite://", dashboard_token=SecretStr("dashboard-secret")
+    )
     app = create_app(settings, database)
     headers = {"X-NCC-Dashboard-Token": "dashboard-secret"}
     with TestClient(app) as client:
@@ -342,7 +347,9 @@ def test_monthly_network_usage_ignores_impossible_counter_jumps(tmp_path: Path) 
         )
         session.commit()
     app = create_app(
-        ServerSettings(database_url="sqlite+pysqlite://", dashboard_token="dashboard-secret"),
+        ServerSettings(
+            database_url="sqlite+pysqlite://", dashboard_token=SecretStr("dashboard-secret")
+        ),
         database,
     )
     with TestClient(app) as client:

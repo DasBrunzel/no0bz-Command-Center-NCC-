@@ -17,6 +17,7 @@ from ncc_server.app import create_app
 from ncc_server.config import ServerSettings
 from ncc_server.database import Database
 from ncc_server.models import Base, TelemetryPoint, utc_now
+from pydantic import SecretStr
 
 
 def test_machine_identity_is_stable_and_private(tmp_path: Path) -> None:
@@ -74,7 +75,7 @@ def test_agent_enrolls_and_flushes_buffer_without_exposing_token(tmp_path: Path)
 
     settings = AgentSettings(
         server_url="https://ncc.example.test",
-        token="ncc_agent_super-secret",
+        token=SecretStr("ncc_agent_super-secret"),
         data_dir=tmp_path,
     )
     buffer = TelemetryBuffer(tmp_path / "queue.sqlite3", max_points=100)
@@ -99,7 +100,7 @@ def test_agent_enrolls_and_flushes_buffer_without_exposing_token(tmp_path: Path)
 def test_failed_upload_stays_in_offline_buffer(tmp_path: Path) -> None:
     settings = AgentSettings(
         server_url="https://ncc.example.test",
-        token="ncc_agent_test",
+        token=SecretStr("ncc_agent_test"),
         data_dir=tmp_path,
     )
     buffer = TelemetryBuffer(tmp_path / "queue.sqlite3", max_points=100)
@@ -120,7 +121,7 @@ def test_failed_upload_stays_in_offline_buffer(tmp_path: Path) -> None:
 def test_plain_http_requires_explicit_trusted_network_opt_in(tmp_path: Path) -> None:
     settings = AgentSettings(
         server_url="http://100.100.100.10:8350",
-        token="ncc_agent_test",
+        token=SecretStr("ncc_agent_test"),
         data_dir=tmp_path,
     )
     with pytest.raises(ValueError, match="must use HTTPS"):
@@ -161,7 +162,7 @@ def test_agent_to_server_telemetry_roundtrip(tmp_path: Path) -> None:
         agent = AgentClient(
             AgentSettings(
                 server_url="https://ncc.example.test",
-                token=plaintext,
+                token=SecretStr(plaintext),
                 data_dir=tmp_path,
             ),
             machine_id,

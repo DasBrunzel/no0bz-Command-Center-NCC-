@@ -12,6 +12,7 @@ from ncc_service.doctor import run_checks, validate_url
 from ncc_service.environment import load_environment_file
 from ncc_service.migrate import upgrade
 from ncc_service.process import child_python_executable
+from pydantic import SecretStr
 from sqlalchemy import create_engine, text
 
 
@@ -52,7 +53,7 @@ def test_service_migration_uses_external_environment_file(
     engine = create_engine(f"sqlite+pysqlite:///{database_path.as_posix()}")
     with engine.connect() as connection:
         revision = connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-        assert revision == "20261004_0013"
+        assert revision == "20261007_0015"
         assert connection.execute(text("SELECT COUNT(*) FROM nodes")).scalar_one() == 0
         assert connection.execute(text("SELECT COUNT(*) FROM fleet_groups")).scalar_one() == 0
     engine.dispose()
@@ -164,9 +165,9 @@ def test_unraid_configuration_reads_key_without_printing_it() -> None:
 
 def test_unraid_settings_support_legacy_setup_key_names() -> None:
     settings = ServerSettings(
-        NCC_UNRAID_URL="http://100.88.247.35/graphql",
-        NCC_UNRAID_API_KEY="secret",
-        NCC_UNRAID_DISPLAY_NAME="horsttower",
+        unraid_url="http://100.88.247.35/graphql",
+        unraid_api_key=SecretStr("secret"),
+        unraid_display_name="horsttower",
     )
     assert settings.unraid_url == "http://100.88.247.35/graphql"
     assert settings.unraid_api_key.get_secret_value() == "secret"
@@ -202,7 +203,8 @@ def test_windows_service_uses_importable_class_name(monkeypatch: pytest.MonkeyPa
         captured["args"] = args
         captured["kwargs"] = kwargs
 
-    monkeypatch.setattr(windows.win32serviceutil, "HandleCommandLine", handle)
+    service_utility = windows.__dict__["win32serviceutil"]
+    monkeypatch.setattr(service_utility, "HandleCommandLine", handle)
     windows.main(["agent", "debug"])
     kwargs = captured["kwargs"]
     assert isinstance(kwargs, dict)

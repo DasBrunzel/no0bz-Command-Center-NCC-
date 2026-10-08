@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
+import pytest
 from fastapi.testclient import TestClient
 from ncc_server.app import create_app
 from ncc_server.config import ServerSettings
@@ -61,13 +62,13 @@ def test_foundation_metadata_contains_persistent_entities() -> None:
     }
 
 
-def test_readiness_reports_unavailable_database() -> None:
+def test_readiness_reports_unavailable_database(monkeypatch: pytest.MonkeyPatch) -> None:
     database = FakeDatabase()
 
     def unavailable() -> None:
         raise OSError("database offline")
 
-    database.ping = unavailable
+    monkeypatch.setattr(database, "ping", unavailable)
     settings = ServerSettings(
         database_url="sqlite+pysqlite:///:memory:",
         database_check_on_start=False,

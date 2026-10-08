@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 from ncc.collectors.registry import ProviderRegistry, merge_metrics
-from ncc.collectors.system import DemoProvider, PsutilProvider, normalize_process_cpu, parse_lhm_tree
+from ncc.collectors.system import (
+    DemoProvider,
+    PsutilProvider,
+    normalize_process_cpu,
+    parse_lhm_tree,
+)
 from ncc.config import Settings
 
 

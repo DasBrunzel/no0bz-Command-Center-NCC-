@@ -4,13 +4,12 @@ from datetime import datetime
 from html import escape
 
 import httpx
+from sqlalchemy.orm import Session
 
 from ncc_server import __version__
 from ncc_server.alert_service import AlertNotification
 from ncc_server.config import ServerSettings
 from ncc_server.models import TelegramNotificationSettings, utc_now
-from sqlalchemy.orm import Session
-
 
 _KIND_LABELS = {
     "offline": "Verbindung verloren",

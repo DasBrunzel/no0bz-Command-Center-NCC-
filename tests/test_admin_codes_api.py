@@ -7,6 +7,7 @@ from ncc_server.app import create_app
 from ncc_server.config import ServerSettings
 from ncc_server.database import Database
 from ncc_server.models import Base
+from pydantic import SecretStr
 
 
 def make_database(path: Path) -> Database:
@@ -20,7 +21,7 @@ def test_admin_code_creates_a_browser_session_and_can_be_revoked(tmp_path: Path)
     app = create_app(
         ServerSettings(
             database_url="sqlite+pysqlite://",
-            dashboard_token="dashboard-secret",
+            dashboard_token=SecretStr("dashboard-secret"),
             dashboard_allow_loopback_without_token=False,
         ),
         database,
@@ -61,7 +62,7 @@ def test_admin_code_creates_a_browser_session_and_can_be_revoked(tmp_path: Path)
 def test_admin_code_cannot_be_redeemed_twice(tmp_path: Path) -> None:
     database = make_database(tmp_path / "one-time-code.db")
     app = create_app(
-        ServerSettings(database_url="sqlite+pysqlite://", dashboard_token="dashboard-secret"),
+        ServerSettings(database_url="sqlite+pysqlite://", dashboard_token=SecretStr("dashboard-secret")),
         database,
     )
     with TestClient(app) as client:
@@ -78,7 +79,7 @@ def test_admin_code_cannot_be_redeemed_twice(tmp_path: Path) -> None:
 def test_beta_tester_code_is_badged_and_cannot_manage_or_delete(tmp_path: Path) -> None:
     database = make_database(tmp_path / "beta-tester.db")
     app = create_app(
-        ServerSettings(database_url="sqlite+pysqlite://", dashboard_token="dashboard-secret"),
+        ServerSettings(database_url="sqlite+pysqlite://", dashboard_token=SecretStr("dashboard-secret")),
         database,
     )
     commander_headers = {"X-NCC-Dashboard-Token": "dashboard-secret"}
