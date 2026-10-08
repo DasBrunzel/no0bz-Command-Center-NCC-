@@ -4,6 +4,14 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.5.0-beta.69] - 2026-10-08
+
+### Fixed
+
+- Hotfix für Beta 68: Netzwerkverläufe werden wieder ohne einen zusätzlichen
+  Zugriff auf ein nicht vorhandenes `metrics`-Objekt gezeichnet. Das Dashboard
+  bleibt dadurch auch nach dem automatischen Telemetrie-Refresh sichtbar.
+
 ## [0.5.0-beta.68] - 2026-10-08
 
 ### Fixed
