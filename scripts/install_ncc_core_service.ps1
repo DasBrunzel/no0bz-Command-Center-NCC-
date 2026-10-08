@@ -16,9 +16,11 @@ $configRoot = Join-Path $root "config"
 New-Item -ItemType Directory -Force -Path $coreRoot, $configRoot, (Join-Path $root "core-state"), (Join-Path $root "logs") | Out-Null
 Copy-Item -LiteralPath $CoreExecutable -Destination (Join-Path $coreRoot "ncc-core.exe") -Force
 $config = Join-Path $configRoot "core.env"
-@(
-  "NCC_CORE_STATE_DIR=$root\core-state"
-) | Set-Content -LiteralPath $config -Encoding utf8
+$agentConfig = Join-Path $configRoot "agent.env"
+if (-not (Test-Path -LiteralPath $agentConfig)) { throw "NCC Agent-Konfiguration fehlt: $agentConfig" }
+$agentValues = Get-Content -LiteralPath $agentConfig | Where-Object { $_ -match '^NCC_AGENT_[A-Z0-9_]+=' }
+if (-not $agentValues) { throw "NCC Agent-Konfiguration enthält keine NCC_AGENT-Werte." }
+@("NCC_CORE_STATE_DIR=$root\core-state") + $agentValues | Set-Content -LiteralPath $config -Encoding utf8
 & icacls.exe $config /inheritance:r /grant:r '*S-1-5-18:F' '*S-1-5-32-544:F' | Out-Null
 $python = Join-Path $root "venv\Scripts\python.exe"
 if (-not (Test-Path $python)) { throw "NCC Dienst-Python fehlt: $python" }
