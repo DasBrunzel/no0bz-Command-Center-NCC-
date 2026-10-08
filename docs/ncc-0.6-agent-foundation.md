@@ -107,6 +107,21 @@ Core schreibt dafür einen lokalen, geheimnisfreien Status:
 }
 ```
 
+## Payload-Archiv und Dienststart
+
+Ein freigegebenes Payload-Artefakt ist ein signiertes ZIP-Archiv. Es enthält
+`payload.json` und ausschließlich relative Dateien. `payload.json` benennt eine
+release-lokale ausführbare Datei und optionale feste Argumente. Core prüft erst
+Signatur und Hash, entpackt atomar nach `payloads/<Version>/files/` und akzeptiert
+keine Pfade außerhalb dieses Verzeichnisses. Erst danach darf die Version
+aktiviert werden.
+
+Der Windows-Installer `scripts/install_ncc_core_service.ps1` registriert den
+eigenständigen Dienst **NccCore**. Ohne aktivierten, signierten Payload bleibt er
+absichtlich gestoppt; er startet niemals einen beliebigen Python-Checkout. Nach
+einer Aktivierung startet Core ausschließlich die in `payload.json` deklarierte
+Datei, übergibt den privaten Core-State-Pfad und prüft den lokalen Ready-Nachweis.
+
 ## Bestehende NCC-0.5-Geräte migrieren
 
 1. Core wird zusätzlich zum vorhandenen 0.5-Agenten installiert, aber noch nicht

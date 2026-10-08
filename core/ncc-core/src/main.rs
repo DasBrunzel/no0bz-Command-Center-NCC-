@@ -66,22 +66,53 @@ fn run(args: Vec<String>) -> Result<()> {
 /// Windows/systemd hosts invoke this fixed command.  Its inputs are environment
 /// variables from a local ACL-protected config file; it never evaluates a shell.
 fn run_service(root: &Path) -> Result<()> {
-    let executable = env::var("NCC_CORE_PAYLOAD_EXECUTABLE")
-        .map_err(|_| "NCC_CORE_PAYLOAD_EXECUTABLE is required".to_owned())?;
-    let version = env::var("NCC_CORE_PAYLOAD_VERSION")
-        .map_err(|_| "NCC_CORE_PAYLOAD_VERSION is required".to_owned())?;
     let timeout = env::var("NCC_CORE_HEALTH_TIMEOUT_SECONDS").unwrap_or_else(|_| "30".to_owned());
+    let state = load_state(root)?;
+    let version = state
+        .active_payload
+        .ok_or("no active, signed NCC payload")?;
+    let descriptor = payload_descriptor(root, &version)?;
     run_payload(
         root,
         &[
             "--version".to_owned(),
             version,
             "--executable".to_owned(),
-            executable,
+            descriptor.executable.display().to_string(),
             "--timeout-seconds".to_owned(),
             timeout,
         ],
     )
+}
+
+#[derive(Deserialize)]
+struct PayloadDescriptorFile {
+    executable: String,
+    #[serde(default)]
+    arguments: Vec<String>,
+}
+
+struct PayloadDescriptor {
+    executable: PathBuf,
+    arguments: Vec<String>,
+}
+
+fn payload_descriptor(root: &Path, version: &str) -> Result<PayloadDescriptor> {
+    let payload_root = root.join("payloads").join(version).join("files");
+    let descriptor: PayloadDescriptorFile =
+        serde_json::from_slice(&fs::read(payload_root.join("payload.json")).map_err(display)?)
+            .map_err(display)?;
+    let executable = payload_root.join(&descriptor.executable);
+    if descriptor.executable.is_empty()
+        || !executable.is_file()
+        || !executable.starts_with(&payload_root)
+    {
+        return Err("payload descriptor executable is invalid".to_owned());
+    }
+    Ok(PayloadDescriptor {
+        executable,
+        arguments: descriptor.arguments,
+    })
 }
 
 fn run_payload(root: &Path, args: &[String]) -> Result<()> {
@@ -96,7 +127,14 @@ fn run_payload(root: &Path, args: &[String]) -> Result<()> {
     let health_file = state_dir.join("payload-health.json");
     // A health record is only valid for the process launched below.
     let _ = fs::remove_file(&health_file);
-    let arguments = values(args, "--argument");
+    let arguments = {
+        let provided = values(args, "--argument");
+        if provided.is_empty() {
+            payload_descriptor(root, &version)?.arguments
+        } else {
+            provided
+        }
+    };
     let mut child = payload::start(&executable, &arguments, &state_dir)?;
     let ready = payload::wait_for_ready(
         &state_dir,
@@ -186,7 +224,7 @@ fn stage(root: &Path, args: &[String]) -> Result<()> {
         return Err("artifact SHA-256 does not match manifest".to_owned());
     }
     verify_trusted_release_signature(root, &key_id, &version, &hash, expected_size, &signature)?;
-    let destination = root.join("payloads").join(version).join("payload.archive");
+    let destination = root.join("payloads").join(&version).join("payload.archive");
     let parent = destination.parent().ok_or("payload path has no parent")?;
     fs::create_dir_all(parent).map_err(display)?;
     let temporary = destination.with_extension("tmp");
@@ -195,7 +233,57 @@ fn stage(root: &Path, args: &[String]) -> Result<()> {
         return Err("staged artifact SHA-256 mismatch".to_owned());
     }
     fs::rename(temporary, destination).map_err(display)?;
+    extract_payload(root, &version)?;
     Ok(())
+}
+
+fn extract_payload(root: &Path, version: &str) -> Result<()> {
+    let archive_path = root.join("payloads").join(version).join("payload.archive");
+    let files = root.join("payloads").join(version).join("files");
+    let temporary = files.with_extension("tmp");
+    let _ = fs::remove_dir_all(&temporary);
+    fs::create_dir_all(&temporary).map_err(display)?;
+    let archive = fs::File::open(archive_path).map_err(display)?;
+    let mut archive = zip::ZipArchive::new(archive).map_err(display)?;
+    for index in 0..archive.len() {
+        let mut entry = archive.by_index(index).map_err(display)?;
+        let enclosed = entry
+            .enclosed_name()
+            .ok_or("payload archive contains unsafe path")?
+            .to_owned();
+        let destination = temporary.join(enclosed);
+        if entry.is_dir() {
+            fs::create_dir_all(&destination).map_err(display)?;
+        } else {
+            let parent = destination.parent().ok_or("payload entry has no parent")?;
+            fs::create_dir_all(parent).map_err(display)?;
+            let mut target = fs::File::create(destination).map_err(display)?;
+            std::io::copy(&mut entry, &mut target).map_err(display)?;
+        }
+    }
+    if !temporary.join("payload.json").is_file() {
+        return Err("payload archive misses payload.json".to_owned());
+    }
+    let _ = payload_descriptor_from(&temporary)?;
+    let _ = fs::remove_dir_all(&files);
+    fs::rename(temporary, files).map_err(display)
+}
+
+fn payload_descriptor_from(payload_root: &Path) -> Result<PayloadDescriptor> {
+    let descriptor: PayloadDescriptorFile =
+        serde_json::from_slice(&fs::read(payload_root.join("payload.json")).map_err(display)?)
+            .map_err(display)?;
+    let executable = payload_root.join(&descriptor.executable);
+    if descriptor.executable.is_empty()
+        || !executable.is_file()
+        || !executable.starts_with(payload_root)
+    {
+        return Err("payload descriptor executable is invalid".to_owned());
+    }
+    Ok(PayloadDescriptor {
+        executable,
+        arguments: descriptor.arguments,
+    })
 }
 
 fn activate(root: &Path, args: &[String]) -> Result<()> {
@@ -313,6 +401,7 @@ mod tests {
     use base64::{Engine as _, engine::general_purpose::STANDARD};
     use ed25519_dalek::{Signer, SigningKey};
     use std::fs;
+    use std::io::Write;
 
     fn args(root: &Path, rest: &[&str]) -> Vec<String> {
         let mut result = vec!["--state-dir".to_owned(), root.display().to_string()];
@@ -354,23 +443,38 @@ mod tests {
         ]
     }
 
+    fn payload_archive(path: &Path, executable: &[u8]) {
+        let file = fs::File::create(path).unwrap();
+        let mut archive = zip::ZipWriter::new(file);
+        let options = zip::write::SimpleFileOptions::default();
+        archive.start_file("payload.json", options).unwrap();
+        archive
+            .write_all(br#"{"executable":"payload.bin"}"#)
+            .unwrap();
+        archive.start_file("payload.bin", options).unwrap();
+        archive.write_all(executable).unwrap();
+        archive.finish().unwrap();
+    }
+
     #[test]
     fn a_failed_health_check_rolls_back() {
         let root = env::temp_dir().join(format!("ncc-core-test-{}", now_unix().unwrap()));
         let source = root.join("source.zip");
         fs::create_dir_all(&root).unwrap();
-        fs::write(&source, b"first").unwrap();
+        payload_archive(&source, b"first");
         let hash = sha256(&source).unwrap();
-        run(stage_args(&root, &source, "0.6.0-beta.1", &hash, 5)).unwrap();
+        let size = fs::metadata(&source).unwrap().len();
+        run(stage_args(&root, &source, "0.6.0-beta.1", &hash, size)).unwrap();
         run(args(&root, &["activate", "--version", "0.6.0-beta.1"])).unwrap();
         run(args(
             &root,
             &["health", "--version", "0.6.0-beta.1", "--healthy", "true"],
         ))
         .unwrap();
-        fs::write(&source, b"second").unwrap();
+        payload_archive(&source, b"second");
         let hash = sha256(&source).unwrap();
-        run(stage_args(&root, &source, "0.6.0-beta.2", &hash, 6)).unwrap();
+        let size = fs::metadata(&source).unwrap().len();
+        run(stage_args(&root, &source, "0.6.0-beta.2", &hash, size)).unwrap();
         run(args(&root, &["activate", "--version", "0.6.0-beta.2"])).unwrap();
         run(args(
             &root,
