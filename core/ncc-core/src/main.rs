@@ -56,9 +56,39 @@ fn run(args: Vec<String>) -> Result<()> {
         "stage" => stage(&state_dir, &remaining[1..])?,
         "activate" => activate(&state_dir, &remaining[1..])?,
         "health" => report_health(&state_dir, &remaining[1..])?,
-        _ => return Err("expected status, stage, activate or health".to_owned()),
+        "run-payload" => run_payload(&state_dir, &remaining[1..])?,
+        _ => return Err("expected status, stage, activate, health or run-payload".to_owned()),
     }
     Ok(())
+}
+
+fn run_payload(root: &Path, args: &[String]) -> Result<()> {
+    let version = valid_version(&value(args, "--version")?)?;
+    let executable = PathBuf::from(value(args, "--executable")?);
+    let timeout: u64 = value(args, "--timeout-seconds")?.parse().map_err(display)?;
+    let state = load_state(root)?;
+    if state.active_payload.as_deref() != Some(&version) {
+        return Err("payload version is not active".to_owned());
+    }
+    let mut child = payload::start(&executable, &[])?;
+    let ready = payload::wait_for_ready(
+        &root.join("state"),
+        &version,
+        std::time::Duration::from_secs(timeout),
+    )?;
+    if ready {
+        return Ok(());
+    }
+    let _ = child.kill();
+    report_health(
+        root,
+        &[
+            "--version".to_owned(),
+            version,
+            "--healthy".to_owned(),
+            "false".to_owned(),
+        ],
+    )
 }
 
 fn parse_state_dir(args: Vec<String>) -> Result<(PathBuf, Vec<String>)> {
