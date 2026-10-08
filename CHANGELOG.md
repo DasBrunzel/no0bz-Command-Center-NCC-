@@ -4,6 +4,14 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.5.0-beta.70] - 2026-10-08
+
+### Fixed
+
+- Die Traffic-Statistik lädt Geräte jetzt unabhängig. Eine fehlerhafte oder
+  vorübergehend nicht erreichbare Geräteabfrage leert nicht mehr die komplette
+  Statistikseite.
+
 ## [0.5.0-beta.69] - 2026-10-08
 
 ### Fixed

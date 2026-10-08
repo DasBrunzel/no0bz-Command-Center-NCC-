@@ -1270,16 +1270,36 @@ function StatisticsPage({
       try {
         const entries = await Promise.all(
           trafficNodes.map(async (node) => {
-            const [monthly, history] = await Promise.all([
-              getJson<NetworkUsageSummary>(`/api/v1/fleet/nodes/${node.node_id}/network/month`, token),
-              getJson<Telemetry[]>(`/api/v1/fleet/nodes/${node.node_id}/telemetry?limit=48`, token),
-            ]);
-            return [node.node_id, monthly, history] as const;
+            try {
+              const [monthly, history] = await Promise.all([
+                getJson<NetworkUsageSummary>(
+                  `/api/v1/fleet/nodes/${node.node_id}/network/month`,
+                  token,
+                ),
+                getJson<Telemetry[]>(
+                  `/api/v1/fleet/nodes/${node.node_id}/telemetry?limit=48`,
+                  token,
+                ),
+              ]);
+              return [node.node_id, monthly, history] as const;
+            } catch {
+              return [node.node_id, null, []] as const;
+            }
           }),
         );
         if (!current) return;
-        setTraffic(Object.fromEntries(entries.map(([nodeId, monthly]) => [nodeId, monthly])));
-        setTrafficHistory(Object.fromEntries(entries.map(([nodeId, , history]) => [nodeId, history])));
+        setTraffic(
+          Object.fromEntries(
+            entries
+              .filter((entry): entry is [string, NetworkUsageSummary, Telemetry[]] => entry[1] !== null)
+              .map(([nodeId, monthly]) => [nodeId, monthly]),
+          ),
+        );
+        setTrafficHistory(
+          Object.fromEntries(
+            entries.map(([nodeId, , history]) => [nodeId, [...history]]),
+          ) as Record<string, Telemetry[]>,
+        );
       } catch {
         if (current) {
           setTraffic({});
@@ -2752,7 +2772,7 @@ function App() {
         <footer>
           <ShieldCheck size={14} />
           <span>GESICHERTE VERBINDUNG</span>
-          <b>v0.5.0-beta.69</b>
+          <b>v0.5.0-beta.70</b>
         </footer>
       </aside>
       <div className="mobile-scrim" onClick={() => setSidebar(false)} />
