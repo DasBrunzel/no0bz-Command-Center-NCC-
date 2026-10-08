@@ -25,7 +25,7 @@ try {
     $content = Join-Path $work 'content'
     New-Item -ItemType Directory -Force -Path $content | Out-Null
     Copy-Item $payload (Join-Path $content 'test-payload.exe')
-    @{ executable = 'test-payload.exe'; arguments = @() } | ConvertTo-Json -Compress | Set-Content (Join-Path $content 'payload.json') -NoNewline -Encoding utf8
+    [IO.File]::WriteAllText((Join-Path $content 'payload.json'), (@{ executable = 'test-payload.exe'; arguments = @() } | ConvertTo-Json -Compress), [Text.UTF8Encoding]::new($false))
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     [IO.Compression.ZipFile]::CreateFromDirectory($content, $archive)
     $hash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -40,7 +40,7 @@ try {
     $public = [Convert]::ToBase64String([IO.File]::ReadAllBytes($publicDer)[12..43])
     $signature = [Convert]::ToBase64String([IO.File]::ReadAllBytes($signatureFile))
     New-Item -ItemType Directory -Force -Path (Join-Path $root 'config') | Out-Null
-    @{ keys = @{ 'temporary-migration-test' = $public } } | ConvertTo-Json -Compress | Set-Content (Join-Path $root 'config\trusted-keys.json') -NoNewline -Encoding utf8
+    [IO.File]::WriteAllText((Join-Path $root 'config\trusted-keys.json'), (@{ keys = @{ 'temporary-migration-test' = $public } } | ConvertTo-Json -Compress), [Text.UTF8Encoding]::new($false))
     & $coreInstalled --state-dir $root stage --source $archive --version $version --sha256 $hash --size $size --key-id temporary-migration-test --signature $signature
     if ($LASTEXITCODE -ne 0) { throw 'Core hat den signierten Test-Payload abgewiesen.' }
     & $coreInstalled --state-dir $root activate --version $version
