@@ -14,3 +14,13 @@ SHA-256 und Größe gebundenen Release-Statement. Als Nächstes wird sie an den
 Staging-Befehl und eine vertrauenswürdige Public-Key-Liste gebunden. Private
 Signaturschlüssel gehören nicht in dieses Repository und werden erst vor einem
 veröffentlichten 0.6-Release eingerichtet.
+
+Ein Payload meldet seinen erfolgreichen Start künftig über eine lokale,
+geheimnisfreie Datei mit folgendem Inhalt an Core:
+
+```json
+{"payload_version":"0.6.0-beta.1","status":"ready"}
+```
+
+Nur die aktive Version mit Status `ready` gilt als gesund; jede andere Antwort führt
+nach Ablauf des späteren 90-Sekunden-Fensters zum Rollback.

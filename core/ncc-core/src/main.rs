@@ -1,3 +1,4 @@
+mod health;
 mod signature;
 
 use serde::{Deserialize, Serialize};
