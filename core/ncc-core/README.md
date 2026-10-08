@@ -9,7 +9,8 @@ und wird von NCC 0.5 nicht gestartet.
 cargo test --manifest-path core/ncc-core/Cargo.toml
 ```
 
-Der künftige Schritt ergänzt eine Ed25519-Signaturprüfung, Payload-Start per lokaler
-IPC und einen getrennten Windows-/systemd-Dienst. Private Signaturschlüssel gehören
-nicht in dieses Repository und werden erst vor einem veröffentlichten 0.6-Release
-eingerichtet.
+Der Prototyp enthält bereits die Ed25519-Prüflogik für einen exakt an Version,
+SHA-256 und Größe gebundenen Release-Statement. Als Nächstes wird sie an den
+Staging-Befehl und eine vertrauenswürdige Public-Key-Liste gebunden. Private
+Signaturschlüssel gehören nicht in dieses Repository und werden erst vor einem
+veröffentlichten 0.6-Release eingerichtet.
