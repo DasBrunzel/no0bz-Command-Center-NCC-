@@ -72,6 +72,16 @@ jeweilige Gerät. Warnungen informieren über fehlende frische Telemetrie, alte
 Agent-Versionen, wiederholte Doppelmeldungen und unplausible Netzwerkzähler. Sie
 erscheinen im Warnungszentrum und können über Telegram zugestellt werden.
 
+### Ausblick: NCC 0.6 Agent Foundation
+
+NCC 0.6 wird den Agenten in einen kleinen dauerhaften **NCC Core** und einen
+austauschbaren Telemetrie-Payload aufteilen. Updates werden signiert, atomar
+aktiviert und bei einem fehlerhaften Payload automatisch zurückgerollt. Bestehende
+NCC-0.5-Agenten bleiben kompatibel und werden nur bewusst, einzeln pro Gerät
+migriert. Die Planung berücksichtigt außerdem ein physisches Gerät mit mehreren
+Profilen — etwa Windows und CachyOS im Dualboot — damit es im Dashboard nicht doppelt
+erscheint. Details: [NCC 0.6 Agent Foundation](docs/ncc-0.6-agent-foundation.md).
+
 Neben den Farbthemes stehen in den Einstellungen drei alternative Dashboard-Layouts
 bereit: **Orbit**, **Blueprint** und **Studio**. Die Auswahl wird nur im jeweiligen
 Browser gespeichert.

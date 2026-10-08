@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://no0bz.dev/ncc/schemas/agent-release-manifest-v1.json",
+  "title": "NCC 0.6 Agent Release Manifest",
+  "description": "Signed, secret-free metadata consumed by NCC Core before staging an agent payload.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "channel", "released_at", "artifacts", "signature"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "channel": { "type": "string", "enum": ["stable", "beta"] },
+    "released_at": { "type": "string", "format": "date-time" },
+    "minimum_core_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["payload_version", "platform", "architecture", "url", "sha256", "size_bytes"],
+        "properties": {
+          "payload_version": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"
+          },
+          "platform": { "type": "string", "enum": ["windows", "linux"] },
+          "architecture": { "type": "string", "enum": ["x86_64", "aarch64"] },
+          "url": { "type": "string", "format": "uri", "pattern": "^https://" },
+          "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "size_bytes": { "type": "integer", "minimum": 1 },
+          "notes_url": { "type": "string", "format": "uri", "pattern": "^https://" }
+        }
+      }
+    },
+    "signature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "key_id", "value"],
+      "properties": {
+        "algorithm": { "const": "ed25519" },
+        "key_id": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "value": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

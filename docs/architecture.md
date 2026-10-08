@@ -73,3 +73,16 @@ Im Servermodus registrieren sich Clients mit demselben Token und senden ihre Sna
 Der Server markiert Nodes nach 15 Sekunden ohne Kontakt offline. Ein Client verbindet
 sich mit exponentiellem Backoff erneut.
 
+## NCC 0.6 Agent Foundation (geplant)
+
+NCC 0.6 ersetzt den bestehenden Agenten nicht auf einmal. Ein kleiner, kompiliert
+ausgelieferter **NCC Core** übernimmt Dienstlebenszyklus, signierte Updates und
+Rollback. Der austauschbare Telemetrie-Payload sammelt weiterhin die Hardwaredaten und
+sendet sie über die bestehende API. Core und Server besitzen zwingend getrennte
+Laufzeiten, damit ein Agent-Update niemals ein Serverpaket verändern kann.
+
+Die verbindliche Entwurfs-, Migrations- und Sicherheitsgrundlage steht in
+[NCC 0.6 – Agent Foundation](ncc-0.6-agent-foundation.md). Das zugehörige,
+geheimnisfreie Update-Manifest ist als
+[JSON Schema](ncc-agent-release-manifest.schema.json) versioniert.
+
