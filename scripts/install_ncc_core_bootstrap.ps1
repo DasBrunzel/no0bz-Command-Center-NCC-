@@ -66,8 +66,11 @@ Set-NccAcl $coreTarget
 Set-NccAcl $coreEnv
 Set-NccAcl (Join-Path $stateRoot 'config\trusted-keys.json')
 
-& $python -m ncc_service.windows core update
-if ($LASTEXITCODE -ne 0) {
+$existingCoreService = Get-Service -Name NccCore -ErrorAction SilentlyContinue
+if ($existingCoreService) {
+    & $python -m ncc_service.windows core update
+    if ($LASTEXITCODE -ne 0) { throw 'Der bestehende NccCore-Dienst konnte nicht aktualisiert werden.' }
+} else {
     & $python -m ncc_service.windows core --startup auto install
     if ($LASTEXITCODE -ne 0) { throw 'Der NccCore-Dienst konnte nicht registriert werden.' }
 }
