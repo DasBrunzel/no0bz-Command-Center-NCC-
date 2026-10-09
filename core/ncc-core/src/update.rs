@@ -3,6 +3,11 @@ use std::env;
 use std::fs;
 use std::path::Path;
 
+// A release must be bounded even after bypassing ureq's deliberately small
+// 10 MiB default response limit. This accommodates packaged Python payloads
+// while preventing an approved server or redirect from exhausting disk/memory.
+const MAX_RELEASE_DOWNLOAD_BYTES: u64 = 512 * 1024 * 1024;
+
 #[derive(Debug, Deserialize)]
 pub struct PendingRelease {
     pub payload_version: String,
@@ -35,6 +40,11 @@ pub fn download(root: &Path, release: &PendingRelease) -> Result<std::path::Path
     if !release.artifact_url.starts_with("https://") {
         return Err("release artifact URL must use HTTPS".to_owned());
     }
+    if release.size_bytes == 0 || release.size_bytes > MAX_RELEASE_DOWNLOAD_BYTES {
+        return Err(format!(
+            "release size is outside the allowed range (1..={MAX_RELEASE_DOWNLOAD_BYTES} bytes)"
+        ));
+    }
     let downloads = root.join("downloads");
     fs::create_dir_all(&downloads).map_err(|error| error.to_string())?;
     let destination = downloads.join(format!("{}.zip", release.payload_version));
@@ -44,6 +54,8 @@ pub fn download(root: &Path, release: &PendingRelease) -> Result<std::path::Path
         .map_err(|error| format!("release download failed: {error}"))?;
     let bytes = response
         .body_mut()
+        .with_config()
+        .limit(MAX_RELEASE_DOWNLOAD_BYTES)
         .read_to_vec()
         .map_err(|error| format!("release download is unreadable: {error}"))?;
     if bytes.len() as u64 != release.size_bytes {
