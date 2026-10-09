@@ -31,11 +31,21 @@ def upgrade() -> None:
     )
     op.add_column("nodes", sa.Column("update_channel", sa.String(length=16), server_default="beta", nullable=False))
     op.add_column("nodes", sa.Column("pending_release_id", sa.String(length=36), nullable=True))
-    op.create_foreign_key("fk_nodes_pending_release", "nodes", "agent_releases", ["pending_release_id"], ["id"], ondelete="SET NULL")
+    if op.get_bind().dialect.name == "sqlite":
+        with op.batch_alter_table("nodes") as batch:
+            batch.create_foreign_key(
+                "fk_nodes_pending_release", "agent_releases", ["pending_release_id"], ["id"], ondelete="SET NULL"
+            )
+    else:
+        op.create_foreign_key("fk_nodes_pending_release", "nodes", "agent_releases", ["pending_release_id"], ["id"], ondelete="SET NULL")
 
 
 def downgrade() -> None:
-    op.drop_constraint("fk_nodes_pending_release", "nodes", type_="foreignkey")
+    if op.get_bind().dialect.name == "sqlite":
+        with op.batch_alter_table("nodes") as batch:
+            batch.drop_constraint("fk_nodes_pending_release", type_="foreignkey")
+    else:
+        op.drop_constraint("fk_nodes_pending_release", "nodes", type_="foreignkey")
     op.drop_column("nodes", "pending_release_id")
     op.drop_column("nodes", "update_channel")
     op.drop_table("agent_releases")

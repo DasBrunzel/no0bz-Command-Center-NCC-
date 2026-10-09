@@ -20,10 +20,22 @@ def upgrade() -> None:
         sa.UniqueConstraint("hardware_fingerprint"),
     )
     op.add_column("nodes", sa.Column("physical_device_id", sa.String(length=36), nullable=True))
-    op.create_foreign_key("fk_nodes_physical_device", "nodes", "physical_devices", ["physical_device_id"], ["id"], ondelete="SET NULL")
+    if op.get_bind().dialect.name == "sqlite":
+        # SQLite cannot ALTER an existing table to add a foreign key. Alembic
+        # recreates the table atomically in batch mode for development/tests.
+        with op.batch_alter_table("nodes") as batch:
+            batch.create_foreign_key(
+                "fk_nodes_physical_device", "physical_devices", ["physical_device_id"], ["id"], ondelete="SET NULL"
+            )
+    else:
+        op.create_foreign_key("fk_nodes_physical_device", "nodes", "physical_devices", ["physical_device_id"], ["id"], ondelete="SET NULL")
 
 
 def downgrade() -> None:
-    op.drop_constraint("fk_nodes_physical_device", "nodes", type_="foreignkey")
+    if op.get_bind().dialect.name == "sqlite":
+        with op.batch_alter_table("nodes") as batch:
+            batch.drop_constraint("fk_nodes_physical_device", type_="foreignkey")
+    else:
+        op.drop_constraint("fk_nodes_physical_device", "nodes", type_="foreignkey")
     op.drop_column("nodes", "physical_device_id")
     op.drop_table("physical_devices")
