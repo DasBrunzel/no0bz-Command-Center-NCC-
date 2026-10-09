@@ -4,6 +4,21 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+### Fixed
+
+- Der 0.6-Collector führt bei einem kurzzeitig blockierten Sensor bis zu einer
+  Minute den letzten gültigen Wert fort, statt fehlende CPU-, RAM- oder GPU-Daten
+  als künstliche Nullwerte an das Dashboard zu liefern.
+- Der Windows-GPU-Collector verarbeitet fremde Treiberzeichen mit explizitem
+  UTF-8-Fallback, sodass ein einzelner nicht decodierbarer Countertext keinen
+  Reader-Thread mehr beschädigt.
+
+### Added
+
+- `initialize_ncc_release_signer.ps1` erstellt einen dauerhaften,
+  passphrasengeschützten Ed25519-Release-Signierer mit restriktiven Windows-ACLs
+  und gibt ausschließlich dessen öffentlichen Verifikationsschlüssel aus.
+
 ## [0.6.0-beta.1] - 2026-10-08
 
 ### Added

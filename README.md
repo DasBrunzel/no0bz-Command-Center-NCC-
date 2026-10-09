@@ -113,6 +113,14 @@ release-2026 BASE64_ED25519_PUBLIC_KEY`. Für die erste Migration stehen
 `rollback_ncc_core_to_agent.ps1` bereit. Der Wechsel wird erst nach einem
 erfolgreichen Paralleltest ausgeführt; der 0.5-Agent bleibt bis dahin Rückfall.
 
+Für den ersten dauerhaften Signierer auf einer vertrauenswürdigen Windows-
+Release-Workstation erzeugt `initialize_ncc_release_signer.ps1` einen
+passphrasengeschützten Ed25519-Privatschlüssel unter
+`%ProgramData%\no0bz\NCC\release-signer`. Die Passphrase wird ausschließlich
+von OpenSSL abgefragt und niemals an NCC übergeben. Anschließend wird **nur** der
+ausgegebene öffentliche Schlüssel auf die jeweiligen NccCore-Installationen
+verteilt. Der private Schlüssel bleibt auf der Release-Workstation.
+
 Neben den Farbthemes stehen in den Einstellungen drei alternative Dashboard-Layouts
 bereit: **Orbit**, **Blueprint** und **Studio**. Die Auswahl wird nur im jeweiligen
 Browser gespeichert.
