@@ -12,6 +12,7 @@ from ncc_server.models import (
     AlertState,
     AuditEvent,
     Base,
+    FleetChatMessage,
     Node,
     TelemetryPoint,
     utc_now,
@@ -206,6 +207,9 @@ def test_fleet_api_is_protected_and_returns_latest_metrics(tmp_path: Path) -> No
         assert session.get(Node, online_id) is None
         assert session.query(TelemetryPoint).count() == 0
         assert session.query(AgentToken).count() == 0
+        chat_rows = session.query(FleetChatMessage).all()
+        assert len(chat_rows) == 2
+        assert all(row.sender_node_id is None for row in chat_rows)
         assert session.query(AuditEvent).filter_by(action="node.forgotten").count() == 1
         assert session.query(AuditEvent).filter_by(action="node.renamed").count() == 1
         assert session.query(AuditEvent).filter_by(action="node.access-role.updated").count() == 1

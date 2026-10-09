@@ -3,13 +3,15 @@ from __future__ import annotations
 import json
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
 from ncc_server.config import ServerSettings
 from ncc_server.models import (
     AlertState,
+    AgentToken,
     AuditEvent,
+    FleetChatMessage,
     FleetGroup,
     Node,
     PhysicalDevice,
@@ -385,6 +387,18 @@ def forget_fleet_node(session: Session, node_id: str) -> bool:
     node = session.get(Node, node_id)
     if node is None:
         return False
+    # Be explicit about dependent data instead of relying only on database
+    # cascades. Older PostgreSQL installations may predate individual NCC
+    # migrations, and chat history deliberately keeps the message while its
+    # sender becomes anonymous after a device is removed.
+    session.execute(
+        update(FleetChatMessage)
+        .where(FleetChatMessage.sender_node_id == node.id)
+        .values(sender_node_id=None)
+    )
+    session.execute(delete(AlertState).where(AlertState.node_id == node.id))
+    session.execute(delete(TelemetryPoint).where(TelemetryPoint.node_id == node.id))
+    session.execute(delete(AgentToken).where(AgentToken.node_id == node.id))
     session.add(
         AuditEvent(
             actor_type="dashboard",

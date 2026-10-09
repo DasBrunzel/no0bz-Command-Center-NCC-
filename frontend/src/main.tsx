@@ -1023,9 +1023,12 @@ function NodeOverview({
       return;
     }
     setForgetting(false);
-    window.alert(
-      "Das Gerät konnte nicht entfernt werden. Bitte erneut versuchen.",
-    );
+    let detail = "";
+    try {
+      const body = (await response.json()) as { detail?: unknown };
+      detail = typeof body.detail === "string" ? body.detail : "";
+    } catch { /* Empty or non-JSON error responses use the status below. */ }
+    window.alert(`Das Gerät konnte nicht entfernt werden (${response.status})${detail ? `: ${detail}` : "."}`);
   };
   const rename = async () => {
     const displayName = window
