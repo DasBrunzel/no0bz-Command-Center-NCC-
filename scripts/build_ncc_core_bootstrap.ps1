@@ -19,6 +19,7 @@ if ($keyBytes.Length -ne 32) { throw 'PublicKey muss ein 32-Byte Ed25519-Public-
 
 $project = Split-Path -Parent $PSScriptRoot
 $OutputDirectory = if ($OutputDirectory) { $OutputDirectory } else { Join-Path $project 'dist\bootstrap' }
+$packageVersion = $Version -replace '-beta\.', 'b' -replace '-alpha\.', 'a' -replace '-rc\.', 'rc'
 $core = Join-Path $project 'core\ncc-core\target\release\ncc-core.exe'
 $installer = Join-Path $PSScriptRoot 'install_ncc_core_bootstrap.ps1'
 $serviceSource = Join-Path $project 'backend\ncc_service'
@@ -42,13 +43,22 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ncc-core-service-bootstrap"
-version = "$Version"
+version = "$packageVersion"
 requires-python = ">=3.10"
 
 [tool.setuptools.packages.find]
 where = ["backend"]
-"@ | Set-Content -LiteralPath (Join-Path $work 'service-package\pyproject.toml') -Encoding utf8
-    @{ keys = @{ $KeyId = $PublicKey } } | ConvertTo-Json -Compress | Set-Content -LiteralPath (Join-Path $work 'trusted-keys.json') -Encoding utf8
+"@ | ForEach-Object {
+        [IO.File]::WriteAllText(
+            (Join-Path $work 'service-package\pyproject.toml'), $_,
+            [Text.UTF8Encoding]::new($false)
+        )
+    }
+    [IO.File]::WriteAllText(
+        (Join-Path $work 'trusted-keys.json'),
+        (@{ keys = @{ $KeyId = $PublicKey } } | ConvertTo-Json -Compress),
+        [Text.UTF8Encoding]::new($false)
+    )
     $readme = @"
 # NCC Core Bootstrap $Version
 
