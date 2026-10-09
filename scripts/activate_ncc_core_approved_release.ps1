@@ -20,10 +20,41 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 $root = Join-Path $env:ProgramData 'no0bz\NCC'
 $core = Join-Path $root 'core\ncc-core.exe'
 $stateDir = Join-Path $root 'core-state'
+$coreEnv = Join-Path $root 'config\core.env'
 if (!(Test-Path -LiteralPath $core)) { throw "NccCore executable fehlt: $core" }
+if (!(Test-Path -LiteralPath $coreEnv)) { throw "NccCore-Konfiguration fehlt: $coreEnv" }
 if (!(Get-Service -Name NccCore -ErrorAction SilentlyContinue)) { throw 'Der Dienst NccCore ist nicht installiert.' }
 
-Restart-Service -Name NccCore -Force
+$serviceBefore = Get-Service -Name NccCore
+$wasRunning = $serviceBefore.Status -eq 'Running'
+if ($wasRunning) {
+    Stop-Service -Name NccCore -Force
+    (Get-Service -Name NccCore).WaitForStatus('Stopped', [TimeSpan]::FromSeconds(20))
+}
+
+# The Windows service loads core.env before starting ncc-core. Load the same
+# values into this elevated process so `check-update` performs the exact same
+# authenticated HTTPS/hash/signature gate, but can return its useful error to
+# the operator instead of hiding it in the Windows service wrapper.
+$updateOutput = ''
+$updateFailure = $null
+try {
+    foreach ($line in Get-Content -LiteralPath $coreEnv) {
+        if ($line -match '^([A-Z0-9_]+)=(.*)$') {
+            [Environment]::SetEnvironmentVariable($Matches[1], $Matches[2].Trim('"'), 'Process')
+        }
+    }
+    $updateOutput = & $core --state-dir $stateDir check-update 2>&1 | Out-String
+    if ($LASTEXITCODE -ne 0) { throw "NccCore check-update failed: $updateOutput" }
+} catch {
+    $updateFailure = $_
+} finally {
+    # Keep monitoring available even if download, hash, or signature checking
+    # rejected the candidate. The active known-good payload stays untouched.
+    Start-Service -Name NccCore
+}
+
+if ($updateFailure) { throw $updateFailure }
 $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
 $lastState = ''
 do {
@@ -40,6 +71,7 @@ do {
                     ActivePayload = $state.active_payload
                     PreviousPayload = $state.previous_payload
                     Health = $state.health
+                    UpdateCheck = $updateOutput.Trim()
                     Rollback = (Join-Path $PSScriptRoot 'rollback_ncc_core_to_agent.ps1')
                 } | ConvertTo-Json
                 exit 0
