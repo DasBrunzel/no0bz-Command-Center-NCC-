@@ -41,9 +41,18 @@ Copy-Item -LiteralPath $configPath -Destination $configBackup -ErrorAction Stop
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $projectRoot 'scripts\backup_ncc_postgres.ps1')
 if ($LASTEXITCODE -ne 0) { throw 'PostgreSQL backup failed; server update was not started.' }
 
-& git -C $projectRoot fetch origin $Branch
+# A targeted fetch otherwise updates only FETCH_HEAD on some Git-for-Windows
+# versions. Store the remote-tracking ref explicitly so a first-time branch
+# switch is deterministic.
+$remoteRef = "refs/heads/$Branch:refs/remotes/origin/$Branch"
+& git -C $projectRoot fetch origin $remoteRef
 if ($LASTEXITCODE -ne 0) { throw 'Git fetch failed.' }
-& git -C $projectRoot switch $Branch
+& git -C $projectRoot show-ref --verify --quiet "refs/heads/$Branch"
+if ($LASTEXITCODE -eq 0) {
+    & git -C $projectRoot switch $Branch
+} else {
+    & git -C $projectRoot switch --track -c $Branch "origin/$Branch"
+}
 if ($LASTEXITCODE -ne 0) { throw "Could not switch to branch $Branch." }
 & git -C $projectRoot pull --ff-only origin $Branch
 if ($LASTEXITCODE -ne 0) { throw 'Git fast-forward update failed.' }
