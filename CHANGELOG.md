@@ -23,6 +23,9 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   und gibt ausschließlich dessen öffentlichen Verifikationsschlüssel aus.
 - Die Update-Freigabe im Dashboard verwendet bei mehreren kompatiblen Releases
   eine sichtbare Auswahl statt einer manuell einzutippenden Release-ID.
+- `update_ncc_server_release_distribution.ps1` ermoeglicht ein begrenztes,
+  vorab gesichertes Windows-Server-Update fuer die Dashboard-Release-Verteilung,
+  ohne Agenten oder deren Konfiguration anzufassen.
 
 ## [0.6.0-beta.1] - 2026-10-08
 

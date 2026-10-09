@@ -113,6 +113,13 @@ release-2026 BASE64_ED25519_PUBLIC_KEY`. Für die erste Migration stehen
 `rollback_ncc_core_to_agent.ps1` bereit. Der Wechsel wird erst nach einem
 erfolgreichen Paralleltest ausgeführt; der 0.5-Agent bleibt bis dahin Rückfall.
 
+Falls ein bestehender Windows-NCC-Server die Release-Verteilung noch nicht
+bereitstellt, aktualisiert `update_ncc_server_release_distribution.ps1` nur den
+Server auf den 0.6-Branch. Es verlangt einen sauberen Git-Checkout, sichert
+`server.env` und PostgreSQL vor der Migration und prueft anschliessend den
+NccServer sowie die Release-Route. Agenten und ihre Konfiguration werden dabei
+nicht angefasst.
+
 Für den ersten dauerhaften Signierer auf einer vertrauenswürdigen Windows-
 Release-Workstation erzeugt `initialize_ncc_release_signer.ps1` einen
 passphrasengeschützten Ed25519-Privatschlüssel unter
