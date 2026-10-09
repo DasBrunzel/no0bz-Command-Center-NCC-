@@ -350,13 +350,37 @@ class WindowsGpuProvider(SensorProvider):
             "process_gpu": self._process_gpu_percent(),
         }
 
+    @staticmethod
+    def _gpu_counter_rows() -> list[dict[str, Any]]:
+        """Return GPU-engine counter rows without relying on the system ANSI codepage.
+
+        Some Windows GPU drivers expose adapter/process names containing bytes which
+        cannot be decoded by the active CP1252 codepage.  Explicit UTF-8 output and
+        replacement decoding make that one counter sample non-fatal instead of
+        crashing the subprocess reader thread.
+        """
+        command = (
+            "$OutputEncoding = [Console]::OutputEncoding = "
+            "[System.Text.UTF8Encoding]::new(); "
+            "(Get-Counter '\\GPU Engine(*)\\Utilization Percentage' -ErrorAction Stop).CounterSamples "
+            "| Select-Object InstanceName,CookedValue | ConvertTo-Json -Compress"
+        )
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", command],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
+            shell=False,
+            check=False,
+        )
+        rows = json.loads(result.stdout or "[]")
+        return [rows] if isinstance(rows, dict) else rows
+
     def _gpu_percent(self) -> float:
         try:
-            command = "(Get-Counter '\\GPU Engine(*)\\Utilization Percentage' -ErrorAction Stop).CounterSamples | Select-Object InstanceName,CookedValue | ConvertTo-Json -Compress"
-            result = subprocess.run(["powershell", "-NoProfile", "-Command", command], capture_output=True, text=True, timeout=5, shell=False, check=False)
-            rows = json.loads(result.stdout or "[]")
-            if isinstance(rows, dict):
-                rows = [rows]
+            rows = self._gpu_counter_rows()
             values = [float(row.get("CookedValue") or 0) for row in rows]
             raw = min(100.0, sum(value for value in values if value > 0))
             self._last_percent = round(raw * 0.5 + self._last_percent * 0.5, 1)
@@ -367,11 +391,7 @@ class WindowsGpuProvider(SensorProvider):
     def _process_gpu_percent(self) -> dict[str, float]:
         """Read Windows GPU Engine counters grouped by PID when available."""
         try:
-            command = "(Get-Counter '\\GPU Engine(*)\\Utilization Percentage' -ErrorAction Stop).CounterSamples | Select-Object InstanceName,CookedValue | ConvertTo-Json -Compress"
-            result = subprocess.run(["powershell", "-NoProfile", "-Command", command], capture_output=True, text=True, timeout=5, shell=False, check=False)
-            rows = json.loads(result.stdout or "[]")
-            if isinstance(rows, dict):
-                rows = [rows]
+            rows = self._gpu_counter_rows()
             usage: dict[str, float] = {}
             for row in rows:
                 match = re.search(r"pid_(\\d+)", str(row.get("InstanceName") or ""), re.IGNORECASE)
