@@ -34,10 +34,22 @@ try {
     $release = Get-Content $manifest.FullName -Raw | ConvertFrom-Json
 
     # Copy only non-secret-safe formatting from agent.env, then give the Core
-    # payload an isolated data root and a fresh browser pairing.
-    $pairingId = & $python -c "import secrets; print(secrets.token_urlsafe(18))"
-    $pairingSecret = & $python -c "import secrets; print(secrets.token_urlsafe(32))"
+    # payload an isolated data root.  A rerun refreshes the test payload but
+    # deliberately keeps its pairing identity so it cannot create duplicate
+    # test nodes or invalidate an already approved browser pairing.
     $dataDir = Join-Path $root 'core-test-agent-data'; New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
+    $existingCoreValues = @{}
+    if (Test-Path $coreEnv) {
+        foreach ($line in Get-Content $coreEnv) {
+            if ($line -match '^([A-Z0-9_]+)=(.*)$') { $existingCoreValues[$Matches[1]] = $Matches[2] }
+        }
+    }
+    $pairingId = [string]$existingCoreValues['NCC_AGENT_PAIRING_ID']
+    $pairingSecret = [string]$existingCoreValues['NCC_AGENT_PAIRING_SECRET']
+    if ([string]::IsNullOrWhiteSpace($pairingId) -or [string]::IsNullOrWhiteSpace($pairingSecret)) {
+        $pairingId = & $python -c "import secrets; print(secrets.token_urlsafe(18))"
+        $pairingSecret = & $python -c "import secrets; print(secrets.token_urlsafe(32))"
+    }
     $values = Get-Content $agentEnv | Where-Object { $_ -match '^NCC_AGENT_[A-Z0-9_]+=' -and $_ -notmatch '^NCC_AGENT_(PAIRING_ID|PAIRING_SECRET|DATA_DIR|DISPLAY_NAME)=' }
     @("NCC_CORE_STATE_DIR=$root\core-state", "NCC_AGENT_PAIRING_ID=$pairingId", "NCC_AGENT_PAIRING_SECRET=$pairingSecret", "NCC_AGENT_DATA_DIR=$dataDir", "NCC_AGENT_DISPLAY_NAME=$DisplayName") + $values | Set-Content $coreEnv -Encoding utf8
     & icacls.exe $coreEnv /inheritance:r /grant:r '*S-1-5-18:F' '*S-1-5-32-544:F' | Out-Null

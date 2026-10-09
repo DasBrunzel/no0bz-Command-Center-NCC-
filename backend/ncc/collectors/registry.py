@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import threading
 import time
+from copy import deepcopy
 from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from pathlib import Path
@@ -23,6 +24,9 @@ from ncc.config import ROOT, Settings
 
 PROVIDER_TIMEOUT_SECONDS = 5.0
 MAX_BACKOFF_SECONDS = 300.0
+# A short cache prevents a slow sensor process from turning a valid dashboard
+# value into a misleading zero while the next collection cycle is in flight.
+LAST_GOOD_PROVIDER_TTL_SECONDS = 60.0
 
 
 def merge_metrics(target: dict[str, Any], values: Mapping[str, Any]) -> None:
@@ -59,22 +63,36 @@ class ProviderRegistry:
         self.capabilities: list[Capabilities] = [provider.probe() for provider in self.providers]
         self._failures: dict[str, int] = {}
         self._paused_until: dict[str, float] = {}
+        self._last_good_values: dict[str, tuple[float, dict[str, Any]]] = {}
         self._pool = ThreadPoolExecutor(max_workers=max(2, len(providers)), thread_name_prefix="ncc-provider")
+
+    def _merge_last_good(self, merged: dict[str, Any], provider_name: str, now: float) -> None:
+        cached = self._last_good_values.get(provider_name)
+        if cached is None:
+            return
+        recorded_at, values = cached
+        if now - recorded_at <= LAST_GOOD_PROVIDER_TTL_SECONDS:
+            merge_metrics(merged, deepcopy(values))
 
     def collect(self) -> dict[str, Any]:
         merged: dict[str, Any] = {}
         now = time.monotonic()
         for provider in self.providers:
-            if not provider.is_available() or self._paused_until.get(provider.name, 0) > now:
+            if not provider.is_available():
+                continue
+            if self._paused_until.get(provider.name, 0) > now:
+                self._merge_last_good(merged, provider.name, now)
                 continue
             try:
                 values = self._pool.submit(provider.collect).result(timeout=PROVIDER_TIMEOUT_SECONDS)
                 merge_metrics(merged, values)
+                self._last_good_values[provider.name] = (now, deepcopy(values))
                 self._failures[provider.name] = 0
             except (Exception, TimeoutError):
                 count = self._failures.get(provider.name, 0) + 1
                 self._failures[provider.name] = count
                 self._paused_until[provider.name] = now + min(2**count, MAX_BACKOFF_SECONDS)
+                self._merge_last_good(merged, provider.name, now)
         return merged
 
 

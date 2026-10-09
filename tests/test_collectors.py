@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from ncc.collectors.registry import ProviderRegistry, merge_metrics
 from ncc.collectors.system import (
     DemoProvider,
@@ -50,4 +52,33 @@ def test_sensor_provider_extends_cpu_metrics_without_losing_psutil_data() -> Non
     metrics = {"cpu": {"percent": 42.0, "logical_cores": 16}}
     merge_metrics(metrics, {"cpu": {"temperature_c": 61.5}})
     assert metrics == {"cpu": {"percent": 42.0, "logical_cores": 16, "temperature_c": 61.5}}
+
+
+class _IntermittentProvider:
+    name = "intermittent-test"
+    priority = 1
+
+    def __init__(self) -> None:
+        self.fail = False
+
+    def is_available(self) -> bool:
+        return True
+
+    def collect(self) -> dict[str, Any]:
+        if self.fail:
+            raise TimeoutError("simulated busy sensor")
+        return {"cpu": {"percent": 87.5}, "memory": {"percent": 64.0}}
+
+
+def test_registry_keeps_recent_values_when_a_provider_times_out() -> None:
+    registry = ProviderRegistry(Settings(token="test", demo=True))
+    provider = _IntermittentProvider()
+    registry.providers = [provider]  # type: ignore[assignment]
+
+    assert registry.collect()["cpu"]["percent"] == 87.5
+    provider.fail = True
+    snapshot = registry.collect()
+
+    assert snapshot["cpu"]["percent"] == 87.5
+    assert snapshot["memory"]["percent"] == 64.0
 
