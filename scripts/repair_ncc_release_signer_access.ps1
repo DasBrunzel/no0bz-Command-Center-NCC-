@@ -17,8 +17,12 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 $privateKey = Join-Path $SignerRoot "$KeyId-private.pem"
 if (!(Test-Path -LiteralPath $privateKey)) { throw "Privater Release-Schluessel fehlt: $privateKey" }
 
-& icacls.exe $SignerRoot /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' /T /C | Out-Null
-if ($LASTEXITCODE -ne 0) { throw 'Die Signer-Berechtigungen konnten nicht repariert werden.' }
+& icacls.exe $SignerRoot /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Die Signer-Ordnerberechtigungen konnten nicht repariert werden.' }
+Get-ChildItem -LiteralPath $SignerRoot -Force -File | ForEach-Object {
+    & icacls.exe $_.FullName /inheritance:r /grant:r '*S-1-5-18:F' '*S-1-5-32-544:F' | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Die Signer-Berechtigungen konnten nicht repariert werden: $($_.Name)" }
+}
 
 try {
     $handle = [IO.File]::Open($privateKey, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)

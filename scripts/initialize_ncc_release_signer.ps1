@@ -52,11 +52,15 @@ try {
         (@{ key_id = $KeyId; public_key_base64 = $public; created_at_utc = [DateTime]::UtcNow.ToString('o') } | ConvertTo-Json),
         [Text.UTF8Encoding]::new($false)
     )
-    # The files already exist at this point. Apply the intended SYSTEM/Admin
-    # ACL recursively so a private key never accidentally keeps stale
-    # inherited permissions from ProgramData.
-    & icacls.exe $SignerRoot /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' /T /C | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'Die Berechtigungen fuer den Release-Schluessel konnten nicht sicher gesetzt werden.' }
+    # The directory needs inheritable rights, while each existing key file
+    # needs an explicit usable ACE. (OI)(CI) alone would not grant access to
+    # the file itself on every Windows/NTFS combination.
+    & icacls.exe $SignerRoot /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Die Ordnerberechtigungen fuer den Release-Schluessel konnten nicht sicher gesetzt werden.' }
+    Get-ChildItem -LiteralPath $SignerRoot -Force -File | ForEach-Object {
+        & icacls.exe $_.FullName /inheritance:r /grant:r '*S-1-5-18:F' '*S-1-5-32-544:F' | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Die Berechtigungen konnten nicht sicher gesetzt werden: $($_.Name)" }
+    }
 
     [pscustomobject]@{
         Result = 'Encrypted NCC Ed25519 release signer created'
