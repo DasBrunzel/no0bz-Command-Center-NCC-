@@ -51,7 +51,10 @@ if ($LASTEXITCODE -ne 0) { throw 'Git fetch failed.' }
 if ($LASTEXITCODE -eq 0) {
     & git -C $projectRoot switch $Branch
 } else {
-    & git -C $projectRoot switch --track -c $Branch "origin/$Branch"
+    # Git for Windows may expose a directly fetched remote ref without enough
+    # metadata for --track. A normal local branch from that verified ref is
+    # sufficient because the following pull always names origin and Branch.
+    & git -C $projectRoot switch -c $Branch "refs/remotes/origin/$Branch"
 }
 if ($LASTEXITCODE -ne 0) { throw "Could not switch to branch $Branch." }
 & git -C $projectRoot pull --ff-only origin $Branch
