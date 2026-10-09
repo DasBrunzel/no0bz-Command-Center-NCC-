@@ -27,6 +27,25 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   vorab gesichertes Windows-Server-Update fuer die Dashboard-Release-Verteilung,
   ohne Agenten oder deren Konfiguration anzufassen.
 
+## [0.6.0-beta.2] - 2026-10-09
+
+### Added
+
+- Erster veröffentlichter, signierter Windows-x86_64-Payload als GitHub-
+  Pre-Release `v0.6.0-beta.2`. Das zugehörige Manifest ist für die bewusste
+  Registrierung und Update-Freigabe im NCC-Dashboard vorgesehen.
+- Sicheres Diagnose- und Reparaturskript für die Zugriffsrechte des lokalen
+  Release-Signierers, ohne privaten Schlüssel oder Passphrase auszugeben.
+
+### Fixed
+
+- Der Payload-Build erkennt fehlende erhöhte Rechte vor dem zeitaufwendigen
+  PyInstaller-Build und prüft den Zugriff auf den privaten Signaturschlüssel
+  vor dem Paketieren.
+- Signierer-ACLs werden für den Ordner und jede vorhandene Schlüsseldatei
+  getrennt gesetzt. Zugriff bleibt auf `SYSTEM` und lokale Administratoren
+  begrenzt.
+
 ## [0.6.0-beta.1] - 2026-10-08
 
 ### Added
