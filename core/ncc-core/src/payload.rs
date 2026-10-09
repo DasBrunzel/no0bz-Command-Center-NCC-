@@ -16,6 +16,9 @@ pub fn start(
     Command::new(executable)
         .args(arguments)
         .env("NCC_CORE_STATE_DIR", state_dir)
+        .env("NCC_PAYLOAD_VERSION", version)
+        // Keep the pre-release name for a payload compiled against older Core
+        // sources. It can be removed once the first Core generation is retired.
         .env("NCC_TEST_PAYLOAD_VERSION", version)
         .spawn()
         .map_err(|error| format!("could not start payload: {error}"))
