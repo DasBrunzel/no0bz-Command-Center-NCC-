@@ -113,6 +113,13 @@ fn check_update(root: &Path) -> Result<()> {
         return Ok(());
     };
     let current = load_state(root)?;
+    // A release that has already failed its own health handshake must not be
+    // retried on every service restart.  It remains visible to the operator on
+    // the server, while the known-good payload keeps monitoring this device.
+    if should_skip_rolled_back_release(&current, &release.payload_version) {
+        println!("{{\"update\":\"skipped-rolled-back\"}}");
+        return Ok(());
+    }
     if current.active_payload.as_deref() == Some(&release.payload_version) {
         println!("{{\"update\":\"already-active\"}}");
         return Ok(());
@@ -130,6 +137,11 @@ fn check_update(root: &Path) -> Result<()> {
         ],
     )?;
     activate(root, &["--version".to_owned(), release.payload_version])
+}
+
+fn should_skip_rolled_back_release(state: &CoreState, release_version: &str) -> bool {
+    state.health == Health::RolledBack
+        && state.previous_payload.as_deref() == Some(release_version)
 }
 
 #[derive(Deserialize)]
@@ -548,5 +560,21 @@ mod tests {
             Some("0.6.0-beta.1")
         );
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_rolled_back_release_is_not_retried_automatically() {
+        let state = CoreState {
+            active_payload: Some("0.6.0-beta.1".to_owned()),
+            previous_payload: Some("0.6.0-beta.2".to_owned()),
+            last_update_unix: Some(1),
+            health: Health::RolledBack,
+        };
+        assert!(should_skip_rolled_back_release(&state, "0.6.0-beta.2"));
+        assert!(!should_skip_rolled_back_release(&state, "0.6.0-beta.3"));
+        assert!(!should_skip_rolled_back_release(
+            &CoreState { health: Health::Healthy, ..state },
+            "0.6.0-beta.2"
+        ));
     }
 }
