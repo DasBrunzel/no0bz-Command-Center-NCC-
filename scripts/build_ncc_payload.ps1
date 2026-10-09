@@ -5,15 +5,16 @@ param(
     [string]$Version = "0.6.0-beta.1",
     [ValidateSet('windows')] [string]$Platform = 'windows',
     [string]$ArtifactUrl = '',
-    [string]$OutputDirectory = (Join-Path $PSScriptRoot '..\dist\payloads')
+    [string]$OutputDirectory = ''
 )
 
 $ErrorActionPreference = 'Stop'
 $project = Split-Path -Parent $PSScriptRoot
+$OutputDirectory = if ($OutputDirectory) { $OutputDirectory } else { Join-Path $project 'dist\payloads' }
 $python = Join-Path $project '.venv\Scripts\python.exe'
 if (!(Test-Path $python)) { throw "Build-Python fehlt: $python" }
-if (!(Test-Path $PrivateKey)) { throw "Privater Signaturschlüssel fehlt: $PrivateKey" }
-if ($KeyId -notmatch '^[A-Za-z0-9._-]{1,64}$') { throw 'Ungültige Key-ID.' }
+if (!(Test-Path $PrivateKey)) { throw "Private signing key is missing: $PrivateKey" }
+if ($KeyId -notmatch '^[A-Za-z0-9._-]{1,64}$') { throw 'Invalid key ID.' }
 $work = Join-Path $env:TEMP ('ncc-payload-build-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force -Path $work, $OutputDirectory | Out-Null
 try {
