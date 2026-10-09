@@ -135,6 +135,15 @@ SHA-256-Prüfsumme sowie die Ed25519-Signatur mit `ncc-release-2026`. Es muss
 vor einer Node-Freigabe einmalig im Dashboard registriert werden. Das private
 PEM und seine Passphrase gehören weder in Git noch auf den NCC-Server.
 
+Für ein vorhandenes Windows-Gerät mit NCC 0.5 baut
+`build_ncc_core_bootstrap.ps1` ein kompaktes Bootstrap-ZIP. Auf dem Zielgerät
+werden weder Rust noch ein Git-Checkout benötigt: Zuerst wird der freigegebene
+Release im Dashboard dem bestehenden Node zugeteilt; danach wird das ZIP
+entpackt und `install_ncc_core_bootstrap.ps1` erhöht ausgeführt. Der Bootstrap
+übernimmt Token und Pairing-Identität, prüft den signierten Payload und entfernt
+den alten `NccAgent`-Dienst erst, wenn NccCore gesund läuft. Die alte
+`agent.env` bleibt als datierte Sicherung erhalten.
+
 Neben den Farbthemes stehen in den Einstellungen drei alternative Dashboard-Layouts
 bereit: **Orbit**, **Blueprint** und **Studio**. Die Auswahl wird nur im jeweiligen
 Browser gespeichert.

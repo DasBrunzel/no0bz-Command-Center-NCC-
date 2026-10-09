@@ -18,6 +18,14 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ### Added
 
+- `build_ncc_core_bootstrap.ps1` erstellt ein kompaktes Windows-Bootstrap-ZIP
+  für bestehende NCC-0.5-Geräte. Es enthält den kompilierten NccCore, die
+  minimale Windows-Dienstlogik und ausschließlich den öffentlichen
+  Release-Verifikationsschlüssel — keinen privaten Signaturschlüssel.
+- `install_ncc_core_bootstrap.ps1` übernimmt die vorhandene Agent-Identität,
+  akzeptiert nur einen zuvor im Dashboard freigegebenen signierten Payload und
+  entfernt den alten `NccAgent`-Dienst erst nach erfolgreichem Core-Healthcheck.
+  Die frühere `agent.env` wird dabei als rückholbare Sicherung abgelegt.
 - `initialize_ncc_release_signer.ps1` erstellt einen dauerhaften,
   passphrasengeschützten Ed25519-Release-Signierer mit restriktiven Windows-ACLs
   und gibt ausschließlich dessen öffentlichen Verifikationsschlüssel aus.
