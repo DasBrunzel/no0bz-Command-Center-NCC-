@@ -1,6 +1,7 @@
 mod health;
 mod payload;
 mod signature;
+mod update;
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -71,8 +72,9 @@ fn run(args: Vec<String>) -> Result<()> {
         "activate" => activate(&state_dir, &remaining[1..])?,
         "health" => report_health(&state_dir, &remaining[1..])?,
         "run-payload" => run_payload(&state_dir, &remaining[1..])?,
+        "check-update" => check_update(&state_dir)?,
         "service" => run_service(&state_dir)?,
-        _ => return Err("expected status, stage, activate, health or run-payload".to_owned()),
+        _ => return Err("expected status, stage, activate, health, check-update or run-payload".to_owned()),
     }
     Ok(())
 }
@@ -80,6 +82,12 @@ fn run(args: Vec<String>) -> Result<()> {
 /// Windows/systemd hosts invoke this fixed command.  Its inputs are environment
 /// variables from a local ACL-protected config file; it never evaluates a shell.
 fn run_service(root: &Path) -> Result<()> {
+    // An approved update is checked only at a controlled service start.  A
+    // failed request, untrusted key, or bad artifact never blocks the proven
+    // active payload from monitoring the host.
+    if let Err(error) = check_update(root) {
+        eprintln!("ncc-core: update check skipped: {error}");
+    }
     let timeout = env::var("NCC_CORE_HEALTH_TIMEOUT_SECONDS").unwrap_or_else(|_| "30".to_owned());
     let state = load_state(root)?;
     let version = state
@@ -97,6 +105,31 @@ fn run_service(root: &Path) -> Result<()> {
             timeout,
         ],
     )
+}
+
+fn check_update(root: &Path) -> Result<()> {
+    let Some(release) = update::request_pending_release()? else {
+        println!("{{\"update\":\"none\"}}");
+        return Ok(());
+    };
+    let current = load_state(root)?;
+    if current.active_payload.as_deref() == Some(&release.payload_version) {
+        println!("{{\"update\":\"already-active\"}}");
+        return Ok(());
+    }
+    let source = update::download(root, &release)?;
+    stage(
+        root,
+        &[
+            "--source".to_owned(), source.display().to_string(),
+            "--version".to_owned(), release.payload_version.clone(),
+            "--sha256".to_owned(), release.sha256,
+            "--size".to_owned(), release.size_bytes.to_string(),
+            "--key-id".to_owned(), release.signature_key_id,
+            "--signature".to_owned(), release.signature_value,
+        ],
+    )?;
+    activate(root, &["--version".to_owned(), release.payload_version])
 }
 
 #[derive(Deserialize)]
