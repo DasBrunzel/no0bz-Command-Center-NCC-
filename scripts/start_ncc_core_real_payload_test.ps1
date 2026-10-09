@@ -18,10 +18,12 @@ if (!(Test-Path $agentEnv) -or !(Test-Path $python) -or !(Test-Path $core)) { th
 # Refresh the Core service first. It may preserve/start the prior harmless test
 # payload; stopping the service immediately afterwards removes that process tree.
 & (Join-Path $PSScriptRoot 'install_ncc_core_service.ps1') -CoreExecutable $core
+$coreWasRunning = (Get-Service -Name NccCore -ErrorAction SilentlyContinue).Status -eq 'Running'
 Stop-Service NccCore -Force -ErrorAction SilentlyContinue
 
 $work = Join-Path $env:TEMP ('ncc-real-payload-test-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force -Path $work | Out-Null
+$testPayloadStarted = $false
 try {
     $key = Join-Path $work 'test-release-key.pem'
     & openssl genpkey -algorithm ED25519 -out $key | Out-Null
@@ -69,7 +71,15 @@ try {
     Start-Service NccCore; Start-Sleep -Seconds 3
     $state = & $coreInstalled --state-dir $stateRoot status
     if ($state -notmatch '"healthy"') { throw "Core-Payload ist nicht gesund: $state" }
+    $testPayloadStarted = $true
     $serverUrl = (($values | Where-Object { $_ -match '^NCC_AGENT_SERVER_URL=' } | Select-Object -First 1) -replace '^NCC_AGENT_SERVER_URL=', '').Trim('"')
     Write-Host "[NCC] Echter 0.6-Payload ist gesund. 0.5-NccAgent läuft unverändert weiter."
     Write-Host "[NCC] Browser-Pairing für den separaten Test-Node: $serverUrl/?pair=$pairingId"
-} finally { Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue }
+} finally {
+    if (-not $testPayloadStarted -and $coreWasRunning) {
+        # Keep the known-good test payload available even if a build, signing or
+        # staging step failed before the replacement payload could start.
+        Start-Service NccCore -ErrorAction SilentlyContinue
+    }
+    Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
+}
