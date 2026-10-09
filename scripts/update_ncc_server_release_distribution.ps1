@@ -23,10 +23,10 @@ foreach ($path in @($configPath, $venvPython, (Join-Path $projectRoot '.git'))) 
     if (-not (Test-Path -LiteralPath $path)) { throw "Required NCC path is missing: $path" }
 }
 
-$dirty = @(& git -C $projectRoot status --porcelain)
+$dirty = @(& git -C $projectRoot status --porcelain --untracked-files=no)
 if ($LASTEXITCODE -ne 0) { throw 'Could not read the repository status.' }
 if ($dirty.Count -gt 0) {
-    throw 'Repository has local changes. Stop without overwriting them and resolve them first.'
+    throw 'Repository has tracked local changes. Stop without overwriting them and resolve them first.'
 }
 
 $timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
