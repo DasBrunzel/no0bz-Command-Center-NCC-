@@ -27,6 +27,27 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   vorab gesichertes Windows-Server-Update fuer die Dashboard-Release-Verteilung,
   ohne Agenten oder deren Konfiguration anzufassen.
 
+## [0.6.0-beta.3] - 2026-10-09
+
+### Fixed
+
+- Der signierte Payload übernimmt die durch NccCore verifizierte
+  Manifest-Version für seinen Health-Record. Dadurch wird ein freigegebenes
+  Release nicht mehr wegen einer fest einkompilierten Fallback-Version unnötig
+  zurückgerollt.
+- Ein Release, das bereits seinen Health-Check nicht bestanden hat und
+  zurückgerollt wurde, wird beim nächsten NccCore-Start nicht erneut in einer
+  Update-Schleife versucht.
+- `repair_ncc_core_orphan_payloads.ps1` entfernt ausschließlich verwaiste
+  Test-Payload-Prozesse im NCC-Core-Zustandsordner und startet den zuletzt
+  gesunden Payload kontrolliert neu.
+
+### Added
+
+- Read-only-Diagnose `diagnose_ncc_duplicate_telemetry.ps1` zeigt die
+  relevanten NCC-Dienste, Payload-Prozesse und NCC-Aufgaben, ohne Token oder
+  Pairing-Geheimnisse auszugeben.
+
 ## [0.6.0-beta.2] - 2026-10-09
 
 ### Added

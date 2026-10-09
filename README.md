@@ -1,13 +1,13 @@
 # no0bz Command Center (NCC)
 
-![Version](https://img.shields.io/badge/version-0.6.0--beta.2-ff334f)
+![Version](https://img.shields.io/badge/version-0.6.0--beta.3-ff334f)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776ab)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 Real-Time System Monitor & Local Sync Hub (Python/FastAPI + React).
 
 > **NCC 0.6 befindet sich im kontrollierten Beta-Test.** Die aktuelle Payload-
-> version `0.6.0-beta.2` ergänzt NCC 0.5 um einen isolierten, kompilierten Core.
+> version `0.6.0-beta.3` ergänzt NCC 0.5 um einen isolierten, kompilierten Core.
 > Der produktive Server und die bestehenden Agenten bleiben vorerst auf dem
 > bewährten 0.5-Pfad. NCC besteht aus einem dauerhaft laufenden Server, GUI-losen Windows-/Linux-Agenten,
 > einer Unraid-API-Integration und einer gemeinsamen Fleet-Weboberfläche. Die
@@ -128,8 +128,8 @@ von OpenSSL abgefragt und niemals an NCC übergeben. Anschließend wird **nur** 
 ausgegebene öffentliche Schlüssel auf die jeweiligen NccCore-Installationen
 verteilt. Der private Schlüssel bleibt auf der Release-Workstation.
 
-Der erste echte signierte Windows-Payload ist als
-[NCC 0.6.0-beta.2 Pre-Release](https://github.com/DasBrunzel/no0bz-Command-Center-NCC-/releases/tag/v0.6.0-beta.2)
+Der aktuelle echte signierte Windows-Payload ist als
+[NCC 0.6.0-beta.3 Pre-Release](https://github.com/DasBrunzel/no0bz-Command-Center-NCC-/releases/tag/v0.6.0-beta.3)
 verfügbar. Sein Manifest verweist ausschließlich auf HTTPS, enthält die exakte
 SHA-256-Prüfsumme sowie die Ed25519-Signatur mit `ncc-release-2026`. Es muss
 vor einer Node-Freigabe einmalig im Dashboard registriert werden. Das private
