@@ -13,7 +13,7 @@ $ErrorActionPreference = 'Stop'
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $principal = [Security.Principal.WindowsPrincipal]::new($identity)
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    throw 'Dieses Skript bitte in einer als Administrator gestarteten PowerShell ausführen.'
+    throw 'Dieses Skript bitte in einer als Administrator gestarteten PowerShell ausfuehren.'
 }
 
 $openssl = Get-Command openssl.exe -ErrorAction SilentlyContinue
@@ -25,21 +25,21 @@ $publicPem = Join-Path $SignerRoot "$KeyId-public.pem"
 $publicBase64 = Join-Path $SignerRoot "$KeyId-public.base64.txt"
 $metadata = Join-Path $SignerRoot "$KeyId.json"
 if (Test-Path -LiteralPath $privateKey) {
-    throw "Ein privater Schlüssel für '$KeyId' existiert bereits: $privateKey. Es wird nichts überschrieben."
+    throw "Ein privater Schluessel fuer '$KeyId' existiert bereits: $privateKey. Es wird nichts ueberschrieben."
 }
 
 New-Item -ItemType Directory -Force -Path $SignerRoot | Out-Null
 try {
-    Write-Host '[NCC] OpenSSL fragt jetzt zweimal nach einer neuen Passphrase für den Release-Schlüssel.'
-    Write-Host '[NCC] Diese Passphrase wird nicht gespeichert und nicht an NCC übertragen.'
+    Write-Host '[NCC] OpenSSL fragt jetzt zweimal nach einer neuen Passphrase fuer den Release-Schluessel.'
+    Write-Host '[NCC] Diese Passphrase wird nicht gespeichert und nicht an NCC uebertragen.'
     & $openssl.Source genpkey -algorithm ED25519 -aes-256-cbc -out $privateKey
-    if ($LASTEXITCODE -ne 0) { throw 'OpenSSL konnte keinen Ed25519-Privatschlüssel erzeugen.' }
+    if ($LASTEXITCODE -ne 0) { throw 'OpenSSL konnte keinen Ed25519-Privatschluessel erzeugen.' }
 
     & $openssl.Source pkey -in $privateKey -pubout -out $publicPem
-    if ($LASTEXITCODE -ne 0) { throw 'OpenSSL konnte den öffentlichen Schlüssel nicht ableiten.' }
+    if ($LASTEXITCODE -ne 0) { throw 'OpenSSL konnte den oeffentlichen Schluessel nicht ableiten.' }
     $der = Join-Path $SignerRoot "$KeyId-public.der"
     & $openssl.Source pkey -pubin -in $publicPem -pubout -outform DER -out $der
-    if ($LASTEXITCODE -ne 0) { throw 'OpenSSL konnte den öffentlichen Schlüssel nicht exportieren.' }
+    if ($LASTEXITCODE -ne 0) { throw 'OpenSSL konnte den oeffentlichen Schluessel nicht exportieren.' }
     $raw = [IO.File]::ReadAllBytes($der)
     Remove-Item -LiteralPath $der -Force -ErrorAction SilentlyContinue
     # SubjectPublicKeyInfo for an Ed25519 key is always the fixed 12-byte DER

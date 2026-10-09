@@ -8,7 +8,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $principal = [Security.Principal.WindowsPrincipal]::new($identity)
-if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'Bitte erhöht in PowerShell ausführen.' }
+if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'Bitte erhoeht in PowerShell ausfuehren.' }
 $project = Split-Path -Parent $PSScriptRoot
 $root = Join-Path $env:ProgramData 'no0bz\NCC'
 $configRoot = Join-Path $root 'config'; $agentEnv = Join-Path $configRoot 'agent.env'; $coreEnv = Join-Path $configRoot 'core.env'
@@ -27,7 +27,7 @@ $testPayloadStarted = $false
 try {
     $key = Join-Path $work 'test-release-key.pem'
     & openssl genpkey -algorithm ED25519 -out $key | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'OpenSSL konnte keinen temporären Testschlüssel erstellen.' }
+    if ($LASTEXITCODE -ne 0) { throw 'OpenSSL konnte keinen temporaeren Testschluessel erstellen.' }
     $payloadOut = Join-Path $work 'payload'
     & (Join-Path $PSScriptRoot 'build_ncc_payload.ps1') -PrivateKey $key -KeyId 'temporary-real-payload-test' -Version '0.6.0-beta.1' -ArtifactUrl 'https://ncc.invalid/parallel-test' -OutputDirectory $payloadOut
     $archive = Get-ChildItem $payloadOut -Filter '*.zip' | Select-Object -First 1
@@ -73,8 +73,8 @@ try {
     if ($state -notmatch '"healthy"') { throw "Core-Payload ist nicht gesund: $state" }
     $testPayloadStarted = $true
     $serverUrl = (($values | Where-Object { $_ -match '^NCC_AGENT_SERVER_URL=' } | Select-Object -First 1) -replace '^NCC_AGENT_SERVER_URL=', '').Trim('"')
-    Write-Host "[NCC] Echter 0.6-Payload ist gesund. 0.5-NccAgent läuft unverändert weiter."
-    Write-Host "[NCC] Browser-Pairing für den separaten Test-Node: $serverUrl/?pair=$pairingId"
+    Write-Host "[NCC] Echter 0.6-Payload ist gesund. 0.5-NccAgent laeuft unveraendert weiter."
+    Write-Host "[NCC] Browser-Pairing fuer den separaten Test-Node: $serverUrl/?pair=$pairingId"
 } finally {
     if (-not $testPayloadStarted -and $coreWasRunning) {
         # Keep the known-good test payload available even if a build, signing or

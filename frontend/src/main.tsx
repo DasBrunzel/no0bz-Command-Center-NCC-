@@ -1072,21 +1072,9 @@ function NodeOverview({
     window.alert("Die Geräte-Rolle konnte nicht geändert werden.");
   };
   const compatibleReleases = releases.filter((release) => release.platform === node.platform);
+  const channelReleases = compatibleReleases.filter((release) => release.channel === node.update_channel);
   const pendingRelease = releases.find((release) => release.release_id === node.pending_release_id) || null;
-  const assignRelease = async () => {
-    const candidates = compatibleReleases.filter((release) => release.channel === node.update_channel);
-    if (!candidates.length && !pendingRelease) {
-      window.alert(`Für ${node.platform} im ${node.update_channel.toUpperCase()}-Kanal ist noch kein Release registriert.`);
-      return;
-    }
-    const choices = candidates.map((release) => `${release.release_id} · ${release.payload_version}`).join("\n");
-    const answer = window.prompt(`Release-ID freigeben (leer = Freigabe zurücknehmen):\n${choices}`, pendingRelease?.release_id || "");
-    if (answer === null) return;
-    const releaseId = answer.trim() || null;
-    if (releaseId && !candidates.some((release) => release.release_id === releaseId)) {
-      window.alert("Diese Release-ID passt nicht zu Plattform und Update-Kanal dieses Nodes.");
-      return;
-    }
+  const setRelease = async (releaseId: string | null) => {
     setUpdatingRelease(true);
     const response = await fetch(`/api/v1/fleet/nodes/${node.node_id}/release`, {
       method: "PUT", headers: { ...headers(token), "Content-Type": "application/json" }, body: JSON.stringify({ release_id: releaseId }),
@@ -1094,6 +1082,17 @@ function NodeOverview({
     if (response.ok) { window.location.reload(); return; }
     setUpdatingRelease(false);
     window.alert("Update-Freigabe konnte nicht geändert werden.");
+  };
+  const assignRelease = () => {
+    if (!channelReleases.length && !pendingRelease) {
+      window.alert(`Für ${node.platform} im ${node.update_channel.toUpperCase()}-Kanal ist noch kein Release registriert.`);
+      return;
+    }
+    if (pendingRelease) {
+      if (window.confirm(`Freigabe für ${pendingRelease.payload_version} zurücknehmen?`)) void setRelease(null);
+      return;
+    }
+    if (channelReleases.length === 1) void setRelease(channelReleases[0].release_id);
   };
   const changeUpdateChannel = async () => {
     const channel = node.update_channel === "beta" ? "stable" : "beta";
@@ -1182,8 +1181,12 @@ function NodeOverview({
               {updatingRelease ? "Wird gesetzt …" : `Update-Kanal: ${node.update_channel.toUpperCase()}`}
             </button>}
             {canDelete && !isUnraid && <button className="node-role" disabled={updatingRelease} onClick={() => void assignRelease()}>
-              <Download size={15} />{pendingRelease ? `Update freigegeben: ${pendingRelease.payload_version}` : "Update bewusst freigeben"}
+              <Download size={15} />{pendingRelease ? `Freigabe aufheben: ${pendingRelease.payload_version}` : channelReleases.length > 1 ? "Release auswählen" : "Update bewusst freigeben"}
             </button>}
+            {canDelete && !isUnraid && !pendingRelease && channelReleases.length > 1 && <select className="node-role" disabled={updatingRelease} defaultValue="" onChange={(event) => { const releaseId = event.target.value; if (releaseId) void setRelease(releaseId); }}>
+              <option value="" disabled>Release auswählen …</option>
+              {channelReleases.map((release) => <option key={release.release_id} value={release.release_id}>{release.payload_version} · {new Date(release.released_at).toLocaleDateString("de-DE")}</option>)}
+            </select>}
             {canDelete && <button
               className="forget-node"
               disabled={forgetting}
@@ -1934,7 +1937,7 @@ function SettingsPage({
           {releaseMessage && <small className="traffic-reset-message">{releaseMessage}</small>}
           <button className="primary" type="submit" disabled={!releaseManifest.trim()}>Signiertes Release registrieren</button>
         </form>
-        <div className="settings-release-list">{releases.map((release) => <p key={release.release_id}><b>{release.payload_version}</b> · {release.platform}/{release.architecture} · {release.channel.toUpperCase()} · {release.assigned_nodes} freigegeben</p>)}{!releases.length && <p>Noch kein Release registriert.</p>}</div>
+        <div className="settings-release-list">{releases.map((release) => <p key={release.release_id}><b>{release.payload_version}</b> · {release.platform}/{release.architecture} · {release.channel.toUpperCase()} · {release.assigned_nodes} freigegeben<br /><code title="Release-ID">{release.release_id}</code></p>)}{!releases.length && <p>Noch kein Release registriert.</p>}</div>
       </section>}
       <section className="surface settings-card">
         <header className="section-head">

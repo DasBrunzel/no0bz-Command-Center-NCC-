@@ -10,10 +10,10 @@ $ErrorActionPreference = 'Stop'
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $principal = [Security.Principal.WindowsPrincipal]::new($identity)
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    throw 'Dieses Skript bitte in einer als Administrator gestarteten PowerShell ausführen.'
+    throw 'Dieses Skript bitte in einer als Administrator gestarteten PowerShell ausfuehren.'
 }
-try { $raw = [Convert]::FromBase64String($PublicKey) } catch { throw 'Der öffentliche Schlüssel ist kein gültiges Base64.' }
-if ($raw.Length -ne 32) { throw 'Ein Ed25519-öffentlicher Schlüssel muss genau 32 Bytes haben.' }
+try { $raw = [Convert]::FromBase64String($PublicKey) } catch { throw 'Der oeffentliche Schluessel ist kein gueltiges Base64.' }
+if ($raw.Length -ne 32) { throw 'Ein Ed25519-oeffentlicher Schluessel muss genau 32 Bytes haben.' }
 
 $configRoot = Join-Path $env:ProgramData 'no0bz\NCC\core-state\config'
 $path = Join-Path $configRoot 'trusted-keys.json'
@@ -23,7 +23,7 @@ if (Test-Path -LiteralPath $path) {
     try {
         $existing = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
         foreach ($property in $existing.keys.psobject.Properties) { $keys[$property.Name] = [string]$property.Value }
-    } catch { throw "Bestehende Vertrauensdatei ist ungültig: $path" }
+    } catch { throw "Bestehende Vertrauensdatei ist ungueltig: $path" }
 }
 $keys[$KeyId] = $PublicKey
 [IO.File]::WriteAllText($path, (@{ keys = $keys } | ConvertTo-Json -Compress), [Text.UTF8Encoding]::new($false))

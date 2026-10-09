@@ -8,7 +8,7 @@ $ErrorActionPreference = 'Stop'
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $principal = [Security.Principal.WindowsPrincipal]::new($identity)
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    throw 'Dieses Skript bitte in einer als Administrator gestarteten PowerShell ausführen.'
+    throw 'Dieses Skript bitte in einer als Administrator gestarteten PowerShell ausfuehren.'
 }
 
 $root = Join-Path $env:ProgramData 'no0bz\NCC'
@@ -18,12 +18,12 @@ $coreEnv = Join-Path $configRoot 'core.env'
 $coreState = Join-Path $root 'core-state'
 $core = Join-Path $root 'core\ncc-core.exe'
 foreach ($path in @($agentEnv, $coreEnv, $core)) {
-    if (-not (Test-Path -LiteralPath $path)) { throw "Benötigte NCC-Datei fehlt: $path" }
+    if (-not (Test-Path -LiteralPath $path)) { throw "Benoetigte NCC-Datei fehlt: $path" }
 }
 
 $before = & $core --state-dir $coreState status
 if ($LASTEXITCODE -ne 0 -or $before -notmatch '"active_payload"\s*:\s*"' -or $before -notmatch '"health"\s*:\s*"healthy"') {
-    throw "NccCore-Payload ist noch nicht gesund. Abbruch ohne Änderung: $before"
+    throw "NccCore-Payload ist noch nicht gesund. Abbruch ohne Aenderung: $before"
 }
 
 $timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
@@ -33,7 +33,7 @@ Copy-Item -LiteralPath $coreEnv -Destination $backup -ErrorAction Stop
 # Reuse the proven 0.5 identity/token.  Thus the Core payload continues the
 # same dashboard node instead of creating another machine entry.
 $agentValues = Get-Content -LiteralPath $agentEnv | Where-Object { $_ -match '^NCC_AGENT_[A-Z0-9_]+=' }
-if (-not $agentValues) { throw 'agent.env enthält keine NCC_AGENT-Werte.' }
+if (-not $agentValues) { throw 'agent.env enthaelt keine NCC_AGENT-Werte.' }
 @("NCC_CORE_STATE_DIR=$coreState") + $agentValues | Set-Content -LiteralPath $coreEnv -Encoding utf8
 & icacls.exe $coreEnv /inheritance:r /grant:r '*S-1-5-18:F' '*S-1-5-32-544:F' | Out-Null
 

@@ -12,12 +12,17 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 - Der Windows-GPU-Collector verarbeitet fremde Treiberzeichen mit explizitem
   UTF-8-Fallback, sodass ein einzelner nicht decodierbarer Countertext keinen
   Reader-Thread mehr beschädigt.
+- Alle für Core-Migration, Rollback und Release-Schlüssel verwendeten
+  PowerShell-Skripte sind jetzt ASCII-kompatibel, damit Windows PowerShell 5
+  sie unabhängig von der lokalen ANSI-Codepage zuverlässig parst.
 
 ### Added
 
 - `initialize_ncc_release_signer.ps1` erstellt einen dauerhaften,
   passphrasengeschützten Ed25519-Release-Signierer mit restriktiven Windows-ACLs
   und gibt ausschließlich dessen öffentlichen Verifikationsschlüssel aus.
+- Die Update-Freigabe im Dashboard verwendet bei mehreren kompatiblen Releases
+  eine sichtbare Auswahl statt einer manuell einzutippenden Release-ID.
 
 ## [0.6.0-beta.1] - 2026-10-08
 
