@@ -9,6 +9,11 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+$principal = [Security.Principal.WindowsPrincipal]::new($identity)
+if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    throw 'Dieses Skript bitte in einer als Administrator gestarteten PowerShell ausfuehren. Der private Release-Schluessel ist absichtlich nur fuer Administratoren und SYSTEM lesbar.'
+}
 $project = Split-Path -Parent $PSScriptRoot
 $OutputDirectory = if ($OutputDirectory) { $OutputDirectory } else { Join-Path $project 'dist\payloads' }
 $python = Join-Path $project '.venv\Scripts\python.exe'
