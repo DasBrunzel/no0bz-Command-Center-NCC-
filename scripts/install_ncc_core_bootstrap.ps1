@@ -60,7 +60,27 @@ Copy-Item -LiteralPath $coreSource -Destination $coreTarget -Force
 # remain unchanged, so the Core continues the existing dashboard node.
 $agentValues = Get-Content -LiteralPath $agentEnv | Where-Object { $_ -match '^NCC_AGENT_[A-Z0-9_]+=' }
 if (-not $agentValues) { throw 'agent.env enthaelt keine NCC_AGENT-Werte.' }
-@("NCC_CORE_STATE_DIR=$stateRoot") + $agentValues | Set-Content -LiteralPath $coreEnv -Encoding utf8
+$agentConfig = @{}
+foreach ($line in $agentValues) {
+    if ($line -match '^([A-Z0-9_]+)=(.*)$') { $agentConfig[$Matches[1]] = $Matches[2].Trim('"') }
+}
+# Browser-paired 0.5 agents keep their bearer credential in the protected local
+# data directory instead of agent.env. NccCore needs that same credential only
+# for the authenticated pending-release request; it is never written to output.
+$dataDir = [string]$agentConfig['NCC_AGENT_DATA_DIR']
+if ([string]::IsNullOrWhiteSpace($dataDir)) {
+    $dataDir = Join-Path $env:LOCALAPPDATA 'no0bz\NCC Agent'
+}
+$credentialFile = Join-Path $dataDir 'agent-credential.json'
+if (-not (Test-Path -LiteralPath $credentialFile)) {
+    throw "Die vorhandene NCC-Agent-Anmeldung wurde nicht gefunden: $credentialFile. NccAgent bleibt unveraendert aktiv."
+}
+try { $agentToken = [string]((Get-Content -LiteralPath $credentialFile -Raw | ConvertFrom-Json).token) } catch {
+    throw 'Die lokale NCC-Agent-Anmeldung ist ungueltig. NccAgent bleibt unveraendert aktiv.'
+}
+if ([string]::IsNullOrWhiteSpace($agentToken)) { throw 'Die lokale NCC-Agent-Anmeldung enthaelt keinen Token. NccAgent bleibt unveraendert aktiv.' }
+$coreAgentValues = $agentValues | Where-Object { $_ -notmatch '^NCC_AGENT_TOKEN=' }
+@("NCC_CORE_STATE_DIR=$stateRoot", "NCC_AGENT_TOKEN=$agentToken") + $coreAgentValues | Set-Content -LiteralPath $coreEnv -Encoding utf8
 Copy-Item -LiteralPath $trustedKeysSource -Destination (Join-Path $stateRoot 'config\trusted-keys.json') -Force
 Set-NccAcl $coreTarget
 Set-NccAcl $coreEnv

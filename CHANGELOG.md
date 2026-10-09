@@ -6,6 +6,13 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ### Fixed
 
+- Der Windows-Core-Bootstrap übernimmt bei browsergepairten 0.5-Agenten das
+  vorhandene lokale Agent-Credential ausschließlich in die ACL-geschützte
+  `core.env`, damit die authentisierte Release-Abfrage funktioniert. Der Token
+  wird nicht ausgegeben oder in das Bootstrap-Paket aufgenommen.
+- Die Erstinstallation erkennt einen noch nicht vorhandenen `NccCore`-Dienst
+  zuverlässig und registriert ihn direkt, statt ihn fälschlich aktualisieren zu
+  wollen.
 - Der 0.6-Collector führt bei einem kurzzeitig blockierten Sensor bis zu einer
   Minute den letzten gültigen Wert fort, statt fehlende CPU-, RAM- oder GPU-Daten
   als künstliche Nullwerte an das Dashboard zu liefern.
