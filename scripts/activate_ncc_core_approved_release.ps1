@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
+    [AllowEmptyString()]
     [ValidatePattern('^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$')]
-    [string]$ExpectedVersion = '0.6.0-beta.2',
+    [string]$ExpectedVersion = '',
     [ValidateRange(10, 120)]
     [int]$TimeoutSeconds = 45
 )
@@ -38,6 +39,7 @@ if ($wasRunning) {
 # the operator instead of hiding it in the Windows service wrapper.
 $updateOutput = ''
 $updateFailure = $null
+$detectedVersion = ''
 try {
     foreach ($line in Get-Content -LiteralPath $coreEnv) {
         if ($line -match '^([A-Z0-9_]+)=(.*)$') {
@@ -46,6 +48,15 @@ try {
     }
     $updateOutput = & $core --state-dir $stateDir check-update 2>&1 | Out-String
     if ($LASTEXITCODE -ne 0) { throw "NccCore check-update failed: $updateOutput" }
+    if (-not $ExpectedVersion) {
+        $stagedState = & $core --state-dir $stateDir status 2>&1 | Out-String
+        if ($LASTEXITCODE -ne 0) { throw "NccCore status after update check failed: $stagedState" }
+        try { $detectedVersion = ($stagedState | ConvertFrom-Json).active_payload } catch { }
+        if (-not $detectedVersion) {
+            throw 'Die erwartete Payload-Version konnte nicht aus dem signierten Core-Zustand bestimmt werden. Bitte -ExpectedVersion angeben.'
+        }
+        $ExpectedVersion = $detectedVersion
+    }
 } catch {
     $updateFailure = $_
 } finally {
