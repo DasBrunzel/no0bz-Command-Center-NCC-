@@ -44,7 +44,7 @@ if ($LASTEXITCODE -ne 0) { throw 'PostgreSQL backup failed; server update was no
 # A targeted fetch otherwise updates only FETCH_HEAD on some Git-for-Windows
 # versions. Store the remote-tracking ref explicitly so a first-time branch
 # switch is deterministic.
-$remoteRef = "refs/heads/$Branch:refs/remotes/origin/$Branch"
+$remoteRef = "refs/heads/${Branch}:refs/remotes/origin/${Branch}"
 & git -C $projectRoot fetch origin $remoteRef
 if ($LASTEXITCODE -ne 0) { throw 'Git fetch failed.' }
 & git -C $projectRoot show-ref --verify --quiet "refs/heads/$Branch"
