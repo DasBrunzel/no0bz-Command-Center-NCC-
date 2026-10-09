@@ -9,8 +9,7 @@ Real-Time System Monitor & Local Sync Hub (Python/FastAPI + React).
 > **NCC 0.6 befindet sich in der Beta-Vorbereitung.** Die aktuelle Entwicklungs-
 > version `0.6.0-beta.1` ergänzt NCC 0.5 um einen isolierten, kompilierten Core.
 > Der produktive Server und die bestehenden Agenten bleiben vorerst auf dem
-> bewährten 0.5-Pfad.
-> besteht aus einem dauerhaft laufenden Server, GUI-losen Windows-/Linux-Agenten,
+> bewährten 0.5-Pfad. NCC besteht aus einem dauerhaft laufenden Server, GUI-losen Windows-/Linux-Agenten,
 > einer Unraid-API-Integration und einer gemeinsamen Fleet-Weboberfläche. Die
 > NCC-0.4-Starter bleiben ausschließlich als Kompatibilitätsschicht erhalten.
 
@@ -84,6 +83,35 @@ NCC-0.5-Agenten bleiben kompatibel und werden nur bewusst, einzeln pro Gerät
 migriert. Die Planung berücksichtigt außerdem ein physisches Gerät mit mehreren
 Profilen — etwa Windows und CachyOS im Dualboot — damit es im Dashboard nicht doppelt
 erscheint. Details: [NCC 0.6 Agent Foundation](docs/ncc-0.6-agent-foundation.md).
+
+### NCC 0.6: kontrollierte Payload-Updates
+
+NCC 0.6 trennt den dauerhaften **NccCore** vom austauschbaren Payload. Der Core
+akzeptiert ein Update nur, wenn alle Schutzschichten erfüllt sind: HTTPS-Download,
+exakte Größe, SHA-256 und eine Ed25519-Signatur eines lokal vertrauenswürdigen
+öffentlichen Schlüssels. Ein privater Signaturschlüssel gehört niemals auf einen
+NCC-Server oder ein Zielgerät.
+
+Commander registrieren das Manifest eines Release-Artefakts unter
+**Einstellungen → Signierte Payload-Releases**. Anschließend wird im ausgewählten
+Node bewusst der Kanal **Beta** oder **Stable** gewählt und das konkrete Release
+freigegeben. Erst beim nächsten kontrollierten NccCore-Start lädt und aktiviert
+der Core dieses Release; schlägt dessen Health-Check fehl, bleibt die letzte
+funktionierende Payload erhalten beziehungsweise wird zurückgerollt.
+
+Den öffentlichen Schlüssel eines eigenen Release-Signierers installiert man
+einmalig, erhöht und ohne private Schlüssel zu kopieren:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install_ncc_core_trusted_key.ps1 -KeyId release-2026 -PublicKey BASE64_ED25519_PUBLIC_KEY
+```
+
+Unter Linux übernimmt dies `sudo ./scripts/install_ncc_core_trusted_key.sh
+release-2026 BASE64_ED25519_PUBLIC_KEY`. Für die erste Migration stehen
+`start_ncc_core_real_payload_test.ps1`,
+`switch_ncc_core_to_primary.ps1` und
+`rollback_ncc_core_to_agent.ps1` bereit. Der Wechsel wird erst nach einem
+erfolgreichen Paralleltest ausgeführt; der 0.5-Agent bleibt bis dahin Rückfall.
 
 Neben den Farbthemes stehen in den Einstellungen drei alternative Dashboard-Layouts
 bereit: **Orbit**, **Blueprint** und **Studio**. Die Auswahl wird nur im jeweiligen

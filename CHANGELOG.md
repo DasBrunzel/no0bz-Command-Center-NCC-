@@ -15,6 +15,16 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   Signaturen lokal vertrauenswürdiger Public Keys.
 - Geheimnisfreier lokaler Health-Vertrag für Payloads sowie ein harmloser
   Test-Payload für künftige Core-/Rollback-Tests.
+- Echten, eigenständigen Windows-Telemetrie-Payload für CPU, RAM, GPU,
+  Laufwerke und Netzwerk paketiert; der erste Test läuft parallel zum 0.5-Agenten.
+- Kontrollierter Windows-Wechsel mit automatischer Rückkehr zum 0.5-Agenten,
+  falls der Core nicht gesund startet.
+- Signierte Release-Verteilung: Commander registrieren Release-Manifeste,
+  wählen pro Gerät Beta oder Stable und geben Updates bewusst je Node frei.
+- NccCore lädt ausschließlich explizit freigegebene HTTPS-Artefakte, prüft
+  Hash und Ed25519-Signatur gegen lokal installierte öffentliche Schlüssel und
+  aktiviert sie bei einem kontrollierten Dienststart.
+- Linux/systemd-Installation und isolierter Linux-Core-Migrationstest ergänzt.
 
 ### Changed
 
