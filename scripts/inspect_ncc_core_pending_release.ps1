@@ -21,6 +21,7 @@ $core = Join-Path $root 'core\ncc-core.exe'
 $stateDir = Join-Path $root 'core-state'
 $coreEnv = Join-Path $root 'config\core.env'
 $trustedKeys = Join-Path $stateDir 'config\trusted-keys.json'
+$logPath = Join-Path $root 'logs\core.log'
 foreach ($path in @($core, $coreEnv)) {
     if (!(Test-Path -LiteralPath $path)) { throw "Benoetigte NCC-Datei fehlt: $path" }
 }
@@ -65,5 +66,6 @@ try {
     TrustedReleaseKeyInstalled = $keyInstalled
     PendingReleaseHttpStatus = $pendingStatus
     PendingReleaseResponse = $pendingBody
-    LogPath = (Join-Path $root 'logs\core.log')
+    LogPath = $logPath
+    RecentCoreLog = if (Test-Path -LiteralPath $logPath) { @(Get-Content -LiteralPath $logPath -Tail 80) } else { @('core.log missing') }
 } | ConvertTo-Json -Depth 6
