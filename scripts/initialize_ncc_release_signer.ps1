@@ -52,7 +52,11 @@ try {
         (@{ key_id = $KeyId; public_key_base64 = $public; created_at_utc = [DateTime]::UtcNow.ToString('o') } | ConvertTo-Json),
         [Text.UTF8Encoding]::new($false)
     )
-    & icacls.exe $SignerRoot /inheritance:r /grant:r '*S-1-5-18:F' '*S-1-5-32-544:F' | Out-Null
+    # The files already exist at this point. Apply the intended SYSTEM/Admin
+    # ACL recursively so a private key never accidentally keeps stale
+    # inherited permissions from ProgramData.
+    & icacls.exe $SignerRoot /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' /T /C | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Die Berechtigungen fuer den Release-Schluessel konnten nicht sicher gesetzt werden.' }
 
     [pscustomobject]@{
         Result = 'Encrypted NCC Ed25519 release signer created'

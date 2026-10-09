@@ -19,6 +19,12 @@ $OutputDirectory = if ($OutputDirectory) { $OutputDirectory } else { Join-Path $
 $python = Join-Path $project '.venv\Scripts\python.exe'
 if (!(Test-Path $python)) { throw "Build-Python fehlt: $python" }
 if (!(Test-Path $PrivateKey)) { throw "Private signing key is missing: $PrivateKey" }
+try {
+    $privateKeyHandle = [IO.File]::Open($PrivateKey, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+    $privateKeyHandle.Dispose()
+} catch {
+    throw "Der private Release-Schluessel ist in diesem erhöhten Fenster nicht lesbar: $PrivateKey. Die Signer-Berechtigungen muessen einmal repariert werden; der Schluesselinhalt wird dabei nicht gelesen oder angezeigt."
+}
 if ($KeyId -notmatch '^[A-Za-z0-9._-]{1,64}$') { throw 'Invalid key ID.' }
 $work = Join-Path $env:TEMP ('ncc-payload-build-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force -Path $work, $OutputDirectory | Out-Null
