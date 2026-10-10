@@ -25,6 +25,13 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ### Added
 
+- Linux erhält einen eigenständigen 0.6-Core-Bootstrap: Der neue Builder
+  `build_ncc_core_linux_bootstrap.sh` paketiert einen Linux-x86_64-Core, die
+  systemd-Unit und nur den öffentlichen Release-Schlüssel. Der Installer
+  `install_ncc_core_linux_bootstrap.sh` übernimmt das bestehende lokale
+  Browser-Credential, prüft einen bewusst zugewiesenen signierten Linux-Payload
+  und archiviert den 0.5-Agenten erst nach einem erfolgreichen Healthcheck.
+
 - `build_ncc_core_bootstrap.ps1` erstellt ein kompaktes Windows-Bootstrap-ZIP
   für bestehende NCC-0.5-Geräte. Es enthält den kompilierten NccCore, die
   minimale Windows-Dienstlogik und ausschließlich den öffentlichen
@@ -41,6 +48,14 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 - `update_ncc_server_release_distribution.ps1` ermoeglicht ein begrenztes,
   vorab gesichertes Windows-Server-Update fuer die Dashboard-Release-Verteilung,
   ohne Agenten oder deren Konfiguration anzufassen.
+
+### Changed
+
+- Die Linux-Core-Installation übernimmt das bestehende lokale
+  Agent-Credential sicher in die gruppengeschützte `core.env`, damit
+  browsergepairte 0.5-Agenten authentisiert nach freigegebenen Releases suchen
+  können. Das ursprüngliche `agent.env` bleibt bis zu einer bewussten Migration
+  unverändert.
 
 ## [0.6.0-beta.3] - 2026-10-09
 

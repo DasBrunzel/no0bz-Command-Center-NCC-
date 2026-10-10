@@ -306,13 +306,13 @@ fn extract_payload(root: &Path, version: &str) -> Result<()> {
             .enclosed_name()
             .ok_or("payload archive contains unsafe path")?
             .to_owned();
-        let destination = temporary.join(enclosed);
+        let destination = temporary.join(&enclosed);
         if entry.is_dir() {
             fs::create_dir_all(&destination).map_err(display)?;
         } else {
             let parent = destination.parent().ok_or("payload entry has no parent")?;
             fs::create_dir_all(parent).map_err(display)?;
-            let mut target = fs::File::create(destination).map_err(display)?;
+            let mut target = fs::File::create(&destination).map_err(display)?;
             std::io::copy(&mut entry, &mut target).map_err(display)?;
             // ZIP does not automatically restore executable bits.  Preserve a
             // payload's Unix mode so the same signed archive format can run
@@ -321,7 +321,7 @@ fn extract_payload(root: &Path, version: &str) -> Result<()> {
             if let Some(mode) = entry.unix_mode() {
                 use std::os::unix::fs::PermissionsExt;
                 fs::set_permissions(
-                    temporary.join(enclosed),
+                    &destination,
                     fs::Permissions::from_mode(mode),
                 )
                 .map_err(display)?;

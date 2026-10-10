@@ -68,8 +68,11 @@ Windows:
   telemetry-buffer\\                # bestehender Puffer, migrationsfähig
 ```
 
-Linux verwendet dieselbe Trennung unter `/opt/ncc/core`, `/opt/ncc/payloads`,
-`/etc/ncc/agent.env` und `/var/lib/ncc-agent`.
+Linux verwendet dieselbe Trennung unter `/opt/no0bz/ncc/core`,
+`/var/lib/ncc-core/payloads`, `/etc/ncc/agent.env` und `/var/lib/ncc-agent`.
+Der Linux-Bootstrap kopiert das bestehende Browser-Credential ausschließlich in
+die root-/`ncc`-geschützte `core.env`; es wird nie in ein Release-Archiv, Log oder
+Dashboard übertragen.
 
 ## Signiertes Release-Manifest
 
@@ -121,6 +124,16 @@ eigenständigen Dienst **NccCore**. Ohne aktivierten, signierten Payload bleibt 
 absichtlich gestoppt; er startet niemals einen beliebigen Python-Checkout. Nach
 einer Aktivierung startet Core ausschließlich die in `payload.json` deklarierte
 Datei, übergibt den privaten Core-State-Pfad und prüft den lokalen Ready-Nachweis.
+
+Für bestehende Linux-0.5-Agenten erzeugt
+`scripts/build_ncc_core_linux_bootstrap.sh` ein quellcheckoutfreies
+`ncc-core-bootstrap-<Version>-linux-x86_64.tar.gz`. Der Ziel-Installer
+`install_ncc_core_linux_bootstrap.sh` setzt einen vorhandenen, erfolgreich
+browsergepairten Agenten voraus. Er startet NccCore nur, wenn der Server einen
+bewusst zugewiesenen, signierten Linux-x86_64-Payload liefert. Bis zu dessen
+Healthcheck bleibt der bisherige `ncc-agent` aktiv; anschließend wird dessen
+Konfiguration als datierte Sicherung archiviert und kann mit
+`rollback_ncc_core_to_agent.sh` wiederhergestellt werden.
 
 ## Bestehende NCC-0.5-Geräte migrieren
 

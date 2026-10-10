@@ -16,12 +16,22 @@ INSTALLER="$PROJECT/scripts/install_ncc_core_service.sh"
 STATE_ROOT=/var/lib/ncc-core
 CORE_ENV=/etc/ncc/core.env
 
-command -v cargo >/dev/null || { echo 'Rust/Cargo is required to build the test Core.' >&2; exit 1; }
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --core-binary) CORE_BINARY="$2"; shift 2 ;;
+    *) echo "usage: $0 [--core-binary /path/to/ncc-core]" >&2; exit 2 ;;
+  esac
+done
+
 command -v openssl >/dev/null || { echo 'OpenSSL is required to sign the test payload.' >&2; exit 1; }
 command -v python3 >/dev/null || { echo 'Python 3 is required to package the test payload.' >&2; exit 1; }
 [[ -f /etc/ncc/agent.env ]] || { echo 'Existing agent configuration missing: /etc/ncc/agent.env' >&2; exit 1; }
 
-cargo build --release --manifest-path "$CORE_MANIFEST"
+if [[ ! -x "$CORE_BINARY" ]]; then
+  command -v cargo >/dev/null || { echo 'Rust/Cargo is required to build the test Core.' >&2; exit 1; }
+  cargo build --release --manifest-path "$CORE_MANIFEST"
+fi
+[[ -x "$CORE_BINARY" ]] || { echo "Core binary missing after build: $CORE_BINARY" >&2; exit 1; }
 "$INSTALLER" --core-binary "$CORE_BINARY" --agent-env /etc/ncc/agent.env
 systemctl stop ncc-core.service || true
 
@@ -37,7 +47,7 @@ cat >"$payload_dir/test-payload" <<'PAYLOAD'
 set -eu
 : "${NCC_CORE_STATE_DIR:?missing NCC_CORE_STATE_DIR}"
 mkdir -p "$NCC_CORE_STATE_DIR"
-printf '{"version":"%s","ready":true}\n' "${NCC_TEST_PAYLOAD_VERSION:?missing payload version}" > "$NCC_CORE_STATE_DIR/payload-health.json"
+printf '{"payload_version":"%s","status":"ready"}\n' "${NCC_TEST_PAYLOAD_VERSION:?missing payload version}" > "$NCC_CORE_STATE_DIR/payload-health.json"
 while :; do sleep 60; done
 PAYLOAD
 chmod 0755 "$payload_dir/test-payload"
@@ -55,6 +65,12 @@ PY
 
 sha="$(sha256sum "$work/payload.zip" | awk '{print $1}')"
 size="$(stat -c '%s' "$work/payload.zip")"
+# The Core deliberately stages as the unprivileged `ncc` user.  Make only this
+# throw-away, signed test archive readable while keeping the temporary signing
+# key root-only.
+chown ncc:ncc "$work/payload.zip"
+chmod 0644 "$work/payload.zip"
+chmod 0755 "$work"
 printf 'NCC-AGENT-RELEASE-V1\n%s\n%s\n%s\n' "$version" "$sha" "$size" > "$work/statement.txt"
 openssl genpkey -algorithm ED25519 -out "$work/private.pem" >/dev/null 2>&1
 openssl pkey -in "$work/private.pem" -pubout -outform DER -out "$work/public.der" >/dev/null 2>&1
@@ -67,11 +83,18 @@ printf '{"keys":{"temporary-linux-migration-test":"%s"}}\n' "$public" > "$STATE_
 chown ncc:ncc "$STATE_ROOT/config/trusted-keys.json"
 chmod 0640 "$STATE_ROOT/config/trusted-keys.json"
 
-/opt/no0bz/ncc/core/ncc-core --state-dir "$STATE_ROOT" stage --source "$work/payload.zip" --version "$version" --sha256 "$sha" --size "$size" --key-id temporary-linux-migration-test --signature "$signature"
-/opt/no0bz/ncc/core/ncc-core --state-dir "$STATE_ROOT" activate --version "$version"
+# Stage as the same unprivileged account used by ncc-core.service.  Otherwise
+# root would own the activated files and the service could neither execute the
+# payload nor read its health record.
+as_core() {
+  runuser --preserve-environment -u ncc -- bash -c 'set -a; . /etc/ncc/core.env; set +a; exec "$@"' -- "$@"
+}
+
+as_core /opt/no0bz/ncc/core/ncc-core --state-dir "$STATE_ROOT" stage --source "$work/payload.zip" --version "$version" --sha256 "$sha" --size "$size" --key-id temporary-linux-migration-test --signature "$signature"
+as_core /opt/no0bz/ncc/core/ncc-core --state-dir "$STATE_ROOT" activate --version "$version"
 systemctl start ncc-core.service
 sleep 3
-state="$(/opt/no0bz/ncc/core/ncc-core --state-dir "$STATE_ROOT" status)"
+state="$(as_core /opt/no0bz/ncc/core/ncc-core --state-dir "$STATE_ROOT" status)"
 systemctl is-active --quiet ncc-core.service
 grep -q '"healthy"' <<<"$state"
 echo '[NCC] Linux Core test migration healthy; existing 0.5 ncc-agent remains unchanged.'

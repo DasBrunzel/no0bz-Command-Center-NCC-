@@ -20,9 +20,48 @@ id ncc >/dev/null 2>&1 || useradd --system --home /var/lib/ncc-core --shell /usr
 install -d -o ncc -g ncc -m 0750 /opt/no0bz/ncc/core /var/lib/ncc-core/{state,config,payloads} /var/lib/ncc-agent /etc/ncc
 install -o root -g root -m 0755 "$CORE_BINARY" /opt/no0bz/ncc/core/ncc-core
 
-# Keep only the variables the payload needs. Credentials remain root/ncc readable
-# and no updater ever rewrites the original agent.env.
-{ echo 'NCC_CORE_STATE_DIR=/var/lib/ncc-core'; grep '^NCC_AGENT_[A-Z0-9_]*=' "$AGENT_ENV"; } >/etc/ncc/core.env
+# Browser-paired 0.5 agents keep their bearer credential in the protected
+# agent data directory rather than in agent.env.  The Core needs that same
+# credential only for the authenticated release lookup.  Do not print it.
+agent_data_dir="$(python3 - "$AGENT_ENV" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+values = {}
+for line in Path(sys.argv[1]).read_text(encoding="utf-8").splitlines():
+    match = re.match(r"^([A-Z0-9_]+)=(.*)$", line)
+    if match:
+        values[match.group(1)] = match.group(2).strip().strip('"').strip("'")
+print(values.get("NCC_AGENT_DATA_DIR", "/var/lib/ncc-agent"))
+PY
+)"
+credential_file="$agent_data_dir/agent-credential.json"
+agent_token="$(python3 - "$credential_file" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+try:
+    value = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8")).get("token", "")
+except (OSError, ValueError, TypeError):
+    value = ""
+if not isinstance(value, str) or not value:
+    raise SystemExit(1)
+print(value)
+PY
+)" || {
+  echo "Existing NCC agent credential is missing or invalid: $credential_file" >&2
+  exit 1
+}
+
+# Keep the original agent configuration untouched.  The separate Core
+# environment is root/ncc readable; no token is written to stdout.
+{
+  echo 'NCC_CORE_STATE_DIR=/var/lib/ncc-core'
+  printf 'NCC_AGENT_TOKEN=%s\n' "$agent_token"
+  grep '^NCC_AGENT_[A-Z0-9_]*=' "$AGENT_ENV" | grep -v '^NCC_AGENT_TOKEN=' || true
+} >/etc/ncc/core.env
 chown root:ncc /etc/ncc/core.env
 chmod 0640 /etc/ncc/core.env
 install -o root -g root -m 0644 "$(dirname "$0")/../packaging/systemd/ncc-core.service" /etc/systemd/system/ncc-core.service

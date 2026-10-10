@@ -144,6 +144,17 @@ entpackt und `install_ncc_core_bootstrap.ps1` erhöht ausgeführt. Der Bootstrap
 den alten `NccAgent`-Dienst erst, wenn NccCore gesund läuft. Die alte
 `agent.env` bleibt als datierte Sicherung erhalten.
 
+Für vorhandene Linux-Geräte gibt es denselben kontrollierten Pfad als
+`build_ncc_core_linux_bootstrap.sh`. Der Builder läuft auf einem Linux-x86_64-
+Buildsystem und erzeugt ein `.tar.gz` mit NccCore, systemd-Unit und ausschließlich
+dem öffentlichen Release-Schlüssel. Auf dem Zielgerät übernimmt
+`install_ncc_core_linux_bootstrap.sh` das bereits browsergepairte Credential aus
+dem geschützten Agent-Datenordner. Es akzeptiert nur einen zuvor im Dashboard
+diesem Node zugewiesenen, signierten **Linux-x86_64-Payload**. Ohne eine solche
+Freigabe oder bei fehlschlagendem Healthcheck bleibt der 0.5-Agent unverändert
+aktiv. Nach Erfolg wird dessen `agent.env` datiert archiviert; der mitgelieferte
+Rollback stellt sie wieder her.
+
 Neben den Farbthemes stehen in den Einstellungen drei alternative Dashboard-Layouts
 bereit: **Orbit**, **Blueprint** und **Studio**. Die Auswahl wird nur im jeweiligen
 Browser gespeichert.
