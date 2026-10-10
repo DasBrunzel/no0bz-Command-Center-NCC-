@@ -378,6 +378,16 @@ Datenträger und Prozesse kommen plattformübergreifend aus `psutil`; NVIDIA ver
 NVML, Windows besitzt einen herstellerunabhängigen GPU-Fallback und Linux liest AMD
 direkt über `amdgpu`/sysfs. Ohne LHM fehlen lediglich einige optionale Sensorwerte.
 
+## NCC 0.6 Linux-Payloads
+
+Ein Linux-Payload wird auf Linux mit
+`scripts/build_ncc_payload_linux.sh --version <SemVer>` gebaut. Das Ergebnis ist
+zunächst bewusst **unsigniert**. Das Windows-Skript
+`scripts/sign_ncc_payload_artifact.ps1` signiert das fertige Archiv danach in einer
+erhöhten PowerShell mit dem ausschließlich auf HorstPC liegenden privaten
+Release-Schlüssel. So bleibt der Linux-Build reproduzierbar, ohne den privaten
+Schlüssel auf einen Agenten oder in WSL zu kopieren.
+
 ## API
 
 | Methode | Pfad | Zweck | Schreibschutz |

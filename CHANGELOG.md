@@ -25,6 +25,10 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ### Added
 
+- `build_ncc_payload_linux.sh` erzeugt einen quellcheckoutfreien Linux-x86_64-
+  Telemetrie-Payload. Die Signatur erfolgt getrennt auf HorstPC über
+  `sign_ncc_payload_artifact.ps1`; der private Release-Schlüssel bleibt dadurch
+  außerhalb von Linux-Buildsystemen und Agenten.
 - Linux erhält einen eigenständigen 0.6-Core-Bootstrap: Der neue Builder
   `build_ncc_core_linux_bootstrap.sh` paketiert einen Linux-x86_64-Core, die
   systemd-Unit und nur den öffentlichen Release-Schlüssel. Der Installer
