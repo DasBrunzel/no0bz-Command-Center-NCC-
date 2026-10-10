@@ -44,6 +44,10 @@ def test_admin_code_creates_a_browser_session_and_can_be_revoked(tmp_path: Path)
             assert redeemed.status_code == 200
             assert "ncc_dashboard_session" in redeemed.headers["set-cookie"]
             assert browser.get("/api/v1/admin-codes").status_code == 200
+            logged_out = browser.post("/api/v1/admin-codes/logout")
+            assert logged_out.status_code == 204
+            assert "ncc_dashboard_session=\"\"" in logged_out.headers["set-cookie"]
+            assert browser.get("/api/v1/admin-codes").status_code == 401
 
             codes = administrator.get("/api/v1/admin-codes", headers=legacy_headers)
             assert codes.status_code == 200

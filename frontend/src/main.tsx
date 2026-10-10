@@ -1841,7 +1841,7 @@ function AlertsPage({ alerts, canClear, onClear }: { alerts: AlertRecord[]; canC
 function SettingsPage({
   theme,
   onTheme,
-  onToken,
+  onSwitchAccess,
   policy,
   onPolicy,
   telegram,
@@ -1856,7 +1856,7 @@ function SettingsPage({
 }: {
   theme: Theme;
   onTheme: (v: Theme) => void;
-  onToken: () => void;
+  onSwitchAccess: () => void;
   policy: AlertPolicy | null;
   onPolicy: (policy: AlertPolicy) => Promise<void>;
   telegram: TelegramSettings | null;
@@ -2015,11 +2015,11 @@ function SettingsPage({
           <ShieldCheck size={19} />
         </header>
         <p>
-          Der Dashboard-Token ist vom Agent-Token getrennt und bleibt
-          ausschließlich in diesem Browser gespeichert.
+          Melde diese Browser-Sitzung ab, um einen neuen einmaligen Admin-Code
+          einzugeben. Der bisherige Zugang auf anderen Geräten bleibt erhalten.
         </p>
-        <button className="primary" onClick={onToken}>
-          <KeyRound size={16} /> Dashboard-Token ändern
+        <button className="primary" onClick={onSwitchAccess}>
+          <KeyRound size={16} /> Zugang wechseln
         </button>
       </section>
     </div>
@@ -2767,6 +2767,16 @@ function App() {
     if (!response.ok) throw new Error("REQUEST");
     await load(true);
   };
+  const switchDashboardAccess = async () => {
+    try {
+      await fetch("/api/v1/admin-codes/logout", { method: "POST" });
+    } finally {
+      localStorage.removeItem("ncc-dashboard-token");
+      setToken("");
+      setAuthenticated(false);
+      setAuthError(false);
+    }
+  };
   const createFleetGroup = async (name: string) => {
     const group = await postJson<FleetGroup>("/api/v1/fleet/groups", token, { name });
     setGroups((current) => [...current, group].sort((left, right) => left.position - right.position || left.name.localeCompare(right.name, "de")));
@@ -2970,7 +2980,7 @@ function App() {
             <SettingsPage
               theme={theme}
               onTheme={setTheme}
-              onToken={() => setAuthenticated(false)}
+              onSwitchAccess={() => void switchDashboardAccess()}
               policy={policy}
               onPolicy={savePolicy}
               telegram={telegram}

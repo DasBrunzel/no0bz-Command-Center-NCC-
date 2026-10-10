@@ -97,6 +97,12 @@ async def redeem(
     return {"status": "ok"}
 
 
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout(response: Response) -> None:
+    """Forget only this browser session so another one-time code can be used."""
+    response.delete_cookie("ncc_dashboard_session", samesite="strict")
+
+
 @router.post(
     "/{code_id}/revoke",
     response_model=AdminCodeResponse,
