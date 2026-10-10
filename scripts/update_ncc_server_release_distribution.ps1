@@ -68,7 +68,10 @@ try {
 
 # Install only the Python package and server migration assets. Existing server
 # configuration stays in place; neither -ReplaceConfig nor Agent is used.
-& $venvPython -m pip install --upgrade $projectRoot
+# The Python distribution version can remain the same between dashboard
+# revisions.  Force the local package refresh so the bundled static files are
+# copied into site-packages as well; dependencies are deliberately untouched.
+& $venvPython -m pip install --upgrade --force-reinstall --no-deps $projectRoot
 if ($LASTEXITCODE -ne 0) { throw 'NCC server package update failed.' }
 if (Test-Path -LiteralPath $migrationRoot) { Remove-Item -LiteralPath $migrationRoot -Recurse -Force }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'migrations') -Destination $migrationRoot -Recurse
