@@ -4,6 +4,8 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.6.0-beta.4] - 2026-10-11
+
 ### Fixed
 
 - Der Linux-Core-Bootstrap erstellt den Download-Arbeitsordner jetzt direkt mit

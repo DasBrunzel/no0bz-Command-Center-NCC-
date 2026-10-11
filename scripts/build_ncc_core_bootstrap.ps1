@@ -6,7 +6,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$PublicKey,
     [ValidatePattern('^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$')]
-    [string]$Version = '0.6.0-beta.3',
+    [string]$Version = '0.6.0-beta.4',
     [string]$OutputDirectory = ''
 )
 
