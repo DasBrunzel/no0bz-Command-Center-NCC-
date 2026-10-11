@@ -8,6 +8,11 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ### Fixed
 
+- Der Linux-Core-Bootstrap legt `/etc/ncc` nun als `root:ncc` mit Modus `0750`
+  an. Dadurch kann der unprivilegierte Core die weiterhin geschuetzte
+  `core.env` durchlaufen und lesen; zuvor schlug der Release-Update-Check auf
+  frisch installierten Linux-Systemen mit `Permission denied` fehl.
+
 - Der Linux-Core-Bootstrap erstellt den Download-Arbeitsordner jetzt direkt mit
   den Rechten des unprivilegierten `ncc`-Dienstkontos. Damit können
   freigegebene Payloads ohne nachträgliche Rechtekorrektur heruntergeladen

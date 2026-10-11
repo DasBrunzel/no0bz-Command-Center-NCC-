@@ -85,7 +85,10 @@ for state_file in machine-id agent-credential.json; do
     install -o ncc -g ncc -m 0600 "$source_file" "$target_file"
   fi
 done
-install -d -o root -g root -m 0750 /etc/ncc
+# Core runs as the unprivileged ncc account and reads core.env through the
+# directory. Keep the directory root-owned but make it searchable for ncc;
+# core.env itself remains root-owned and group-readable only.
+install -d -o root -g ncc -m 0750 /etc/ncc
 install -o root -g root -m 0755 "$CORE_SOURCE" "$CORE_BINARY"
 install -o ncc -g ncc -m 0640 "$KEYS_SOURCE" "$CORE_ROOT/config/trusted-keys.json"
 install -o root -g root -m 0644 "$SERVICE_SOURCE" /etc/systemd/system/ncc-core.service

@@ -155,6 +155,10 @@ Freigabe oder bei fehlschlagendem Healthcheck bleibt der 0.5-Agent unverändert
 aktiv. Nach Erfolg wird dessen `agent.env` datiert archiviert; der mitgelieferte
 Rollback stellt sie wieder her.
 
+Der Core läuft dabei bewusst als Systemkonto `ncc`: `/etc/ncc` ist nur für
+`root` und diese Gruppe durchsuchbar, während `core.env` selbst mit `0640`
+weiterhin ausschließlich für `root:ncc` lesbar bleibt.
+
 Wurde ein Linux-Core-Payload anschließend ausreichend beobachtet, beendet
 `sudo ./scripts/finalize_ncc_core_linux_migration.sh --expected-version <VERSION>`
 die Parallelphase kontrolliert. Der Befehl prüft den Core vor und nach dem
