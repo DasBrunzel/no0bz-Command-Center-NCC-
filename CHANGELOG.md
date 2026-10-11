@@ -6,6 +6,11 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ### Fixed
 
+- Der Linux-Core-Bootstrap erstellt den Download-Arbeitsordner jetzt direkt mit
+  den Rechten des unprivilegierten `ncc`-Dienstkontos. Damit können
+  freigegebene Payloads ohne nachträgliche Rechtekorrektur heruntergeladen
+  werden.
+
 - Der Windows-Core-Bootstrap übernimmt bei browsergepairten 0.5-Agenten das
   vorhandene lokale Agent-Credential ausschließlich in die ACL-geschützte
   `core.env`, damit die authentisierte Release-Abfrage funktioniert. Der Token
@@ -24,6 +29,11 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   sie unabhängig von der lokalen ANSI-Codepage zuverlässig parst.
 
 ### Added
+
+- `finalize_ncc_core_linux_migration.sh` beendet die Parallelphase eines
+  Linux-0.5-Agenten kontrolliert: Es prüft zunächst den gesunden Core-Payload,
+  archiviert die alte Konfiguration, deaktiviert den Legacy-Dienst und stellt
+  ihn bei einem fehlschlagenden Nachtest automatisch wieder her.
 
 - `build_ncc_payload_linux.sh` erzeugt einen quellcheckoutfreien Linux-x86_64-
   Telemetrie-Payload. Die Signatur erfolgt getrennt auf HorstPC über

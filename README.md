@@ -155,6 +155,12 @@ Freigabe oder bei fehlschlagendem Healthcheck bleibt der 0.5-Agent unverändert
 aktiv. Nach Erfolg wird dessen `agent.env` datiert archiviert; der mitgelieferte
 Rollback stellt sie wieder her.
 
+Wurde ein Linux-Core-Payload anschließend ausreichend beobachtet, beendet
+`sudo ./scripts/finalize_ncc_core_linux_migration.sh --expected-version <VERSION>`
+die Parallelphase kontrolliert. Der Befehl prüft den Core vor und nach dem
+Abschalten des alten Dienstes; bei einem Fehler wird der 0.5-Agent automatisch
+wiederhergestellt.
+
 Neben den Farbthemes stehen in den Einstellungen drei alternative Dashboard-Layouts
 bereit: **Orbit**, **Blueprint** und **Studio**. Die Auswahl wird nur im jeweiligen
 Browser gespeichert.

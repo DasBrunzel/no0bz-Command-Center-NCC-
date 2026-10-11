@@ -72,7 +72,7 @@ PY
 }
 
 id ncc >/dev/null 2>&1 || useradd --system --home /var/lib/ncc-core --shell /usr/sbin/nologin ncc
-install -d -o ncc -g ncc -m 0750 /opt/no0bz/ncc/core "$CORE_ROOT"/{state,config,payloads}
+install -d -o ncc -g ncc -m 0750 /opt/no0bz/ncc/core "$CORE_ROOT"/{state,config,payloads,downloads}
 # The legacy service can run under root while Core deliberately runs as the
 # unprivileged ncc account.  Give Core a private state directory, but seed the
 # stable machine identity and credential so both implementations represent the
