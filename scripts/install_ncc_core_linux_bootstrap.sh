@@ -27,6 +27,7 @@ AGENT_ENV=/etc/ncc/agent.env
 CORE_ROOT=/var/lib/ncc-core
 CORE_ENV=/etc/ncc/core.env
 CORE_BINARY=/opt/no0bz/ncc/core/ncc-core
+CORE_AGENT_DATA_DIR="$CORE_ROOT/agent-data"
 
 for path in "$CORE_SOURCE" "$KEYS_SOURCE" "$SERVICE_SOURCE" "$AGENT_ENV"; do
   [[ -f "$path" ]] || { echo "Required bootstrap file missing: $path" >&2; exit 1; }
@@ -72,6 +73,18 @@ PY
 
 id ncc >/dev/null 2>&1 || useradd --system --home /var/lib/ncc-core --shell /usr/sbin/nologin ncc
 install -d -o ncc -g ncc -m 0750 /opt/no0bz/ncc/core "$CORE_ROOT"/{state,config,payloads}
+# The legacy service can run under root while Core deliberately runs as the
+# unprivileged ncc account.  Give Core a private state directory, but seed the
+# stable machine identity and credential so both implementations represent the
+# same node during migration.  Never modify the legacy agent's live files.
+install -d -o ncc -g ncc -m 0700 "$CORE_AGENT_DATA_DIR"
+for state_file in machine-id agent-credential.json; do
+  source_file="$data_dir/$state_file"
+  target_file="$CORE_AGENT_DATA_DIR/$state_file"
+  if [[ -f "$source_file" && ! -e "$target_file" ]]; then
+    install -o ncc -g ncc -m 0600 "$source_file" "$target_file"
+  fi
+done
 install -d -o root -g root -m 0750 /etc/ncc
 install -o root -g root -m 0755 "$CORE_SOURCE" "$CORE_BINARY"
 install -o ncc -g ncc -m 0640 "$KEYS_SOURCE" "$CORE_ROOT/config/trusted-keys.json"
@@ -80,7 +93,8 @@ install -o root -g root -m 0644 "$SERVICE_SOURCE" /etc/systemd/system/ncc-core.s
 {
   echo "NCC_CORE_STATE_DIR=$CORE_ROOT"
   printf 'NCC_AGENT_TOKEN=%s\n' "$agent_token"
-  grep '^NCC_AGENT_[A-Z0-9_]*=' "$AGENT_ENV" | grep -v '^NCC_AGENT_TOKEN=' || true
+  echo "NCC_AGENT_DATA_DIR=$CORE_AGENT_DATA_DIR"
+  grep '^NCC_AGENT_[A-Z0-9_]*=' "$AGENT_ENV" | grep -v -E '^NCC_AGENT_(TOKEN|DATA_DIR)=' || true
 } >"$CORE_ENV"
 chown root:ncc "$CORE_ENV"
 chmod 0640 "$CORE_ENV"
