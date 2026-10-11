@@ -8,6 +8,11 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ### Fixed
 
+- Der Windows-Core-Bootstrap erkennt nun auch den älteren Task-basierten
+  `NccAgent`. Nach einem gesunden Core-Start entfernt er diese Systemaufgabe
+  kontrolliert, sodass keine Doppeltelemetrie entsteht; der Rollback stellt den
+  ursprünglichen Task samt archivierter Konfiguration wieder her.
+
 - Der Linux-Core-Bootstrap legt `/etc/ncc` nun als `root:ncc` mit Modus `0750`
   an. Dadurch kann der unprivilegierte Core die weiterhin geschuetzte
   `core.env` durchlaufen und lesen; zuvor schlug der Release-Update-Check auf

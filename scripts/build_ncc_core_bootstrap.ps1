@@ -22,8 +22,9 @@ $OutputDirectory = if ($OutputDirectory) { $OutputDirectory } else { Join-Path $
 $packageVersion = $Version -replace '-beta\.', 'b' -replace '-alpha\.', 'a' -replace '-rc\.', 'rc'
 $core = Join-Path $project 'core\ncc-core\target\release\ncc-core.exe'
 $installer = Join-Path $PSScriptRoot 'install_ncc_core_bootstrap.ps1'
+$rollback = Join-Path $PSScriptRoot 'rollback_ncc_core_to_agent.ps1'
 $serviceSource = Join-Path $project 'backend\ncc_service'
-foreach ($path in @($core, $installer, $serviceSource)) {
+foreach ($path in @($core, $installer, $rollback, $serviceSource)) {
     if (-not (Test-Path -LiteralPath $path)) { throw "Bootstrap-Quelle fehlt: $path" }
 }
 
@@ -32,6 +33,7 @@ New-Item -ItemType Directory -Force -Path $work, $OutputDirectory | Out-Null
 try {
     Copy-Item -LiteralPath $core -Destination (Join-Path $work 'ncc-core.exe')
     Copy-Item -LiteralPath $installer -Destination (Join-Path $work 'install_ncc_core_bootstrap.ps1')
+    Copy-Item -LiteralPath $rollback -Destination (Join-Path $work 'rollback_ncc_core_to_agent.ps1')
     New-Item -ItemType Directory -Force -Path (Join-Path $work 'service-package\backend') | Out-Null
     Copy-Item -LiteralPath $serviceSource -Destination (Join-Path $work 'service-package\backend\ncc_service') -Recurse
     Get-ChildItem -LiteralPath (Join-Path $work 'service-package') -Directory -Recurse -Filter '__pycache__' |
@@ -68,6 +70,8 @@ where = ["backend"]
 
 Der Bootstrap uebernimmt die vorhandene NCC-Identitaet, prueft den signierten
 Payload und entfernt den alten NccAgent erst nach erfolgreicher Core-Gesundheit.
+Ein Rueckfall ist mit `rollback_ncc_core_to_agent.ps1` moeglich. Auch der
+aeltere, Task-basierte Windows-Agent wird dabei sauber abgeloest.
 "@
     Set-Content -LiteralPath (Join-Path $work 'README.md') -Value $readme -Encoding utf8
     $zip = Join-Path $OutputDirectory "ncc-core-bootstrap-$Version-windows-x86_64.zip"
@@ -78,7 +82,7 @@ Payload und entfernt den alten NccAgent erst nach erfolgreicher Core-Gesundheit.
         Result = 'NCC Core bootstrap package built'
         Package = $zip
         Sha256 = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
-        Included = @('ncc-core.exe', 'install_ncc_core_bootstrap.ps1', 'ncc_service service wrapper', 'trusted public release key')
+        Included = @('ncc-core.exe', 'install_ncc_core_bootstrap.ps1', 'rollback_ncc_core_to_agent.ps1', 'ncc_service service wrapper', 'trusted public release key')
     } | ConvertTo-Json -Depth 4
 } finally {
     Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue

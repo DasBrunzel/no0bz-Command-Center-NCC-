@@ -26,6 +26,7 @@ $coreSource = Join-Path $packageRoot 'ncc-core.exe'
 $trustedKeysSource = Join-Path $packageRoot 'trusted-keys.json'
 $servicePackage = Join-Path $packageRoot 'service-package'
 $python = Join-Path $root 'venv\Scripts\python.exe'
+$legacyRetirementRecord = Join-Path $configRoot 'legacy-agent-retirement.json'
 
 foreach ($path in @($coreSource, $trustedKeysSource, $servicePackage, $agentEnv, $python)) {
     if (-not (Test-Path -LiteralPath $path)) { throw "Benoetigte Bootstrap-Datei fehlt: $path" }
@@ -42,6 +43,22 @@ function Import-NccEnvironment([string]$Path) {
             [Environment]::SetEnvironmentVariable($Matches[1], $Matches[2].Trim('"'), 'Process')
         }
     }
+}
+
+function Start-LegacyNccAgent {
+    $legacyService = Get-Service -Name NccAgent -ErrorAction SilentlyContinue
+    if ($legacyService) {
+        Set-Service -Name NccAgent -StartupType Automatic -ErrorAction SilentlyContinue
+        if ($legacyService.Status -ne 'Running') { Start-Service -Name NccAgent -ErrorAction SilentlyContinue }
+        return 'service'
+    }
+    $legacyTask = Get-ScheduledTask -TaskName NccAgent -ErrorAction SilentlyContinue
+    if ($legacyTask) {
+        Enable-ScheduledTask -TaskName NccAgent | Out-Null
+        if ($legacyTask.State -ne 'Running') { Start-ScheduledTask -TaskName NccAgent }
+        return 'task'
+    }
+    return $null
 }
 
 New-Item -ItemType Directory -Force -Path (Join-Path $root 'core'), $configRoot, $stateRoot, (Join-Path $stateRoot 'config'), (Join-Path $root 'logs') | Out-Null
@@ -118,26 +135,45 @@ do {
 
 if (-not $state -or $state.health -ne 'healthy' -or (Get-Service NccCore).Status -ne 'Running') {
     Stop-Service -Name NccCore -Force -ErrorAction SilentlyContinue
-    if ((Get-Service -Name NccAgent -ErrorAction SilentlyContinue).Status -ne 'Running') {
-        Set-Service -Name NccAgent -StartupType Automatic -ErrorAction SilentlyContinue
-        Start-Service -Name NccAgent -ErrorAction SilentlyContinue
-    }
+    $null = Start-LegacyNccAgent
     throw "NccCore wurde nicht gesund. Der bisherige NccAgent wurde wiederhergestellt. Letzter Core-Zustand: $($state | ConvertTo-Json -Compress)"
 }
 
 if (-not $KeepLegacyAgent) {
     $backup = Join-Path $configRoot ('agent.env.retired-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.bak')
-    Stop-Service -Name NccAgent -Force -ErrorAction SilentlyContinue
-    & $python -m ncc_service.windows agent remove 2>$null
-    if ($LASTEXITCODE -ne 0 -and (Get-Service -Name NccAgent -ErrorAction SilentlyContinue)) {
-        throw 'NccCore ist gesund, aber der alte NccAgent-Dienst konnte nicht entfernt werden. Keine Agent-Dateien wurden geloescht.'
+    $legacyService = Get-Service -Name NccAgent -ErrorAction SilentlyContinue
+    $legacyTask = Get-ScheduledTask -TaskName NccAgent -ErrorAction SilentlyContinue
+    $legacyMode = 'none'
+    if ($legacyService) {
+        $legacyMode = 'service'
+        Stop-Service -Name NccAgent -Force -ErrorAction SilentlyContinue
+        & $python -m ncc_service.windows agent remove 2>$null
+        if ($LASTEXITCODE -ne 0 -and (Get-Service -Name NccAgent -ErrorAction SilentlyContinue)) {
+            throw 'NccCore ist gesund, aber der alte NccAgent-Dienst konnte nicht entfernt werden. Keine Agent-Dateien wurden geloescht.'
+        }
+    } elseif ($legacyTask) {
+        $legacyMode = 'task'
+        Stop-ScheduledTask -TaskName NccAgent -ErrorAction SilentlyContinue
+        Unregister-ScheduledTask -TaskName NccAgent -Confirm:$false
+        if (Get-ScheduledTask -TaskName NccAgent -ErrorAction SilentlyContinue) {
+            throw 'NccCore ist gesund, aber die alte NccAgent-Systemaufgabe konnte nicht entfernt werden. Keine Agent-Dateien wurden geloescht.'
+        }
     }
     Move-Item -LiteralPath $agentEnv -Destination $backup -Force
+    @{
+        mode = $legacyMode
+        task_name = if ($legacyMode -eq 'task') { 'NccAgent' } else { $null }
+        config_backup = $backup
+        retired_at = (Get-Date).ToString('o')
+    } | ConvertTo-Json | Set-Content -LiteralPath $legacyRetirementRecord -Encoding utf8
+    Set-NccAcl $legacyRetirementRecord
     [pscustomobject]@{
         Result = 'NccCore installed, healthy, and legacy NccAgent removed'
         ActivePayload = $state.active_payload
         LegacyAgentConfigBackup = $backup
+        LegacyAgentMode = $legacyMode
         NccCore = (Get-Service NccCore).Status.ToString()
+        Rollback = (Join-Path $packageRoot 'rollback_ncc_core_to_agent.ps1')
     } | ConvertTo-Json
 } else {
     [pscustomobject]@{
