@@ -51,6 +51,8 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   Tailscale erreichbaren OpenSSH-Wartungszugang für Windows-NCC-Server ein.
   Der Zugang akzeptiert nur einen explizit übergebenen Public Key und sichert
   vorhandene Administrator-Schlüsseldateien vor einer Ergänzung.
+  Fehlende Windows-OpenSSH-Hostschlüssel werden vor dem ersten Dienststart
+  idempotent erzeugt.
 
 - `finalize_ncc_core_linux_migration.sh` beendet die Parallelphase eines
   Linux-0.5-Agenten kontrolliert: Es prüft zunächst den gesunden Core-Payload,

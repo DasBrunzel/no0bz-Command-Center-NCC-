@@ -63,6 +63,11 @@ if (-not $firewallRules.Count) {
 & "$env:WINDIR\System32\OpenSSH\sshd.exe" -t
 if ($LASTEXITCODE -ne 0) { throw 'Die Windows-OpenSSH-Konfiguration ist ungueltig.' }
 
+# Add-WindowsCapability does not create these host keys reliably on every
+# Windows Server image. ssh-keygen -A is idempotent and creates only missing
+# keys, so the first service start has a valid server identity.
+& "$env:WINDIR\System32\OpenSSH\ssh-keygen.exe" -A
+if ($LASTEXITCODE -ne 0) { throw 'Die OpenSSH-Server-Hostschluessel konnten nicht erzeugt werden.' }
 Restart-Service -Name sshd
 $listener = Get-NetTCPConnection -State Listen -LocalPort 22 -ErrorAction SilentlyContinue
 if (-not $listener) { throw 'sshd laeuft, lauscht aber nicht auf TCP Port 22.' }
