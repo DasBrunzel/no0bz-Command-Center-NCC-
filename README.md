@@ -128,9 +128,10 @@ von OpenSSL abgefragt und niemals an NCC übergeben. Anschließend wird **nur** 
 ausgegebene öffentliche Schlüssel auf die jeweiligen NccCore-Installationen
 verteilt. Der private Schlüssel bleibt auf der Release-Workstation.
 
-Der aktuelle echte signierte Windows-Payload ist als
+Der aktuelle echte signierte Windows-Payload ist `0.6.0-beta.3`; der
 [NCC 0.6.0-beta.4 Pre-Release](https://github.com/DasBrunzel/no0bz-Command-Center-NCC-/releases/tag/v0.6.0-beta.4)
-verfügbar. Sein Manifest verweist ausschließlich auf HTTPS, enthält die exakte
+enthält zusätzlich den aktuellen Windows-Core-Bootstrap sowie den Linux-Payload.
+Jedes Payload-Manifest verweist ausschließlich auf HTTPS, enthält die exakte
 SHA-256-Prüfsumme sowie die Ed25519-Signatur mit `ncc-release-2026`. Es muss
 vor einer Node-Freigabe einmalig im Dashboard registriert werden. Das private
 PEM und seine Passphrase gehören weder in Git noch auf den NCC-Server.
@@ -141,8 +142,10 @@ werden weder Rust noch ein Git-Checkout benötigt: Zuerst wird der freigegebene
 Release im Dashboard dem bestehenden Node zugeteilt; danach wird das ZIP
 entpackt und `install_ncc_core_bootstrap.ps1` erhöht ausgeführt. Der Bootstrap
 übernimmt Token und Pairing-Identität, prüft den signierten Payload und entfernt
-den alten `NccAgent`-Dienst erst, wenn NccCore gesund läuft. Die alte
-`agent.env` bleibt als datierte Sicherung erhalten.
+den alten `NccAgent`-Dienst beziehungsweise die ältere Systemaufgabe erst, wenn
+NccCore gesund läuft. Für das unter `LocalSystem` laufende `pythonservice.exe`
+setzt der Bootstrap die erforderliche isolierte `PYTHONPATH`-Dienstumgebung.
+Die alte `agent.env` bleibt als datierte Sicherung erhalten.
 
 Für vorhandene Linux-Geräte gibt es denselben kontrollierten Pfad als
 `build_ncc_core_linux_bootstrap.sh`. Der Builder läuft auf einem Linux-x86_64-

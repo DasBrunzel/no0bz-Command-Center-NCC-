@@ -113,6 +113,15 @@ if ($existingCoreService) {
 }
 Set-Service -Name NccCore -StartupType Automatic
 
+# pythonservice.exe runs under LocalSystem and does not automatically inherit
+# the virtual environment's site-packages path.  NccServer has this registry
+# environment already; without it the Core service cannot import its pywin32
+# service class and fails before core.log can be opened.
+$sitePackages = Join-Path $root 'venv\Lib\site-packages'
+$pythonPath = "PYTHONPATH=$sitePackages;$sitePackages\win32;$sitePackages\win32\lib;$sitePackages\pythonwin"
+& reg.exe add 'HKLM\SYSTEM\CurrentControlSet\Services\NccCore' /v Environment /t REG_MULTI_SZ /d $pythonPath /f | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Die Python-Dienstumgebung fuer NccCore konnte nicht gesetzt werden.' }
+
 # Download/stage/activate happens before the service starts. The update route
 # returns only a Commander-approved, node-assigned, signed release.
 Import-NccEnvironment $coreEnv

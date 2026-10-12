@@ -8,6 +8,11 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ### Fixed
 
+- Der Windows-Core-Bootstrap registriert für `NccCore` nun dieselbe
+  `PYTHONPATH`-Dienstumgebung wie der bestehende `NccServer`. Dadurch kann
+  `pythonservice.exe` die Core-Serviceklasse auch unter `LocalSystem` laden;
+  zuvor brach der Dienst noch vor dem Anlegen von `core.log` ab.
+
 - Der Windows-Core-Bootstrap erkennt nun auch den älteren Task-basierten
   `NccAgent`. Nach einem gesunden Core-Start entfernt er diese Systemaufgabe
   kontrolliert, sodass keine Doppeltelemetrie entsteht; der Rollback stellt den
