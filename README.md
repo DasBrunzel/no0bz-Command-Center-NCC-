@@ -147,6 +147,15 @@ NccCore gesund läuft. Für das unter `LocalSystem` laufende `pythonservice.exe`
 setzt der Bootstrap die erforderliche isolierte `PYTHONPATH`-Dienstumgebung.
 Die alte `agent.env` bleibt als datierte Sicherung erhalten.
 
+### Wartungszugang für einen Windows-NCC-Server
+
+`setup_ncc_windows_maintenance_ssh.ps1` richtet einmalig den Windows-Dienst
+OpenSSH Server ein, hinterlegt einen angegebenen Administrator-**Public Key**
+und beschränkt Port 22 auf das Tailscale-Netz (`100.64.0.0/10`). Es installiert
+keinen NCC-Agenten und liest weder Passwörter noch private Schlüssel. So kann
+der Server anschließend unabhängig von RDP über einen nachvollziehbaren,
+privaten Wartungszugang administriert werden.
+
 Für vorhandene Linux-Geräte gibt es denselben kontrollierten Pfad als
 `build_ncc_core_linux_bootstrap.sh`. Der Builder läuft auf einem Linux-x86_64-
 Buildsystem und erzeugt ein `.tar.gz` mit NccCore, systemd-Unit und ausschließlich

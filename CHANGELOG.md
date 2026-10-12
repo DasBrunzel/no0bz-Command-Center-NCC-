@@ -47,6 +47,11 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ### Added
 
+- `setup_ncc_windows_maintenance_ssh.ps1` richtet einen ausschließlich über
+  Tailscale erreichbaren OpenSSH-Wartungszugang für Windows-NCC-Server ein.
+  Der Zugang akzeptiert nur einen explizit übergebenen Public Key und sichert
+  vorhandene Administrator-Schlüsseldateien vor einer Ergänzung.
+
 - `finalize_ncc_core_linux_migration.sh` beendet die Parallelphase eines
   Linux-0.5-Agenten kontrolliert: Es prüft zunächst den gesunden Core-Payload,
   archiviert die alte Konfiguration, deaktiviert den Legacy-Dienst und stellt
