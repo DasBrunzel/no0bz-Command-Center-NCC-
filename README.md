@@ -158,6 +158,11 @@ privaten Wartungszugang administriert werden. Fehlende OpenSSH-Hostschlüssel
 erzeugt das Setup vor dem ersten Dienststart automatisch. Bestehende NCC-
 Offsite-Backupregeln für `nccbackup` bleiben erhalten; der aufrufende
 Administrator wird lediglich zusätzlich in deren `AllowUsers`-Regel ergänzt.
+Falls eine ältere, fehlerhafte `nccbackup`-OpenSSH-Regel Windows-OpenSSH mit
+Fehler 1067 beendet, ersetzt `repair_ncc_windows_sshd_service.ps1` nach einem
+Konfigurationsbackup ausschließlich diese eingehende SSH-Regel durch den
+Wartungsbenutzer. Der tägliche `NccOffsiteTaildropReceiver` bleibt davon
+unberührt, weil er nicht über SSH/SFTP arbeitet.
 
 Falls `sshd` auf einem Windows-Server nicht startet, erzeugt
 `debug_ncc_windows_sshd.ps1` vier Sekunden lang ein reines Vordergrund-Debuglog

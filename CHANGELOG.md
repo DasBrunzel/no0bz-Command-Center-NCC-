@@ -62,6 +62,10 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   dann gesichert und entfernt, wenn das zugehörige lokale Konto tatsächlich
   fehlt; so kann Windows-OpenSSH nicht mehr mit Fehler 1332 beim Dienststart
   abbrechen. Der Taildrop-Empfänger bleibt davon unabhängig.
+  `repair_ncc_windows_sshd_service.ps1` ist der kontrollierte Reparaturpfad
+  für bereits bestehende Regeln, die `sshd` mit Windows-Fehler 1067 beenden:
+  Es sichert die Konfiguration, entfernt nur den alten SSH/SFTP-Stanza und
+  begrenzt den Dienst weiter auf den Wartungsbenutzer.
 
 - `debug_ncc_windows_sshd.ps1` erfasst einen kurzlebigen, nicht verändernden
   Vordergrund-Diagnoselauf für einen fehlschlagenden Windows-OpenSSH-Dienst.
