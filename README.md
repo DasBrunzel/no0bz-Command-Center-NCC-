@@ -176,6 +176,12 @@ Wenn die `LocalSystem`-Diagnose selbst keine Datei unter `C:\ProgramData\ssh`
 anlegen kann, stellt `repair_ncc_windows_sshd_acl.ps1` dort ausschließlich die
 üblichen lokalen Zugriffsrechte für `SYSTEM` und die Administratorengruppe
 wieder her, speichert vorher die vorhandenen ACLs und startet `sshd` erneut.
+Falls `sshd.exe` im Vordergrund funktioniert, der Windows-Dienst aber weiterhin
+mit 1067 beendet wird, sichert und installiert
+`reinstall_ncc_windows_openssh_server.ps1` ausschließlich die optionale
+OpenSSH-**Server**-Komponente neu. Es behält vorhandene öffentliche
+Administratorschlüssel, verwendet eine frische Standardkonfiguration mit genau
+einem Wartungsbenutzer und lässt Port 22 weiterhin nur aus Tailscale zu.
 
 Für vorhandene Linux-Geräte gibt es denselben kontrollierten Pfad als
 `build_ncc_core_linux_bootstrap.sh`. Der Builder läuft auf einem Linux-x86_64-

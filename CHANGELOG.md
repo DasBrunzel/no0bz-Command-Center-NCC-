@@ -76,6 +76,10 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   `repair_ncc_windows_sshd_acl.ps1` repariert bei einem fehlenden
   `LocalSystem`-Zugriff die Standard-ACLs des OpenSSH-ProgramData-Ordners
   (ausschließlich `SYSTEM` und lokale Administratoren) und sichert sie vorher.
+  `reinstall_ncc_windows_openssh_server.ps1` ist der datengesicherte
+  Letztreparaturpfad für einen weiterhin mit 1067 scheiternden Windows-
+  OpenSSH-Dienst: nur die Server-Komponente wird neu installiert; der Zugang
+  bleibt auf Tailscale und den aktuellen Wartungsbenutzer begrenzt.
 
 - `debug_ncc_windows_sshd.ps1` erfasst einen kurzlebigen, nicht verändernden
   Vordergrund-Diagnoselauf für einen fehlschlagenden Windows-OpenSSH-Dienst.
