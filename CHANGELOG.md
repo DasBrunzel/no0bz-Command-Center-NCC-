@@ -58,6 +58,10 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   einen Standard-`.ssh/authorized_keys`-Eintrag.
   Die Firewall-Einschränkung verwendet nun auch auf älteren Windows-Server-
   NetSecurity-Modulen den kompatiblen Pipeline-Pfad.
+  Eine verwaiste, nicht mehr auflösbare `nccbackup`-OpenSSH-Regel wird nur
+  dann gesichert und entfernt, wenn das zugehörige lokale Konto tatsächlich
+  fehlt; so kann Windows-OpenSSH nicht mehr mit Fehler 1332 beim Dienststart
+  abbrechen. Der Taildrop-Empfänger bleibt davon unabhängig.
 
 - `debug_ncc_windows_sshd.ps1` erfasst einen kurzlebigen, nicht verändernden
   Vordergrund-Diagnoselauf für einen fehlschlagenden Windows-OpenSSH-Dienst.

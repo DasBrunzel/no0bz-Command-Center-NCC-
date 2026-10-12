@@ -70,6 +70,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Die ACL fuer die Benutzer-Schluesseldatei konn
 $sshdConfig = Join-Path $sshRoot 'sshd_config'
 $configLines = @(Get-Content -LiteralPath $sshdConfig)
 $markerIndex = [Array]::IndexOf($configLines, '# NCC offsite backup receiver (managed)')
+$retiredStaleBackupReceiverRule = $false
 if ($markerIndex -ge 0 -and $markerIndex + 1 -lt $configLines.Count) {
     $allowIndex = $markerIndex + 1
     if ($configLines[$allowIndex] -match '^AllowUsers\s+(.+)$') {
@@ -78,6 +79,36 @@ if ($markerIndex -ge 0 -and $markerIndex + 1 -lt $configLines.Count) {
             Copy-Item -LiteralPath $sshdConfig -Destination "$sshdConfig.before-ncc-maintenance-$(Get-Date -Format 'yyyyMMdd-HHmmss').bak" -Force
             $configLines[$allowIndex] = 'AllowUsers ' + (($allowedUsers + $env:USERNAME) -join ' ')
             Set-Content -LiteralPath $sshdConfig -Value $configLines -Encoding ascii
+        }
+    }
+
+    # Earlier Taildrop receiver setup revisions could leave an sshd-only
+    # nccbackup stanza behind after the local account had been removed. Windows
+    # OpenSSH then exits as a service with lookup_sid error 1332. Taildrop does
+    # not use sshd, so retire only that already-inert stanza, and only when the
+    # matching local account truly no longer exists. The complete config is
+    # backed up before this repair.
+    $backupUser = Get-CimInstance Win32_UserAccount -Filter "LocalAccount = TRUE AND Name = 'nccbackup'" -ErrorAction SilentlyContinue
+    if (-not $backupUser) {
+        $currentConfig = @(Get-Content -LiteralPath $sshdConfig)
+        $currentMarker = [Array]::IndexOf($currentConfig, '# NCC offsite backup receiver (managed)')
+        if ($currentMarker -ge 0 -and $currentMarker + 1 -lt $currentConfig.Count -and $currentConfig[$currentMarker + 1] -match '^AllowUsers\s+(.+)$') {
+            $usersWithoutStaleBackup = @($Matches[1] -split '\s+' | Where-Object { $_ -and $_ -ne 'nccbackup' })
+            if ($usersWithoutStaleBackup -notcontains $env:USERNAME) { $usersWithoutStaleBackup += $env:USERNAME }
+            $currentConfig[$currentMarker + 1] = 'AllowUsers ' + ($usersWithoutStaleBackup -join ' ')
+
+            $matchIndex = $currentMarker + 2
+            while ($matchIndex -lt $currentConfig.Count -and $currentConfig[$matchIndex] -notmatch '^Match\s+User\s+nccbackup\s*$') { $matchIndex++ }
+            if ($matchIndex -lt $currentConfig.Count) {
+                $endIndex = $matchIndex + 1
+                while ($endIndex -lt $currentConfig.Count -and $currentConfig[$endIndex] -notmatch '^\s*$') { $endIndex++ }
+                $prefix = if ($matchIndex -gt 0) { @($currentConfig[0..($matchIndex - 1)]) } else { @() }
+                $suffix = if ($endIndex -lt $currentConfig.Count) { @($currentConfig[$endIndex..($currentConfig.Count - 1)]) } else { @() }
+                $currentConfig = @($prefix + $suffix)
+            }
+            Copy-Item -LiteralPath $sshdConfig -Destination "$sshdConfig.before-stale-nccbackup-repair-$(Get-Date -Format 'yyyyMMdd-HHmmss').bak" -Force
+            Set-Content -LiteralPath $sshdConfig -Value $currentConfig -Encoding ascii
+            $retiredStaleBackupReceiverRule = $true
         }
     }
 }
@@ -118,5 +149,6 @@ $fingerprint = $PublicKey | & "$env:WINDIR\System32\OpenSSH\ssh-keygen.exe" -lf 
     AllowedRemoteRange = $TailscaleCidr
     AuthorizedKeys = @($authorizedKeys, $userAuthorizedKeys)
     ExistingKeysBackup = $backup
+    RetiredStaleNccbackupSshRule = $retiredStaleBackupReceiverRule
     PublicKeyFingerprint = $fingerprint
 } | ConvertTo-Json -Depth 3
