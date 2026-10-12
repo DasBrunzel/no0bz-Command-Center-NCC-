@@ -155,7 +155,9 @@ und beschränkt Port 22 auf das Tailscale-Netz (`100.64.0.0/10`). Es installiert
 keinen NCC-Agenten und liest weder Passwörter noch private Schlüssel. So kann
 der Server anschließend unabhängig von RDP über einen nachvollziehbaren,
 privaten Wartungszugang administriert werden. Fehlende OpenSSH-Hostschlüssel
-erzeugt das Setup vor dem ersten Dienststart automatisch.
+erzeugt das Setup vor dem ersten Dienststart automatisch. Bestehende NCC-
+Offsite-Backupregeln für `nccbackup` bleiben erhalten; der aufrufende
+Administrator wird lediglich zusätzlich in deren `AllowUsers`-Regel ergänzt.
 
 Falls `sshd` auf einem Windows-Server nicht startet, erzeugt
 `debug_ncc_windows_sshd.ps1` vier Sekunden lang ein reines Vordergrund-Debuglog

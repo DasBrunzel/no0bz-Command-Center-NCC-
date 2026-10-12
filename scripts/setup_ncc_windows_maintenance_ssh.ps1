@@ -28,6 +28,8 @@ Set-Service -Name sshd -StartupType Automatic
 
 $sshRoot = Join-Path $env:ProgramData 'ssh'
 $authorizedKeys = Join-Path $sshRoot 'administrators_authorized_keys'
+$userSshRoot = Join-Path $env:USERPROFILE '.ssh'
+$userAuthorizedKeys = Join-Path $userSshRoot 'authorized_keys'
 New-Item -ItemType Directory -Path $sshRoot -Force | Out-Null
 if (Test-Path -LiteralPath $authorizedKeys) {
     $backup = "$authorizedKeys.before-ncc-maintenance-$(Get-Date -Format 'yyyyMMdd-HHmmss').bak"
@@ -42,10 +44,43 @@ if (-not $hasKey) {
     Add-Content -LiteralPath $authorizedKeys -Value $PublicKey -Encoding ascii
 }
 
+# Keep a standard per-user authorized_keys copy as well. Some pre-existing
+# Windows sshd_config files do not contain the Microsoft administrators match
+# block, but they do use the default .ssh/authorized_keys path.
+New-Item -ItemType Directory -Path $userSshRoot -Force | Out-Null
+$hasUserKey = (Test-Path -LiteralPath $userAuthorizedKeys) -and (
+    Select-String -LiteralPath $userAuthorizedKeys -SimpleMatch -Quiet -Pattern $keyMaterial
+)
+if (-not $hasUserKey) {
+    Add-Content -LiteralPath $userAuthorizedKeys -Value $PublicKey -Encoding ascii
+}
+
 # Windows OpenSSH requires a protected administrators_authorized_keys file for
 # members of the local Administrators group.
 & icacls.exe $authorizedKeys /inheritance:r /grant:r '*S-1-5-18:F' '*S-1-5-32-544:F' | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Die ACL fuer administrators_authorized_keys konnte nicht gesetzt werden.' }
+& icacls.exe $userSshRoot /inheritance:r /grant:r "*$($identity.User.Value):F" '*S-1-5-18:F' | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Die ACL fuer das Benutzer-.ssh-Verzeichnis konnte nicht gesetzt werden.' }
+& icacls.exe $userAuthorizedKeys /inheritance:r /grant:r "*$($identity.User.Value):F" '*S-1-5-18:F' | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Die ACL fuer die Benutzer-Schluesseldatei konnte nicht gesetzt werden.' }
+
+# The offsite receiver intentionally locks SSH to nccbackup. Extend only its
+# managed AllowUsers line so the invoker can perform server maintenance while
+# the constrained backup account and its ForceCommand remain unchanged.
+$sshdConfig = Join-Path $sshRoot 'sshd_config'
+$configLines = @(Get-Content -LiteralPath $sshdConfig)
+$markerIndex = [Array]::IndexOf($configLines, '# NCC offsite backup receiver (managed)')
+if ($markerIndex -ge 0 -and $markerIndex + 1 -lt $configLines.Count) {
+    $allowIndex = $markerIndex + 1
+    if ($configLines[$allowIndex] -match '^AllowUsers\s+(.+)$') {
+        $allowedUsers = @($Matches[1] -split '\s+' | Where-Object { $_ })
+        if ($allowedUsers -notcontains $env:USERNAME) {
+            Copy-Item -LiteralPath $sshdConfig -Destination "$sshdConfig.before-ncc-maintenance-$(Get-Date -Format 'yyyyMMdd-HHmmss').bak" -Force
+            $configLines[$allowIndex] = 'AllowUsers ' + (($allowedUsers + $env:USERNAME) -join ' ')
+            Set-Content -LiteralPath $sshdConfig -Value $configLines -Encoding ascii
+        }
+    }
+}
 
 # The capability normally creates this rule with an unrestricted source range.
 # Keep maintenance SSH private to the Tailscale CGNAT range instead.
@@ -78,7 +113,7 @@ $fingerprint = $PublicKey | & "$env:WINDIR\System32\OpenSSH\ssh-keygen.exe" -lf 
     Service = (Get-Service -Name sshd).Status.ToString()
     Port22 = 'Listening'
     AllowedRemoteRange = $TailscaleCidr
-    AuthorizedKeys = $authorizedKeys
+    AuthorizedKeys = @($authorizedKeys, $userAuthorizedKeys)
     ExistingKeysBackup = $backup
     PublicKeyFingerprint = $fingerprint
 } | ConvertTo-Json -Depth 3

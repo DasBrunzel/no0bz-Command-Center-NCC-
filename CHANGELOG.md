@@ -53,6 +53,9 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   vorhandene Administrator-Schlüsseldateien vor einer Ergänzung.
   Fehlende Windows-OpenSSH-Hostschlüssel werden vor dem ersten Dienststart
   idempotent erzeugt.
+  Bestehende, eingeschränkte Offsite-Backupregeln bleiben dabei aktiv; der
+  aktuelle Administrator wird nur ergänzend freigegeben und erhält zusätzlich
+  einen Standard-`.ssh/authorized_keys`-Eintrag.
 
 - `debug_ncc_windows_sshd.ps1` erfasst einen kurzlebigen, nicht verändernden
   Vordergrund-Diagnoselauf für einen fehlschlagenden Windows-OpenSSH-Dienst.
