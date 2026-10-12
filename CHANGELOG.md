@@ -69,6 +69,8 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   `debug_ncc_windows_sshd_as_system.ps1` liefert bei Windows-Fehler 1067 die
   entscheidende Diagnose unter `LocalSystem`, ohne die bestehende SSH- oder
   Firewall-Konfiguration zu ändern.
+  Die temporäre Diagnose-Startdatei liegt dafür ebenfalls unter `ProgramData`,
+  damit `LocalSystem` nicht am geschützten Benutzer-Tempordner scheitert.
 
 - `debug_ncc_windows_sshd.ps1` erfasst einen kurzlebigen, nicht verändernden
   Vordergrund-Diagnoselauf für einen fehlschlagenden Windows-OpenSSH-Dienst.

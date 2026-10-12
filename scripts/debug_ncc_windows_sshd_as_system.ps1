@@ -13,7 +13,10 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 $sshRoot = Join-Path $env:ProgramData 'ssh'
 $sshdExe = Join-Path $env:WINDIR 'System32\OpenSSH\sshd.exe'
 $logPath = Join-Path $sshRoot 'ncc-sshd-system-debug.log'
-$cmdPath = Join-Path $env:TEMP 'ncc-sshd-system-debug.cmd'
+# LocalSystem cannot reliably traverse a user's %TEMP% profile directory.
+# Keep both diagnostic artefacts in ProgramData so the task uses exactly the
+# same filesystem visibility as the sshd service.
+$cmdPath = Join-Path $sshRoot 'ncc-sshd-system-debug.cmd'
 $taskName = 'NccSshdSystemDiagnostic'
 if (-not (Test-Path -LiteralPath $sshdExe)) { throw "sshd.exe fehlt: $sshdExe" }
 
