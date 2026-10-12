@@ -172,6 +172,10 @@ installierten Dienst nicht.
 1067: Es startet die Diagnose kurz als `LocalSystem` (identisch zum Dienstkonto)
 und zeigt anschließend dessen Debugausgabe; Konfiguration und Firewall bleiben
 unverändert.
+Wenn die `LocalSystem`-Diagnose selbst keine Datei unter `C:\ProgramData\ssh`
+anlegen kann, stellt `repair_ncc_windows_sshd_acl.ps1` dort ausschließlich die
+üblichen lokalen Zugriffsrechte für `SYSTEM` und die Administratorengruppe
+wieder her, speichert vorher die vorhandenen ACLs und startet `sshd` erneut.
 
 Für vorhandene Linux-Geräte gibt es denselben kontrollierten Pfad als
 `build_ncc_core_linux_bootstrap.sh`. Der Builder läuft auf einem Linux-x86_64-

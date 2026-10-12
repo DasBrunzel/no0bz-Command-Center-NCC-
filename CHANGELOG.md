@@ -73,6 +73,9 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   damit `LocalSystem` nicht am geschützten Benutzer-Tempordner scheitert.
   Ein Startmarker und `whoami` unterscheiden zusätzlich einen Fehler des
   Aufgabenplaners eindeutig von einem Fehler innerhalb von `sshd`.
+  `repair_ncc_windows_sshd_acl.ps1` repariert bei einem fehlenden
+  `LocalSystem`-Zugriff die Standard-ACLs des OpenSSH-ProgramData-Ordners
+  (ausschließlich `SYSTEM` und lokale Administratoren) und sichert sie vorher.
 
 - `debug_ncc_windows_sshd.ps1` erfasst einen kurzlebigen, nicht verändernden
   Vordergrund-Diagnoselauf für einen fehlschlagenden Windows-OpenSSH-Dienst.
