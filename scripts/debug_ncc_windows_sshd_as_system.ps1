@@ -24,7 +24,9 @@ Stop-Service -Name sshd -ErrorAction SilentlyContinue
 Remove-Item -LiteralPath $logPath -Force -ErrorAction SilentlyContinue
 @(
     '@echo off',
-    '"' + $sshdExe + '" -ddd -e > "' + $logPath + '" 2>&1'
+    'echo NCC_SYSTEM_TASK_STARTED > "' + $logPath + '"',
+    'whoami >> "' + $logPath + '" 2>&1',
+    '"' + $sshdExe + '" -ddd -e >> "' + $logPath + '" 2>&1'
 ) | Set-Content -LiteralPath $cmdPath -Encoding ascii
 
 Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue

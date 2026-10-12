@@ -71,6 +71,8 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   Firewall-Konfiguration zu ändern.
   Die temporäre Diagnose-Startdatei liegt dafür ebenfalls unter `ProgramData`,
   damit `LocalSystem` nicht am geschützten Benutzer-Tempordner scheitert.
+  Ein Startmarker und `whoami` unterscheiden zusätzlich einen Fehler des
+  Aufgabenplaners eindeutig von einem Fehler innerhalb von `sshd`.
 
 - `debug_ncc_windows_sshd.ps1` erfasst einen kurzlebigen, nicht verändernden
   Vordergrund-Diagnoselauf für einen fehlschlagenden Windows-OpenSSH-Dienst.
