@@ -91,7 +91,10 @@ if (-not $firewallRules.Count) {
 } else {
     foreach ($rule in $firewallRules) {
         Enable-NetFirewallRule -Name $rule.Name | Out-Null
-        Set-NetFirewallAddressFilter -AssociatedNetFirewallRule $rule -RemoteAddress $TailscaleCidr | Out-Null
+        # Windows Server's older NetSecurity module has no
+        # -AssociatedNetFirewallRule parameter. Resolve the address filter
+        # through the pipeline for compatibility with both module versions.
+        $rule | Get-NetFirewallAddressFilter | Set-NetFirewallAddressFilter -RemoteAddress $TailscaleCidr | Out-Null
     }
 }
 

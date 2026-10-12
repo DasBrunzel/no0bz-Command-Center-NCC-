@@ -56,6 +56,8 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   Bestehende, eingeschränkte Offsite-Backupregeln bleiben dabei aktiv; der
   aktuelle Administrator wird nur ergänzend freigegeben und erhält zusätzlich
   einen Standard-`.ssh/authorized_keys`-Eintrag.
+  Die Firewall-Einschränkung verwendet nun auch auf älteren Windows-Server-
+  NetSecurity-Modulen den kompatiblen Pipeline-Pfad.
 
 - `debug_ncc_windows_sshd.ps1` erfasst einen kurzlebigen, nicht verändernden
   Vordergrund-Diagnoselauf für einen fehlschlagenden Windows-OpenSSH-Dienst.
