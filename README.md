@@ -168,6 +168,10 @@ Falls `sshd` auf einem Windows-Server nicht startet, erzeugt
 `debug_ncc_windows_sshd.ps1` vier Sekunden lang ein reines Vordergrund-Debuglog
 und zeigt parallel mögliche Belegungen von TCP-Port 22. Es verändert den
 installierten Dienst nicht.
+`debug_ncc_windows_sshd_as_system.ps1` ergänzt dies bei einem Windows-Fehler
+1067: Es startet die Diagnose kurz als `LocalSystem` (identisch zum Dienstkonto)
+und zeigt anschließend dessen Debugausgabe; Konfiguration und Firewall bleiben
+unverändert.
 
 Für vorhandene Linux-Geräte gibt es denselben kontrollierten Pfad als
 `build_ncc_core_linux_bootstrap.sh`. Der Builder läuft auf einem Linux-x86_64-

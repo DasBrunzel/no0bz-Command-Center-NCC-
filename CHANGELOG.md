@@ -66,6 +66,9 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   für bereits bestehende Regeln, die `sshd` mit Windows-Fehler 1067 beenden:
   Es sichert die Konfiguration, entfernt nur den alten SSH/SFTP-Stanza und
   begrenzt den Dienst weiter auf den Wartungsbenutzer.
+  `debug_ncc_windows_sshd_as_system.ps1` liefert bei Windows-Fehler 1067 die
+  entscheidende Diagnose unter `LocalSystem`, ohne die bestehende SSH- oder
+  Firewall-Konfiguration zu ändern.
 
 - `debug_ncc_windows_sshd.ps1` erfasst einen kurzlebigen, nicht verändernden
   Vordergrund-Diagnoselauf für einen fehlschlagenden Windows-OpenSSH-Dienst.
