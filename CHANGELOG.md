@@ -54,6 +54,9 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   Fehlende Windows-OpenSSH-Hostschlüssel werden vor dem ersten Dienststart
   idempotent erzeugt.
 
+- `debug_ncc_windows_sshd.ps1` erfasst einen kurzlebigen, nicht verändernden
+  Vordergrund-Diagnoselauf für einen fehlschlagenden Windows-OpenSSH-Dienst.
+
 - `finalize_ncc_core_linux_migration.sh` beendet die Parallelphase eines
   Linux-0.5-Agenten kontrolliert: Es prüft zunächst den gesunden Core-Payload,
   archiviert die alte Konfiguration, deaktiviert den Legacy-Dienst und stellt

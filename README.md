@@ -157,6 +157,11 @@ der Server anschließend unabhängig von RDP über einen nachvollziehbaren,
 privaten Wartungszugang administriert werden. Fehlende OpenSSH-Hostschlüssel
 erzeugt das Setup vor dem ersten Dienststart automatisch.
 
+Falls `sshd` auf einem Windows-Server nicht startet, erzeugt
+`debug_ncc_windows_sshd.ps1` vier Sekunden lang ein reines Vordergrund-Debuglog
+und zeigt parallel mögliche Belegungen von TCP-Port 22. Es verändert den
+installierten Dienst nicht.
+
 Für vorhandene Linux-Geräte gibt es denselben kontrollierten Pfad als
 `build_ncc_core_linux_bootstrap.sh`. Der Builder läuft auf einem Linux-x86_64-
 Buildsystem und erzeugt ein `.tar.gz` mit NccCore, systemd-Unit und ausschließlich
