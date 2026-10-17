@@ -2996,11 +2996,13 @@ function App() {
           <button className="menu" onClick={() => setSidebar(true)}>
             <Menu size={20} />
           </button>
-          <div>
-            <span className="eyebrow">NO0BZ INFRASTRUCTURE</span>
+          <div className="workspace-title">
+            <span className="eyebrow">OBSERVABILITY / NCC</span>
             <strong>{title}</strong>
+            <small>Live-Ansicht · alle 5 Sekunden aktualisiert</small>
           </div>
           <div className="top-actions">
+            <div className="refresh-state"><Activity size={13} /><span>LIVE</span></div>
             <div className="clock">
               <Clock3 size={14} />
               <span>{clock.toLocaleTimeString("de-DE")}</span>
