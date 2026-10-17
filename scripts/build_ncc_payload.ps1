@@ -45,13 +45,73 @@ try {
     # cannot always discover those runtime DLLs, so add them explicitly.  Without
     # them a payload exits before its ready health record is written.
     $pythonBase = (& $python -c 'import sys; print(sys.base_prefix)').Trim()
-    $sqliteExtension = Join-Path $pythonBase 'DLLs\_sqlite3.pyd'
-    $sqliteRuntime = Join-Path $pythonBase 'Library\bin\sqlite3.dll'
-    if (!(Test-Path $sqliteExtension) -or !(Test-Path $sqliteRuntime)) {
-        throw "Die SQLite-Laufzeit des Build-Python fehlt: $sqliteExtension / $sqliteRuntime"
+    $requiredRuntimes = @(
+        (Join-Path $pythonBase 'DLLs\_sqlite3.pyd'),
+        (Join-Path $pythonBase 'Library\bin\sqlite3.dll'),
+        (Join-Path $pythonBase 'Library\bin\libssl-3-x64.dll'),
+        (Join-Path $pythonBase 'Library\bin\libcrypto-3-x64.dll')
+    )
+    $missingRuntimes = @($requiredRuntimes | Where-Object { !(Test-Path $_) })
+    if ($missingRuntimes.Count -gt 0) {
+        throw "Die Python-Laufzeit fuer den Windows-Payload ist unvollstaendig: $($missingRuntimes -join ', ')"
     }
-    & $python -m PyInstaller --noconfirm --clean --onefile --name ncc-payload --paths (Join-Path $project 'backend') --collect-submodules ncc --collect-submodules ncc_agent --collect-submodules ncc_payload --add-binary "$sqliteExtension;." --add-binary "$sqliteRuntime;." --distpath $dist --workpath $build --specpath $work (Join-Path $project 'backend\ncc_payload\__main__.py')
+    $pyInstallerArguments = @(
+        '--noconfirm', '--clean', '--onefile', '--name', 'ncc-payload',
+        '--paths', (Join-Path $project 'backend'),
+        '--collect-submodules', 'ncc',
+        '--collect-submodules', 'ncc_agent',
+        '--collect-submodules', 'ncc_payload'
+    )
+    foreach ($runtime in $requiredRuntimes) {
+        $pyInstallerArguments += @('--add-binary', "$runtime;.")
+    }
+    $pyInstallerArguments += @(
+        '--distpath', $dist,
+        '--workpath', $build,
+        '--specpath', $work,
+        (Join-Path $project 'backend\ncc_payload\__main__.py')
+    )
+    & $python -m PyInstaller @pyInstallerArguments
     if ($LASTEXITCODE -ne 0) { throw 'PyInstaller konnte den NCC-Payload nicht bauen.' }
+    $payloadExecutable = Join-Path $dist 'ncc-payload.exe'
+    $smokeRoot = Join-Path $work 'payload-startup-smoke'
+    $smokeState = Join-Path $smokeRoot 'state'
+    $smokeData = Join-Path $smokeRoot 'data'
+    New-Item -ItemType Directory -Force -Path $smokeState, $smokeData | Out-Null
+    $processInfo = [Diagnostics.ProcessStartInfo]::new()
+    $processInfo.FileName = $payloadExecutable
+    $processInfo.UseShellExecute = $false
+    $processInfo.RedirectStandardError = $true
+    $processInfo.RedirectStandardOutput = $true
+    $processInfo.Environment['NCC_CORE_STATE_DIR'] = $smokeState
+    $processInfo.Environment['NCC_PAYLOAD_VERSION'] = 'build-smoke'
+    $processInfo.Environment['NCC_AGENT_SERVER_URL'] = 'http://127.0.0.1:1'
+    $processInfo.Environment['NCC_AGENT_ALLOW_INSECURE_HTTP'] = '1'
+    $processInfo.Environment['NCC_AGENT_TOKEN'] = 'build-smoke-no-network'
+    $processInfo.Environment['NCC_AGENT_DATA_DIR'] = $smokeData
+    $payloadProcess = [Diagnostics.Process]::new()
+    $payloadProcess.StartInfo = $processInfo
+    if (!$payloadProcess.Start()) { throw 'Windows-Payload konnte fuer den Start-Selbsttest nicht ausgefuehrt werden.' }
+    $ready = $false
+    try {
+        $deadline = (Get-Date).AddSeconds(20)
+        $healthFile = Join-Path $smokeState 'payload-health.json'
+        do {
+            Start-Sleep -Milliseconds 250
+            if (Test-Path $healthFile) {
+                try {
+                    $health = Get-Content -LiteralPath $healthFile -Raw | ConvertFrom-Json
+                    $ready = $health.payload_version -eq 'build-smoke' -and $health.status -eq 'ready'
+                } catch { $ready = $false }
+            }
+        } while (!$ready -and !$payloadProcess.HasExited -and (Get-Date) -lt $deadline)
+        if (!$ready) {
+            $stderr = $payloadProcess.StandardError.ReadToEnd().Trim()
+            throw "Windows-Payload besteht den Start-Selbsttest nicht: $stderr"
+        }
+    } finally {
+        if (!$payloadProcess.HasExited) { $payloadProcess.Kill($true); $payloadProcess.WaitForExit() }
+    }
     $content = Join-Path $work 'content'; New-Item -ItemType Directory -Force -Path $content | Out-Null
     Copy-Item (Join-Path $dist 'ncc-payload.exe') (Join-Path $content 'ncc-payload.exe')
     if ($Platform -eq 'windows') {
