@@ -1,7 +1,8 @@
 use crate::health::is_healthy;
 use std::fs;
+use std::fs::OpenOptions;
 use std::path::Path;
-use std::process::{Child, Command};
+use std::process::{Child, Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -13,6 +14,21 @@ pub fn start(
     state_dir: &Path,
     version: &str,
 ) -> Result<Child, String> {
+    // A packaged payload can fail before it writes its ready record.  Preserve
+    // its stdout/stderr beside the staged payload so the durable Core can show
+    // the concrete startup error while keeping the previous payload running.
+    let core_root = state_dir
+        .parent()
+        .ok_or("NCC Core state directory has no parent")?;
+    let log_path = core_root.join("payloads").join(version).join("payload.log");
+    let log = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+        .map_err(|error| format!("could not open payload log {}: {error}", log_path.display()))?;
+    let stdout = log
+        .try_clone()
+        .map_err(|error| format!("could not duplicate payload log handle: {error}"))?;
     Command::new(executable)
         .args(arguments)
         .env("NCC_CORE_STATE_DIR", state_dir)
@@ -20,6 +36,8 @@ pub fn start(
         // Keep the pre-release name for a payload compiled against older Core
         // sources. It can be removed once the first Core generation is retired.
         .env("NCC_TEST_PAYLOAD_VERSION", version)
+        .stdout(Stdio::from(stdout))
+        .stderr(Stdio::from(log))
         .spawn()
         .map_err(|error| format!("could not start payload: {error}"))
 }

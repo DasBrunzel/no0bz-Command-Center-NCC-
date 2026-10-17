@@ -532,7 +532,11 @@ mod tests {
 
     #[test]
     fn a_failed_health_check_rolls_back() {
-        let root = env::temp_dir().join(format!("ncc-core-test-{}", now_unix().unwrap()));
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = env::temp_dir().join(format!("ncc-core-test-{unique}-{}", std::process::id()));
         let source = root.join("source.zip");
         fs::create_dir_all(&root).unwrap();
         payload_archive(&source, b"first");
