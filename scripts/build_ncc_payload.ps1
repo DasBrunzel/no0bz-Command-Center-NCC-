@@ -110,7 +110,9 @@ try {
             throw "Windows-Payload besteht den Start-Selbsttest nicht: $stderr"
         }
     } finally {
-        if (!$payloadProcess.HasExited) { $payloadProcess.Kill($true); $payloadProcess.WaitForExit() }
+        # Windows PowerShell 5/.NET Framework exposes only Process.Kill(), not
+        # the newer Kill(entireProcessTree) overload.
+        if (!$payloadProcess.HasExited) { $payloadProcess.Kill(); $payloadProcess.WaitForExit() }
     }
     $content = Join-Path $work 'content'; New-Item -ItemType Directory -Force -Path $content | Out-Null
     Copy-Item (Join-Path $dist 'ncc-payload.exe') (Join-Path $content 'ncc-payload.exe')
