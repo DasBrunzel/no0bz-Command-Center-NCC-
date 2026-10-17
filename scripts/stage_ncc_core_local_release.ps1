@@ -29,6 +29,7 @@ if (!$version -or !$hash -or !$size -or !$keyId -or !$signature) { throw 'Manife
 $root = Join-Path $env:ProgramData 'no0bz\NCC'
 $core = Join-Path $root 'core\ncc-core.exe'
 $stateDir = Join-Path $root 'core-state'
+$coreConfig = Join-Path $root 'config\core.env'
 if (!(Test-Path -LiteralPath $core)) { throw "NccCore fehlt: $core" }
 $service = Get-Service -Name NccCore -ErrorAction Stop
 $wasRunning = $service.Status -eq 'Running'
@@ -48,13 +49,28 @@ foreach ($payloadProcess in $payloadProcesses) {
 }
 if ($payloadProcesses) { Start-Sleep -Seconds 2 }
 
+$localSkipLine = 'NCC_CORE_SKIP_UPDATE_CHECK=1'
 try {
     $stageOutput = & $core --state-dir $stateDir stage --source $ArtifactPath --version $version --sha256 $hash --size $size --key-id $keyId --signature $signature 2>&1 | Out-String
     if ($LASTEXITCODE -ne 0) { throw "Signiertes Staging abgelehnt: $stageOutput" }
     $activateOutput = & $core --state-dir $stateDir activate --version $version 2>&1 | Out-String
     if ($LASTEXITCODE -ne 0) { throw "Aktivierung abgelehnt: $activateOutput" }
 } finally {
-    Start-Service -Name NccCore
+    # The dashboard/server may still have an older approved release assigned.
+    # Skip that one start's remote poll so it cannot overwrite this explicitly
+    # staged, locally signature-verified payload before the health handshake.
+    $configLines = if (Test-Path -LiteralPath $coreConfig) { Get-Content -LiteralPath $coreConfig } else { @() }
+    Set-Content -LiteralPath $coreConfig -Value @($configLines | Where-Object { $_ -ne $localSkipLine }) -Encoding utf8
+    Add-Content -LiteralPath $coreConfig -Value $localSkipLine -Encoding utf8
+    try {
+        Start-Service -Name NccCore
+        Start-Sleep -Seconds 2
+    } finally {
+        # Never leave the override behind: subsequent ordinary service starts
+        # must continue checking the release assigned by NCC.
+        $configLines = Get-Content -LiteralPath $coreConfig
+        Set-Content -LiteralPath $coreConfig -Value @($configLines | Where-Object { $_ -ne $localSkipLine }) -Encoding utf8
+    }
 }
 
 $deadline = (Get-Date).AddSeconds($TimeoutSeconds)

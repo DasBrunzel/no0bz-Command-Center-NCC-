@@ -85,7 +85,9 @@ fn run_service(root: &Path) -> Result<()> {
     // An approved update is checked only at a controlled service start.  A
     // failed request, untrusted key, or bad artifact never blocks the proven
     // active payload from monitoring the host.
-    if let Err(error) = check_update(root) {
+    if env::var("NCC_CORE_SKIP_UPDATE_CHECK").as_deref() == Ok("1") {
+        println!("{{\"update\":\"skipped-local-rollout\"}}");
+    } else if let Err(error) = check_update(root) {
         eprintln!("ncc-core: update check skipped: {error}");
     }
     let timeout = env::var("NCC_CORE_HEALTH_TIMEOUT_SECONDS").unwrap_or_else(|_| "30".to_owned());
@@ -267,7 +269,8 @@ fn stage(root: &Path, args: &[String]) -> Result<()> {
     let key_id = value(args, "--key-id")?;
     let signature = value(args, "--signature")?;
     let source = PathBuf::from(source);
-    let metadata = fs::metadata(&source).map_err(display)?;
+    let metadata = fs::metadata(&source)
+        .map_err(|error| format!("could not read source metadata: {error}"))?;
     if metadata.len() != expected_size {
         return Err("artifact size does not match manifest".to_owned());
     }
@@ -281,13 +284,13 @@ fn stage(root: &Path, args: &[String]) -> Result<()> {
     verify_trusted_release_signature(root, &key_id, &version, &hash, expected_size, &signature)?;
     let destination = root.join("payloads").join(&version).join("payload.archive");
     let parent = destination.parent().ok_or("payload path has no parent")?;
-    fs::create_dir_all(parent).map_err(display)?;
+    fs::create_dir_all(parent).map_err(|error| format!("could not create payload directory: {error}"))?;
     let temporary = destination.with_extension("tmp");
-    fs::copy(source, &temporary).map_err(display)?;
+    fs::copy(source, &temporary).map_err(|error| format!("could not copy payload archive: {error}"))?;
     if sha256(&temporary)? != hash {
         return Err("staged artifact SHA-256 mismatch".to_owned());
     }
-    fs::rename(temporary, destination).map_err(display)?;
+    rename_with_retry(&temporary, &destination, "could not activate staged archive")?;
     extract_payload(root, &version)?;
     Ok(())
 }
@@ -297,9 +300,9 @@ fn extract_payload(root: &Path, version: &str) -> Result<()> {
     let files = root.join("payloads").join(version).join("files");
     let temporary = files.with_extension("tmp");
     let _ = fs::remove_dir_all(&temporary);
-    fs::create_dir_all(&temporary).map_err(display)?;
-    let archive = fs::File::open(archive_path).map_err(display)?;
-    let mut archive = zip::ZipArchive::new(archive).map_err(display)?;
+    fs::create_dir_all(&temporary).map_err(|error| format!("could not create extraction directory: {error}"))?;
+    let archive = fs::File::open(archive_path).map_err(|error| format!("could not open staged archive: {error}"))?;
+    let mut archive = zip::ZipArchive::new(archive).map_err(|error| format!("could not read staged archive: {error}"))?;
     for index in 0..archive.len() {
         let mut entry = archive.by_index(index).map_err(display)?;
         let enclosed = entry
@@ -308,12 +311,12 @@ fn extract_payload(root: &Path, version: &str) -> Result<()> {
             .to_owned();
         let destination = temporary.join(&enclosed);
         if entry.is_dir() {
-            fs::create_dir_all(&destination).map_err(display)?;
+            fs::create_dir_all(&destination).map_err(|error| format!("could not create payload subdirectory: {error}"))?;
         } else {
             let parent = destination.parent().ok_or("payload entry has no parent")?;
-            fs::create_dir_all(parent).map_err(display)?;
-            let mut target = fs::File::create(&destination).map_err(display)?;
-            std::io::copy(&mut entry, &mut target).map_err(display)?;
+            fs::create_dir_all(parent).map_err(|error| format!("could not create payload parent: {error}"))?;
+            let mut target = fs::File::create(&destination).map_err(|error| format!("could not create payload file: {error}"))?;
+            std::io::copy(&mut entry, &mut target).map_err(|error| format!("could not extract payload file: {error}"))?;
             // ZIP does not automatically restore executable bits.  Preserve a
             // payload's Unix mode so the same signed archive format can run
             // under systemd on Linux as well as under Windows.
@@ -333,7 +336,28 @@ fn extract_payload(root: &Path, version: &str) -> Result<()> {
     }
     let _ = payload_descriptor_from(&temporary)?;
     let _ = fs::remove_dir_all(&files);
-    fs::rename(temporary, files).map_err(display)
+    rename_with_retry(&temporary, &files, "could not activate extracted payload")
+}
+
+/// Antivirus and indexing filters can briefly hold newly-written files on
+/// Windows. Retrying the final rename preserves atomic staging without
+/// interpreting a short sharing violation as a bad signed release.
+fn rename_with_retry(source: &Path, destination: &Path, context: &str) -> Result<()> {
+    let mut last_error = None;
+    for _ in 0..20 {
+        match fs::rename(source, destination) {
+            Ok(()) => return Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => {
+                last_error = Some(error);
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            Err(error) => return Err(format!("{context}: {error}")),
+        }
+    }
+    Err(format!(
+        "{context}: {}",
+        last_error.map(|error| error.to_string()).unwrap_or_else(|| "unknown error".to_owned())
+    ))
 }
 
 fn payload_descriptor_from(payload_root: &Path) -> Result<PayloadDescriptor> {
@@ -542,7 +566,8 @@ mod tests {
         payload_archive(&source, b"first");
         let hash = sha256(&source).unwrap();
         let size = fs::metadata(&source).unwrap().len();
-        run(stage_args(&root, &source, "0.6.0-beta.1", &hash, size)).unwrap();
+        let staged = run(stage_args(&root, &source, "0.6.0-beta.1", &hash, size));
+        assert!(staged.is_ok(), "initial staged payload failed: {staged:?}");
         run(args(&root, &["activate", "--version", "0.6.0-beta.1"])).unwrap();
         run(args(
             &root,
