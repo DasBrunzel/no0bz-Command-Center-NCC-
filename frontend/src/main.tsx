@@ -716,52 +716,37 @@ function CommandDeck({
   releases: AgentRelease[];
   token: string;
 }) {
-  if (!selected) return <section className="command-empty"><Server size={42} /><h1>Warte auf die erste Node</h1><p>Sobald ein NCC-Agent Telemetrie sendet, wird die Command Deck automatisch aktiviert.</p></section>;
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  if (!selected) return <section className="command-empty"><Server size={42} /><h1>Warte auf die erste Node</h1><p>Sobald ein NCC-Agent Telemetrie sendet, wird die Observability-Ansicht aktiviert.</p></section>;
   const metrics = selected.latest?.metrics || {};
   const cpu = metrics.cpu || {}, memory = metrics.memory || {}, gpu = metrics.gpus?.[0] || {}, network = metrics.network || {};
-  const activeAlerts = alerts.filter((alert) => alert.active && !dismissedAlerts.has(alert.alert_id));
-  const groupsWithNodes = groups.map((group) => ({ ...group, nodes: nodes.filter((node) => node.fleet_group_id === group.group_id) }));
   const disks: Metrics[] = Array.isArray(metrics.disks) ? metrics.disks : [];
-  const onlineCount = nodes.filter((node) => node.online).length;
-  return (
-    <section className="command-deck">
-      <header className="deck-hero">
-        <div className="deck-hero-copy">
-          <span className="eyebrow">NCC / LIVE OPERATIONS</span>
-          <h1>Fleet Command Deck</h1>
-          <p>Deine Infrastruktur auf einen Blick – Zustand, Auslastung und nächste Aktion.</p>
-        </div>
-        <div className="deck-fleet-pulse">
-          <span><i className="pulse-dot" /> LIVE FLEET</span>
-          <strong>{onlineCount}<small> / {nodes.length} online</small></strong>
-          <em>{activeAlerts.length ? `${activeAlerts.length} Aufmerksamkeit` : "Alles stabil"}</em>
-        </div>
-      </header>
-      <div className="deck-layout">
-        <section className="deck-roster">
-          <header><span>FLEET ROSTER</span><b>{nodes.length.toString().padStart(2, "0")}</b></header>
-          <div className="deck-roster-scroll">
-            {groupsWithNodes.map((group) => group.nodes.length > 0 && <section key={group.group_id} className="deck-group"><h2>{group.name}<span>{group.nodes.length}</span></h2>{group.nodes.map((node) => <button key={node.node_id} type="button" className={node.node_id === selected.node_id ? "active" : ""} onClick={() => onSelect(node.node_id)}><i className={node.online ? "online" : "offline"} /><span><strong>{node.physical_device_name || node.display_name}</strong><small>{node.platform} · {node.agent_version || "Agent unbekannt"}</small></span>{node.gaming_mode_until && new Date(node.gaming_mode_until).getTime() > Date.now() && <Gamepad2 size={14} />}</button>)}</section>)}
-          </div>
-          <footer><ShieldCheck size={15} /><span>Synchronisiert</span><small>{ago(selected.last_seen_at)}</small></footer>
-        </section>
-        <div className="deck-canvas">
-          <section className="deck-focus">
-            <header><div><span className="eyebrow">AUSGEWÄHLTE NODE</span><h2>{selected.display_name}</h2><p>{selected.platform.toUpperCase()} · {selected.agent_version || "Version unbekannt"}</p></div><StatusDot online={selected.online} /></header>
-            <div className="deck-focus-grid">
-              <article className="deck-primary-metric"><div><Cpu size={21} /><span>COMPUTE</span></div><strong>{num(cpu.percent).toFixed(1)}<small>%</small></strong><p>{typeof cpu.temperature_c === "number" ? `${metric(cpu.temperature_c, 0)} °C · ` : ""}{typeof cpu.frequency_mhz === "number" ? `${metric(cpu.frequency_mhz, 0)} MHz` : "Live-Analyse aktiv"}</p><Sparkline points={points} metric={(item) => num(item.cpu?.percent)} /></article>
-              <article className="deck-small-metric memory"><MemoryStick size={18} /><span>MEMORY</span><strong>{num(memory.percent).toFixed(0)}%</strong><small>{metric(memory.used_gb)} / {metric(memory.total_gb)} GB</small></article>
-              <article className="deck-small-metric graphics"><MonitorCog size={18} /><span>GRAPHICS</span><strong>{num(gpu.percent).toFixed(0)}%</strong><small>{gpu.name || "Keine GPU-Daten"}</small></article>
-              <article className="deck-stream"><header><span><Network size={17} /> NETZWERKSTROM</span><b>{network.interface || "Automatisch"}</b></header><div><strong>↓ {num(network.download_mbps).toFixed(1)} Mbps</strong><strong>↑ {num(network.upload_mbps).toFixed(1)} Mbps</strong></div><Sparkline points={points} metric={(item) => num(item.network?.download_mbps)} maxValue={Math.max(10, ...points.map((point) => num(point.metrics.network?.download_mbps)))} color="var(--blue)" /></article>
-            </div>
-          </section>
-          {activeAlerts.length > 0 && <section className="deck-alerts"><header><AlertTriangle size={17} /><span>AKTIVE EREIGNISSE</span></header>{activeAlerts.slice(0, 3).map((alert) => <article key={alert.alert_id} className={alert.severity}><div><strong>{alert.display_name}</strong><span>{alert.message}</span></div><button type="button" onClick={() => onDismissAlert(alert.alert_id)} aria-label="Warnung ausblenden"><X size={15} /></button></article>)}</section>}
-          <section className="deck-storage"><header><div><HardDrive size={18} /><span>STORAGE MATRIX</span></div><small>{disks.length} Volumes erkannt</small></header><div>{disks.slice(0, 5).map((disk, index) => <article key={`${disk.mount}-${index}`}><span>{disk.mount || disk.name || `Disk ${index + 1}`}</span><i><em style={{ width: `${Math.min(100, num(disk.percent))}%` }} /></i><b>{num(disk.percent).toFixed(0)}%</b></article>)}{!disks.length && <p>Keine Laufwerksdaten vorhanden.</p>}</div></section>
-          <NodeOverview node={selected} points={points} monthlyNetwork={monthlyNetwork} canDelete={canDelete} releases={releases} token={token} />
-        </div>
-      </div>
+  const activeAlerts = alerts.filter((alert) => alert.active && !dismissedAlerts.has(alert.alert_id));
+  const online = nodes.filter((node) => node.online);
+  const groupedNodes = groups.map((group) => ({ ...group, nodes: nodes.filter((node) => node.fleet_group_id === group.group_id) })).filter((group) => group.nodes.length);
+  const maxNetwork = Math.max(10, ...points.flatMap((point) => [num(point.metrics.network?.download_mbps), num(point.metrics.network?.upload_mbps)]));
+  return <section className="observability-board">
+    <header className="obs-toolbar">
+      <div><span className="eyebrow">DASHBOARDS / FLEET</span><h1>Infrastructure overview</h1></div>
+      <div className="obs-toolbar-actions"><button type="button"><Clock3 size={14} /> Live · letzte 20 Min.</button><button type="button"><RefreshCw size={14} /> Auto 5 s</button></div>
+    </header>
+    <section className="obs-fleet-strip">
+      <div className="obs-fleet-health"><span>FLEET HEALTH</span><strong>{online.length}<small> / {nodes.length} erreichbar</small></strong><i style={{ width: `${nodes.length ? (online.length / nodes.length) * 100 : 0}%` }} /></div>
+      <div className="obs-fleet-stats"><span><i className="online" /> {online.length} online</span><span><i className="offline" /> {nodes.length - online.length} offline</span><span><AlertTriangle size={13} /> {activeAlerts.length} Ereignisse</span></div>
+      <div className="obs-node-picker">{groupedNodes.map((group) => <div key={group.group_id}><small>{group.name}</small>{group.nodes.map((node) => <button type="button" key={node.node_id} className={node.node_id === selected.node_id ? "active" : ""} onClick={() => onSelect(node.node_id)}><i className={node.online ? "online" : "offline"} />{node.physical_device_name || node.display_name}</button>)}</div>)}</div>
     </section>
-  );
+    <div className="obs-grid">
+      <section className="obs-panel obs-current-node"><header><div><span className="eyebrow">SELECTED HOST</span><h2>{selected.display_name}</h2><p>{selected.platform} · {selected.agent_version || "Agent-Version unbekannt"}</p></div><StatusDot online={selected.online} /></header><div className="obs-current-node-meta"><span>{cpu.name || "Systemdaten"}</span><b>{typeof cpu.temperature_c === "number" ? `${metric(cpu.temperature_c, 0)} °C` : "Temperatur n/a"}</b><button type="button" onClick={() => setDetailsOpen((current) => !current)}>{detailsOpen ? "Details schließen" : "Details & Aktionen"}</button></div></section>
+      <section className="obs-panel obs-stat cpu"><header><Cpu size={17} /><span>CPU usage</span><strong>{num(cpu.percent).toFixed(1)}%</strong></header><Sparkline points={points} metric={(point) => num(point.cpu?.percent)} /><footer>{typeof cpu.frequency_mhz === "number" ? `${metric(cpu.frequency_mhz, 0)} MHz` : "keine Taktdaten"}</footer></section>
+      <section className="obs-panel obs-stat memory"><header><MemoryStick size={17} /><span>Memory</span><strong>{num(memory.percent).toFixed(1)}%</strong></header><Sparkline points={points} metric={(point) => num(point.memory?.percent)} color="var(--blue)" /><footer>{metric(memory.used_gb)} / {metric(memory.total_gb)} GB</footer></section>
+      <section className="obs-panel obs-stat gpu"><header><MonitorCog size={17} /><span>GPU load</span><strong>{num(gpu.percent).toFixed(1)}%</strong></header><Sparkline points={points} metric={(point) => num(point.gpus?.[0]?.percent)} color="var(--purple)" /><footer>{gpu.name || "Kein GPU-Signal"}</footer></section>
+      <section className="obs-panel obs-network"><header><div><span className="eyebrow">NETWORK TRAFFIC</span><h2>{network.interface || "Primary interface"}</h2></div><div className="obs-network-values"><b>↓ {num(network.download_mbps).toFixed(1)} Mbps</b><b>↑ {num(network.upload_mbps).toFixed(1)} Mbps</b></div></header><div className="obs-chart-stack"><Sparkline points={points} metric={(point) => num(point.network?.download_mbps)} maxValue={maxNetwork} color="var(--blue)" /><Sparkline points={points} metric={(point) => num(point.network?.upload_mbps)} maxValue={maxNetwork} color="var(--purple)" /></div><footer>{monthlyNetwork?.available ? `${metric(monthlyNetwork.received_bytes / 1024 ** 3, 1)} GB empfangen · ${metric(monthlyNetwork.sent_bytes / 1024 ** 3, 1)} GB gesendet diesen Monat` : "Monatszähler wird aufgebaut"}</footer></section>
+      <section className="obs-panel obs-storage"><header><div><HardDrive size={17} /><span>STORAGE</span></div><small>{disks.length} Volumes</small></header><div>{disks.slice(0, 5).map((disk, index) => <article key={`${disk.mount}-${index}`}><span>{disk.mount || disk.name || `Disk ${index + 1}`}</span><i><em style={{ width: `${Math.min(100, num(disk.percent))}%` }} /></i><b>{num(disk.percent).toFixed(0)}%</b></article>)}{!disks.length && <p>Keine Laufwerksdaten vorhanden.</p>}</div></section>
+      <section className="obs-panel obs-incidents"><header><div><AlertTriangle size={17} /><span>INCIDENTS</span></div><b>{activeAlerts.length}</b></header>{activeAlerts.length ? activeAlerts.slice(0, 4).map((alert) => <article key={alert.alert_id}><i className={alert.severity} /><div><strong>{alert.display_name}</strong><span>{alert.message}</span></div><button type="button" onClick={() => onDismissAlert(alert.alert_id)} aria-label="Warnung ausblenden"><X size={14} /></button></article>) : <p><Check size={18} /> Keine aktiven Ereignisse</p>}</section>
+      <section className="obs-panel obs-host-table"><header><div><span className="eyebrow">HOSTS</span><h2>Fleet signals</h2></div><small>Live-Snapshot</small></header><div className="obs-table-head"><span>Host</span><span>Status</span><span>CPU</span><span>RAM</span><span>Letzter Kontakt</span></div>{nodes.map((node) => { const current = node.latest?.metrics || {}; return <button type="button" key={node.node_id} onClick={() => onSelect(node.node_id)} className={node.node_id === selected.node_id ? "active" : ""}><span><i className={node.online ? "online" : "offline"} />{node.physical_device_name || node.display_name}</span><span>{node.online ? "Online" : "Offline"}</span><span>{node.latest ? `${num(current.cpu?.percent).toFixed(0)}%` : "—"}</span><span>{node.latest ? `${num(current.memory?.percent).toFixed(0)}%` : "—"}</span><span>{ago(node.last_seen_at)}</span></button>})}</section>
+    </div>
+    {detailsOpen && <section className="obs-details"><NodeOverview node={selected} points={points} monthlyNetwork={monthlyNetwork} canDelete={canDelete} releases={releases} token={token} /></section>}
+  </section>;
 }
 
 type DashboardProps = Omit<AlternateFleetProps, "layout" | "alerts" | "dismissedAlerts" | "selected"> & {
