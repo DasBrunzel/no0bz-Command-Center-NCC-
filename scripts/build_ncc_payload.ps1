@@ -62,8 +62,10 @@ try {
     $statement = Join-Path $work 'release-statement.txt'
     [IO.File]::WriteAllText($statement, "NCC-AGENT-RELEASE-V1`n$Version`n$hash`n$size`n", [Text.UTF8Encoding]::new($false))
     $signatureFile = Join-Path $work 'signature.bin'
-    & $openssl pkeyutl -sign -rawin -inkey $PrivateKey -in $statement -out $signatureFile
-    if ($LASTEXITCODE -ne 0) { throw 'OpenSSL konnte den Payload nicht signieren.' }
+    $signOutput = & $openssl pkeyutl -sign -rawin -inkey $PrivateKey -in $statement -out $signatureFile 2>&1 | Out-String
+    if ($LASTEXITCODE -ne 0) {
+        throw "OpenSSL konnte den Payload nicht signieren: $($signOutput.Trim())"
+    }
     $signature = [Convert]::ToBase64String([IO.File]::ReadAllBytes($signatureFile))
     Write-Host "[NCC] Payload gebaut: $archive"
     if ($ArtifactUrl) {

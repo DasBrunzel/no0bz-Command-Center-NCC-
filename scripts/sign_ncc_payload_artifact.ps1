@@ -45,8 +45,10 @@ try {
     $statement = Join-Path $work 'release-statement.txt'
     $signatureFile = Join-Path $work 'signature.bin'
     [IO.File]::WriteAllText($statement, "NCC-AGENT-RELEASE-V1`n$Version`n$hash`n$size`n", [Text.UTF8Encoding]::new($false))
-    & $openssl pkeyutl -sign -rawin -inkey $PrivateKey -in $statement -out $signatureFile
-    if ($LASTEXITCODE -ne 0) { throw 'OpenSSL konnte das Linux-Artefakt nicht signieren.' }
+    $signOutput = & $openssl pkeyutl -sign -rawin -inkey $PrivateKey -in $statement -out $signatureFile 2>&1 | Out-String
+    if ($LASTEXITCODE -ne 0) {
+        throw "OpenSSL konnte das Linux-Artefakt nicht signieren: $($signOutput.Trim())"
+    }
     $manifest = @{
         schema_version = 1; channel = $Channel; released_at = [DateTime]::UtcNow.ToString('o')
         minimum_core_version = '0.6.0-beta.1'
