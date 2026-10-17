@@ -18,18 +18,22 @@ New-Item -ItemType Directory -Path $managedDirectory -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'watch_ncc_server.ps1') -Destination $managedScript -Force
 
 $taskName = 'NCC Server Watchdog'
-$action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$managedScript`""
-$daily = New-ScheduledTaskTrigger -Daily -At '00:00'
-$daily.Repetition.Interval = "PT$IntervalMinutes`M"
-$daily.Repetition.Duration = 'P1D'
-$startup = New-ScheduledTaskTrigger -AtStartup
-$taskPrincipal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
-Register-ScheduledTask -TaskName $taskName -Action $action -Trigger @($daily, $startup) -Principal $taskPrincipal -Force | Out-Null
-Start-ScheduledTask -TaskName $taskName
+$startupTaskName = 'NCC Server Watchdog Startup'
+$taskCommand = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$managedScript`""
+
+# Older Windows Server ScheduledTasks modules expose no writable Repetition
+# property. schtasks.exe has a stable minute schedule across those versions.
+& schtasks.exe /Create /TN $taskName /SC MINUTE /MO $IntervalMinutes /RU SYSTEM /RL HIGHEST /TR $taskCommand /F | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Die periodische NCC-Server-Watchdog-Aufgabe konnte nicht erstellt werden.' }
+& schtasks.exe /Create /TN $startupTaskName /SC ONSTART /RU SYSTEM /RL HIGHEST /TR $taskCommand /F | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Die NCC-Server-Watchdog-Startaufgabe konnte nicht erstellt werden.' }
+& schtasks.exe /Run /TN $taskName | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Der NCC-Server-Watchdog konnte nicht gestartet werden.' }
 
 [pscustomobject]@{
     Result = 'NCC Server watchdog installed'
     Task = $taskName
+    StartupTask = $startupTaskName
     IntervalMinutes = $IntervalMinutes
     ManagedScript = $managedScript
     Log = (Join-Path $root 'logs\server-watchdog.log')

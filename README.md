@@ -186,7 +186,7 @@ einem Wartungsbenutzer und lässt Port 22 weiterhin nur aus Tailscale zu.
 ### Selbstheilung des Windows-NCC-Servers
 
 `install_ncc_server_watchdog.ps1` installiert für `NccServer` eine lokale
-SYSTEM-Aufgabe. Sie prüft alle fünf Minuten `/api/v1/status/ready` auf
+SYSTEM-Aufgabe sowie eine Startaufgabe. Sie prüft alle fünf Minuten `/api/v1/status/ready` auf
 `127.0.0.1`. Falls der Dienst zwar als *Running* gemeldet wird, aber der
 HTTP-Worker nicht antwortet, startet sie nur `NccServer` neu und protokolliert
 den Vorgang in `C:\ProgramData\no0bz\NCC\logs\server-watchdog.log`.

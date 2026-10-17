@@ -11,6 +11,9 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   fünf Minuten und startet ihn bei einem hängenden oder fehlenden HTTP-Worker
   kontrolliert neu. Die Prüfung erfolgt ausschließlich über `127.0.0.1` und
   öffnet keinerlei zusätzliche Netzwerkfläche.
+  Die Installation verwendet `schtasks.exe` statt eines versionsabhängigen
+  ScheduledTasks-Repetition-Objekts und funktioniert damit auch auf älteren
+  Windows-Server-Modulen.
 
 ## [Unreleased]
 
