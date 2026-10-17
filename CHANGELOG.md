@@ -12,6 +12,9 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 - Das Node-Dashboard zeigt für solche Windows-Agenten eine kompakte
   Live-Hardware-Sensorleiste mit CPU/GPU-Werten, Board-Lüfterstand sowie der Zahl
   erkannter Temperatur-, Lüfter- und Spannungsmessungen.
+- `stage_ncc_core_local_release.ps1` erlaubt eine kontrollierte lokale Verteilung
+  eines bereits signierten Payloads. Sie nutzt denselben Hash- und Ed25519-Check
+  wie der Serverpfad und lässt den vorherigen Payload als Rollback erhalten.
 
 - Der Windows-Servicewrapper meldet einen unerwartet beendeten NCC-Worker nun
   als echten Dienstfehler. Die bestehenden SCM-Recovery-Aktionen können den

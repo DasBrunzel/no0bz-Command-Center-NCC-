@@ -440,6 +440,11 @@ den bestehenden Providern weiter. Der bisher optionale lokale LHM-Webserver auf 
 8085 bleibt als Kompatibilitäts-Fallback erhalten. LibreHardwareMonitor steht unter
 MPL-2.0; ein Hinweis ist in jedem Windows-Payload enthalten.
 
+Für eine kontrollierte lokale Notfall- oder Testverteilung kann ein bereits
+signiertes Archiv mit `scripts/stage_ncc_core_local_release.ps1` eingespielt
+werden. Auch dabei validiert NccCore vor dem Entpacken zwingend SHA-256 und die
+installierte Ed25519-Release-Signatur; der vorherige Payload bleibt als Rollback.
+
 ## NCC 0.6 Linux-Payloads
 
 Ein Linux-Payload wird auf Linux mit
