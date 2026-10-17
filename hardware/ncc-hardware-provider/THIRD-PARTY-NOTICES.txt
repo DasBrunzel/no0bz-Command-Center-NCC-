@@ -1,0 +1,9 @@
+NCC hardware provider includes LibreHardwareMonitorLib.
+
+LibreHardwareMonitorLib
+Copyright (c) LibreHardwareMonitor contributors
+License: Mozilla Public License 2.0 (MPL-2.0)
+Source and license text: https://github.com/LibreHardwareMonitor/LibreHardwareMonitor
+
+The NCC integration only reads sensor values. It does not use any hardware
+control APIs and does not alter clocks, voltages, fan curves, or firmware.

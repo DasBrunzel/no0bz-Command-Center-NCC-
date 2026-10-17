@@ -991,6 +991,8 @@ function NodeOverview({
     cpu = m.cpu || {},
     memory = m.memory || {},
     gpu = m.gpus?.[0] || {},
+    lhmGpu = m.lhm_gpus?.[0] || {},
+    hardware = m.hardware || {},
     network = m.network || {},
     processes = m.processes || [],
     isUnraid = node.metadata.source === "unraid-api";
@@ -1295,6 +1297,22 @@ function NodeOverview({
           </article>
         )}
       </div>
+      {!isUnraid && hardware.provider === "librehardwaremonitor" && (
+        <article className="surface hardware-sensors">
+          <header><div><Activity size={16} /><span>LIVE-HARDWARE-SENSOREN</span></div><b>LIBRE HARDWARE MONITOR</b></header>
+          <div className="hardware-sensor-grid">
+            <SensorValue label="CPU TEMPERATUR" value={cpu.temperature_c} unit="°C" />
+            <SensorValue label="CPU LEISTUNG" value={cpu.power_w} unit="W" />
+            <SensorValue label="CPU TAKT" value={cpu.frequency_mhz} unit="MHz" />
+            <SensorValue label="GPU TEMPERATUR" value={lhmGpu.temperature_c ?? gpu.temperature_c} unit="°C" />
+            <SensorValue label="GPU HOTSPOT" value={lhmGpu.hotspot_temperature_c} unit="°C" />
+            <SensorValue label="GPU LEISTUNG" value={lhmGpu.power_w ?? gpu.power_w} unit="W" />
+            <SensorValue label="GPU LÜFTER" value={lhmGpu.fan_rpm} unit="RPM" />
+            <SensorValue label="LÜFTER" value={hardware.fans?.[0]?.value} unit={hardware.fans?.[0]?.unit || "RPM"} />
+          </div>
+          <footer>{hardware.sensor_counts?.temperatures ?? hardware.temperatures?.length ?? 0} Temperaturen · {hardware.sensor_counts?.fans ?? hardware.fans?.length ?? 0} Lüfter · {hardware.sensor_counts?.voltages ?? hardware.voltages?.length ?? 0} Spannungen · rein lesend erfasst</footer>
+        </article>
+      )}
       {isUnraid && (
         <div className="unraid-services-grid">
           <UnraidWorkloadCard
@@ -1324,6 +1342,11 @@ function NodeOverview({
       )}
     </section>
   );
+}
+
+function SensorValue({ label, value, unit }: { label: string; value: unknown; unit: string }) {
+  const available = typeof value === "number" && Number.isFinite(value);
+  return <div className="hardware-sensor-value"><span>{label}</span><strong>{available ? metric(value as number, unit === "MHz" || unit === "RPM" ? 0 : 1) : "—"}<small>{available ? ` ${unit}` : ""}</small></strong></div>;
 }
 
 function StatisticsPage({

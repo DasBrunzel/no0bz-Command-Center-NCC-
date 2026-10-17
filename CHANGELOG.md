@@ -4,6 +4,15 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## 0.6.0-beta.4 - in Arbeit
 
+- Windows-0.6-Payloads enthalten nun einen direkt eingebundenen, rein lesenden
+  LibreHardwareMonitor-Helper. NCC ergänzt damit CPU-/GPU-Temperaturen, Leistung,
+  Taktraten, Lüfter und weitere Board-Sensoren ohne einen separat gestarteten
+  LHM-Webserver. Nicht verfügbare Sensoren bleiben ein sicherer Fallback auf die
+  bisherigen psutil-, NVML- und Windows-GPU-Provider.
+- Das Node-Dashboard zeigt für solche Windows-Agenten eine kompakte
+  Live-Hardware-Sensorleiste mit CPU/GPU-Werten, Board-Lüfterstand sowie der Zahl
+  erkannter Temperatur-, Lüfter- und Spannungsmessungen.
+
 - Der Windows-Servicewrapper meldet einen unerwartet beendeten NCC-Worker nun
   als echten Dienstfehler. Die bestehenden SCM-Recovery-Aktionen können den
   Dienst dadurch wieder starten, statt einen scheinbar sauberen Stopp zu sehen.

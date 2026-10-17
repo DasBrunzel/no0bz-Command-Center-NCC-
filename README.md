@@ -426,16 +426,19 @@ Alle Werte liegen in `.env`. Die Vorlage [.env.example](.env.example) dokumentie
 | Linux AMDGPU | Linux | AMD-Auslastung, VRAM und Temperatur | aktiver `amdgpu`-Kerneltreiber |
 | Linux hwmon | Linux, Raspberry Pi OS | Temperaturen, Lüfter/GPU je nach Treiber | Leserechte auf `/sys` |
 | smartctl | Windows, Linux | Laufwerkszustand (Best Effort) | smartmontools, ggf. erhöhte Rechte |
-| LibreHardwareMonitor | Windows | optionale Zusatzwerte: Board, Lüfter, Spannungen, CPU-Power | nicht erforderlich; lokaler Webserver Port 8085 |
+| LibreHardwareMonitor | Windows | Temperaturen, Lüfter, Spannungen, CPU-/GPU-Leistung und Taktraten | direkt als rein lesender Helper im Windows-0.6-Payload enthalten |
 | Demo | alle | vollständige synthetische Daten | `NCC_DEMO=1` |
 
 Provider, die das aktuelle System nicht unterstützt, deaktivieren sich ohne Absturz und
 erscheinen mit Grund im Hardware-Report.
 
-LibreHardwareMonitor ist ausdrücklich **keine Voraussetzung**. CPU, RAM, Netzwerk,
-Datenträger und Prozesse kommen plattformübergreifend aus `psutil`; NVIDIA verwendet
-NVML, Windows besitzt einen herstellerunabhängigen GPU-Fallback und Linux liest AMD
-direkt über `amdgpu`/sysfs. Ohne LHM fehlen lediglich einige optionale Sensorwerte.
+Der Windows-0.6-Payload bringt `LibreHardwareMonitorLib` als kleinen, rein lesenden
+Helper mit. Er läuft nur für eine Momentaufnahme, verändert **nie** Lüfterkurven,
+Taktraten, Spannungen oder Firmware und ergänzt die vorhandenen psutil/NVML-Werte.
+Ist ein Sensor oder der Helper nicht verfügbar, arbeitet der Agent unverändert mit
+den bestehenden Providern weiter. Der bisher optionale lokale LHM-Webserver auf Port
+8085 bleibt als Kompatibilitäts-Fallback erhalten. LibreHardwareMonitor steht unter
+MPL-2.0; ein Hinweis ist in jedem Windows-Payload enthalten.
 
 ## NCC 0.6 Linux-Payloads
 

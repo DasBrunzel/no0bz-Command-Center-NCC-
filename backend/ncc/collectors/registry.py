@@ -3,9 +3,9 @@ from __future__ import annotations
 import json
 import threading
 import time
-from copy import deepcopy
 from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, cast
 
@@ -22,7 +22,7 @@ from ncc.collectors.system import (
 )
 from ncc.config import ROOT, Settings
 
-PROVIDER_TIMEOUT_SECONDS = 5.0
+PROVIDER_TIMEOUT_SECONDS = 8.0
 MAX_BACKOFF_SECONDS = 300.0
 # A short cache prevents a slow sensor process from turning a valid dashboard
 # value into a misleading zero while the next collection cycle is in flight.

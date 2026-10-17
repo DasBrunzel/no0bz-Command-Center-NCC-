@@ -23,5 +23,7 @@ backend/*.egg-info/
 dist/
 build/
 target/
+hardware/**/bin/
+hardware/**/obj/
 *.spec
 

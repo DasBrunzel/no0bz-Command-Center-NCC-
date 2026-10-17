@@ -1092,6 +1092,41 @@ main {
   grid-template-columns: 1fr 1fr;
   gap: 13px;
 }
+.hardware-sensors {
+  padding: 15px 17px;
+}
+.hardware-sensors > header,
+.hardware-sensors > header > div {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+.hardware-sensors > header { justify-content: space-between; }
+.hardware-sensors > header > div { color: var(--accent); font: 600 8px JetBrains Mono; }
+.hardware-sensors > header span { color: var(--text); }
+.hardware-sensors > header b { color: var(--muted); font: 600 7px JetBrains Mono; }
+.hardware-sensor-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 13px 0 9px;
+}
+.hardware-sensor-value {
+  background: color-mix(in srgb, var(--surface2) 65%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+  border-radius: 6px;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 9px;
+}
+.hardware-sensor-value span { color: var(--muted); font: 600 7px JetBrains Mono; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hardware-sensor-value strong { font: 700 15px JetBrains Mono; }
+.hardware-sensor-value small { color: var(--muted); font: 600 7px JetBrains Mono; }
+.hardware-sensors footer { color: var(--muted); font: 600 7px JetBrains Mono; }
+@media (max-width: 900px) {
+  .hardware-sensor-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 .compact {
   padding: 15px 17px;
   min-height: 159px;

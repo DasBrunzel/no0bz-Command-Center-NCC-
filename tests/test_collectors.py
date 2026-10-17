@@ -6,6 +6,7 @@ from ncc.collectors.registry import ProviderRegistry, merge_metrics
 from ncc.collectors.system import (
     DemoProvider,
     PsutilProvider,
+    lhm_snapshot_metrics,
     normalize_process_cpu,
     parse_lhm_tree,
 )
@@ -28,6 +29,19 @@ def test_parses_recursive_lhm_tree() -> None:
     tree = {"Text": "root", "Children": [{"Text": "CPU Package", "Value": "61.5 °C"}]}
     sensors = parse_lhm_tree(tree)
     assert sensors == [{"name": "CPU Package", "value": 61.5, "raw": "61.5 °C"}]
+
+
+def test_lhm_helper_snapshot_maps_sensor_values_without_replacing_primary_gpu() -> None:
+    metrics = lhm_snapshot_metrics([
+        {"hardware_type": "Cpu", "hardware_name": "AMD Ryzen", "hardware_id": "/cpu/0", "type": "Temperature", "name": "CPU Package", "value": 62.4, "unit": "°C"},
+        {"hardware_type": "Cpu", "hardware_name": "AMD Ryzen", "hardware_id": "/cpu/0", "type": "Power", "name": "Package", "value": 93.2, "unit": "W"},
+        {"hardware_type": "GpuNvidia", "hardware_name": "NVIDIA RTX", "hardware_id": "/gpu/0", "type": "Temperature", "name": "GPU Core", "value": 57.0, "unit": "°C"},
+        {"hardware_type": "GpuNvidia", "hardware_name": "NVIDIA RTX", "hardware_id": "/gpu/0", "type": "Fan", "name": "GPU Fan", "value": 1200, "unit": "RPM"},
+    ])
+    assert metrics["cpu"] == {"temperature_c": 62.4, "power_w": 93.2}
+    assert metrics["lhm_gpus"][0]["fan_rpm"] == 1200
+    assert "gpus" not in metrics
+    assert metrics["hardware"]["provider"] == "librehardwaremonitor"
 
 
 def test_rate_pair_converts_and_smooths_network_counters() -> None:

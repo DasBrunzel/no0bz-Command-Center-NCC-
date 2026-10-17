@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import os
 import platform
 import re
 import shutil
 import socket
 import subprocess
+import sys
 import time
 import urllib.request
 from functools import lru_cache
@@ -586,9 +588,22 @@ class LibreHardwareMonitorProvider(SensorProvider):
     def __init__(self, url: str) -> None:
         self.url = url
 
+    @staticmethod
+    def _helper_path() -> Path | None:
+        """Locate the read-only LHM helper shipped alongside a Windows payload."""
+        configured = os.environ.get("NCC_HARDWARE_PROVIDER_PATH")
+        candidates = [Path(configured)] if configured else []
+        candidates.append(Path(sys.executable).resolve().parent / "hardware" / "ncc-hardware-provider.exe")
+        for candidate in candidates:
+            if candidate.is_file():
+                return candidate
+        return None
+
     def is_available(self) -> bool:
         if platform.system() != "Windows":
             return False
+        if self._helper_path() is not None:
+            return True
         try:
             with urllib.request.urlopen(self.url, timeout=1) as response:
                 return bool(response.status == 200)
@@ -601,14 +616,108 @@ class LibreHardwareMonitorProvider(SensorProvider):
             self.name,
             available,
             ["temperatures", "fans", "voltages", "power", "gpu"] if available else [],
-            None if available else "LibreHardwareMonitor-Webserver nicht erreichbar",
-            "Als Administrator starten und Remote Web Server auf Port 8085 aktivieren",
+            None if available else "LibreHardwareMonitor-Sensorhelper nicht verfügbar",
+            "Im Windows-0.6-Payload enthalten; der optionale lokale LHM-Webserver bleibt kompatibel",
         )
 
     def collect(self) -> dict[str, Any]:
+        helper = self._helper_path()
+        if helper is not None:
+            result = subprocess.run(
+                [str(helper)], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=7, check=False
+            )
+            if result.returncode != 0:
+                raise RuntimeError(result.stderr.strip() or "LibreHardwareMonitor helper failed")
+            try:
+                snapshot = json.loads(result.stdout)
+            except json.JSONDecodeError as error:
+                raise RuntimeError("LibreHardwareMonitor helper returned invalid JSON") from error
+            sensors = snapshot.get("sensors", []) if isinstance(snapshot, dict) else []
+            if not isinstance(sensors, list):
+                raise RuntimeError("LibreHardwareMonitor helper returned invalid sensors")
+            return lhm_snapshot_metrics([sensor for sensor in sensors if isinstance(sensor, dict)])
         with urllib.request.urlopen(self.url, timeout=3) as response:
             tree = json.loads(response.read().decode("utf-8"))
         return {"lhm_sensors": parse_lhm_tree(tree), "lhm_source": self.name}
+
+
+def _prefer_sensor(sensors: list[dict[str, Any]], *needles: str) -> dict[str, Any] | None:
+    lowered = tuple(needle.lower() for needle in needles)
+    for sensor in sensors:
+        name = str(sensor.get("name", "")).lower()
+        if any(needle in name for needle in lowered):
+            return sensor
+    return sensors[0] if sensors else None
+
+
+def _sensor_value(sensor: dict[str, Any] | None) -> float | None:
+    if sensor is None:
+        return None
+    value = sensor.get("value")
+    return round(float(value), 2) if isinstance(value, (int, float)) else None
+
+
+def _positive_sensor_value(sensor: dict[str, Any] | None) -> float | None:
+    """Ignore LHM's placeholder zero for unavailable temperature/power/clock readings."""
+    value = _sensor_value(sensor)
+    return value if value is not None and value > 0 else None
+
+
+def lhm_snapshot_metrics(sensors: list[dict[str, Any]]) -> dict[str, Any]:
+    """Convert the bundled LHM helper's flat records into NCC metric fields."""
+    categories: dict[str, list[dict[str, Any]]] = {"temperatures": [], "fans": [], "powers": [], "voltages": [], "clocks": []}
+    counts = {category: 0 for category in categories}
+    cpu_sensors: list[dict[str, Any]] = []
+    gpu_by_id: dict[str, list[dict[str, Any]]] = {}
+    for sensor in sensors:
+        kind = str(sensor.get("type", ""))
+        category = {"Temperature": "temperatures", "Fan": "fans", "Power": "powers", "Voltage": "voltages", "Clock": "clocks"}.get(kind)
+        if category:
+            counts[category] += 1
+            # Keep telemetry compact: the dashboard needs a representative live
+            # view, not hundreds of mostly per-core duplicate records every cycle.
+            if len(categories[category]) < 8:
+                categories[category].append({
+                    "hardware": str(sensor.get("hardware_name", "Hardware")), "label": str(sensor.get("name", "sensor")),
+                    "value": _sensor_value(sensor), "unit": str(sensor.get("unit", "")),
+                })
+        hardware_type = str(sensor.get("hardware_type", "")).lower()
+        if hardware_type == "cpu":
+            cpu_sensors.append(sensor)
+        if hardware_type.startswith("gpu"):
+            gpu_by_id.setdefault(str(sensor.get("hardware_id", sensor.get("hardware_name", "gpu"))), []).append(sensor)
+
+    payload: dict[str, Any] = {"hardware": {"provider": "librehardwaremonitor", "sensor_counts": counts, **categories}}
+    cpu_temperature = _positive_sensor_value(_prefer_sensor([x for x in cpu_sensors if x.get("type") == "Temperature"], "package", "tctl", "t die"))
+    cpu_power = _positive_sensor_value(_prefer_sensor([x for x in cpu_sensors if x.get("type") == "Power"], "package", "ppt"))
+    cpu_clock = _positive_sensor_value(_prefer_sensor([x for x in cpu_sensors if x.get("type") == "Clock"], "core average", "average", "core"))
+    cpu: dict[str, float] = {}
+    if cpu_temperature is not None:
+        cpu["temperature_c"] = cpu_temperature
+    if cpu_power is not None:
+        cpu["power_w"] = cpu_power
+    if cpu_clock is not None:
+        cpu["frequency_mhz"] = cpu_clock
+    if cpu:
+        payload["cpu"] = cpu
+    lhm_gpus: list[dict[str, Any]] = []
+    for index, group in enumerate(gpu_by_id.values()):
+        temperatures = [x for x in group if x.get("type") == "Temperature"]
+        gpu: dict[str, Any] = {"index": index, "name": str(group[0].get("hardware_name", f"GPU {index + 1}")), "source": "librehardwaremonitor"}
+        values = {
+            "temperature_c": _positive_sensor_value(_prefer_sensor(temperatures, "gpu core", "core", "temperature")),
+            "hotspot_temperature_c": _positive_sensor_value(_prefer_sensor(temperatures, "hot spot", "hotspot")),
+            "memory_temperature_c": _positive_sensor_value(_prefer_sensor(temperatures, "memory")),
+            "power_w": _positive_sensor_value(_prefer_sensor([x for x in group if x.get("type") == "Power"], "power")),
+            "fan_rpm": _sensor_value(_prefer_sensor([x for x in group if x.get("type") == "Fan"], "fan")),
+            "frequency_mhz": _positive_sensor_value(_prefer_sensor([x for x in group if x.get("type") == "Clock"], "core", "gpu clock")),
+        }
+        gpu.update({key: value for key, value in values.items() if value is not None})
+        lhm_gpus.append(gpu)
+    if lhm_gpus:
+        # Keep the primary vendor provider's utilization/VRAM values untouched.
+        payload["lhm_gpus"] = lhm_gpus
+    return payload
 
 
 class DemoProvider(SensorProvider):

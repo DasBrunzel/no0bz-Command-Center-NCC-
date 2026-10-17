@@ -17,6 +17,7 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 $project = Split-Path -Parent $PSScriptRoot
 $OutputDirectory = if ($OutputDirectory) { $OutputDirectory } else { Join-Path $project 'dist\payloads' }
 $python = Join-Path $project '.venv\Scripts\python.exe'
+$hardwareProject = Join-Path $project 'hardware\ncc-hardware-provider\NccHardwareProvider.csproj'
 if (!(Test-Path $python)) { throw "Build-Python fehlt: $python" }
 if (!(Test-Path $PrivateKey)) { throw "Private signing key is missing: $PrivateKey" }
 try {
@@ -34,6 +35,14 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'PyInstaller konnte den NCC-Payload nicht bauen.' }
     $content = Join-Path $work 'content'; New-Item -ItemType Directory -Force -Path $content | Out-Null
     Copy-Item (Join-Path $dist 'ncc-payload.exe') (Join-Path $content 'ncc-payload.exe')
+    if ($Platform -eq 'windows') {
+        if (!(Test-Path $hardwareProject)) { throw "LibreHardwareMonitor helper project fehlt: $hardwareProject" }
+        $hardwareOutput = Join-Path $content 'hardware'
+        & dotnet publish $hardwareProject --configuration Release --runtime win-x64 --self-contained true --output $hardwareOutput --nologo
+        if ($LASTEXITCODE -ne 0) { throw 'LibreHardwareMonitor helper konnte nicht gebaut werden.' }
+        if (!(Test-Path (Join-Path $hardwareOutput 'ncc-hardware-provider.exe'))) { throw 'LibreHardwareMonitor helper executable fehlt nach dem Build.' }
+        Copy-Item (Join-Path (Split-Path $hardwareProject -Parent) 'THIRD-PARTY-NOTICES.txt') (Join-Path $hardwareOutput 'THIRD-PARTY-NOTICES.txt') -Force
+    }
     [IO.File]::WriteAllText((Join-Path $content 'payload.json'), (@{ executable = 'ncc-payload.exe'; arguments = @() } | ConvertTo-Json -Compress), [Text.UTF8Encoding]::new($false))
     $archive = Join-Path $OutputDirectory "ncc-payload-$Version-$Platform-x86_64.zip"
     if (Test-Path $archive) { Remove-Item -LiteralPath $archive -Force }
