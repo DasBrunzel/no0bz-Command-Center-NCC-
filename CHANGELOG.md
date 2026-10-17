@@ -4,6 +4,12 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## 0.6.0-beta.4 - in Arbeit
 
+- Das komplette Fleet-Dashboard erhielt das neue **Command Grid**-Design:
+  klare visuelle Hierarchie, eine ruhigere Navigationsleiste, Karten mit
+  Zustandsakzenten, ein dezentes Infrastruktur-Raster und ein vollständig
+  responsives Layout. Alle vorhandenen Ansichten und Bedienfunktionen bleiben
+  erhalten; die vorhandenen Themes steuern weiterhin die jeweilige Farbwelt.
+
 - Windows-0.6-Payloads enthalten nun einen direkt eingebundenen, rein lesenden
   LibreHardwareMonitor-Helper. NCC ergänzt damit CPU-/GPU-Temperaturen, Leistung,
   Taktraten, Lüfter und weitere Board-Sensoren ohne einen separat gestarteten
