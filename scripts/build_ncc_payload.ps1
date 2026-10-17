@@ -18,8 +18,18 @@ $project = Split-Path -Parent $PSScriptRoot
 $OutputDirectory = if ($OutputDirectory) { $OutputDirectory } else { Join-Path $project 'dist\payloads' }
 $python = Join-Path $project '.venv\Scripts\python.exe'
 $hardwareProject = Join-Path $project 'hardware\ncc-hardware-provider\NccHardwareProvider.csproj'
+$openssl = (Get-Command openssl -ErrorAction SilentlyContinue).Source
+if (-not $openssl) {
+    $opensslCandidates = @(
+        'C:\Program Files\Git\usr\bin\openssl.exe',
+        'C:\Program Files\Git\mingw64\bin\openssl.exe',
+        'C:\Program Files\OpenSSL-Win64\bin\openssl.exe'
+    )
+    $openssl = $opensslCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+}
 if (!(Test-Path $python)) { throw "Build-Python fehlt: $python" }
 if (!(Test-Path $PrivateKey)) { throw "Private signing key is missing: $PrivateKey" }
+if (-not $openssl) { throw 'OpenSSL fehlt. Installiere Git for Windows oder OpenSSL, um NCC-Release-Payloads zu signieren.' }
 try {
     $privateKeyHandle = [IO.File]::Open($PrivateKey, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
     $privateKeyHandle.Dispose()
@@ -52,7 +62,7 @@ try {
     $statement = Join-Path $work 'release-statement.txt'
     [IO.File]::WriteAllText($statement, "NCC-AGENT-RELEASE-V1`n$Version`n$hash`n$size`n", [Text.UTF8Encoding]::new($false))
     $signatureFile = Join-Path $work 'signature.bin'
-    & openssl pkeyutl -sign -rawin -inkey $PrivateKey -in $statement -out $signatureFile
+    & $openssl pkeyutl -sign -rawin -inkey $PrivateKey -in $statement -out $signatureFile
     if ($LASTEXITCODE -ne 0) { throw 'OpenSSL konnte den Payload nicht signieren.' }
     $signature = [Convert]::ToBase64String([IO.File]::ReadAllBytes($signatureFile))
     Write-Host "[NCC] Payload gebaut: $archive"

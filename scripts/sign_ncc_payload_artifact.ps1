@@ -11,6 +11,16 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$openssl = (Get-Command openssl -ErrorAction SilentlyContinue).Source
+if (-not $openssl) {
+    $opensslCandidates = @(
+        'C:\Program Files\Git\usr\bin\openssl.exe',
+        'C:\Program Files\Git\mingw64\bin\openssl.exe',
+        'C:\Program Files\OpenSSL-Win64\bin\openssl.exe'
+    )
+    $openssl = $opensslCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+}
+if (-not $openssl) { throw 'OpenSSL fehlt. Installiere Git for Windows oder OpenSSL, um NCC-Release-Payloads zu signieren.' }
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $principal = [Security.Principal.WindowsPrincipal]::new($identity)
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
@@ -35,7 +45,7 @@ try {
     $statement = Join-Path $work 'release-statement.txt'
     $signatureFile = Join-Path $work 'signature.bin'
     [IO.File]::WriteAllText($statement, "NCC-AGENT-RELEASE-V1`n$Version`n$hash`n$size`n", [Text.UTF8Encoding]::new($false))
-    & openssl pkeyutl -sign -rawin -inkey $PrivateKey -in $statement -out $signatureFile
+    & $openssl pkeyutl -sign -rawin -inkey $PrivateKey -in $statement -out $signatureFile
     if ($LASTEXITCODE -ne 0) { throw 'OpenSSL konnte das Linux-Artefakt nicht signieren.' }
     $manifest = @{
         schema_version = 1; channel = $Channel; released_at = [DateTime]::UtcNow.ToString('o')
