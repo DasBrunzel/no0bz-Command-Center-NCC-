@@ -36,6 +36,17 @@ if ($wasRunning) {
     Stop-Service -Name NccCore -Force
     (Get-Service -Name NccCore).WaitForStatus('Stopped', [TimeSpan]::FromSeconds(20))
 }
+# Windows can leave a one-file payload alive after the SCM has stopped its Core
+# parent.  It would retain the telemetry SQLite database and make the staged
+# payload fail before its ready record. Only NCC payloads below this Core state
+# directory are terminated.
+$payloadProcesses = Get-CimInstance Win32_Process -Filter "name='ncc-payload.exe'" | Where-Object {
+    $_.CommandLine -and $_.CommandLine.IndexOf($stateDir, [StringComparison]::OrdinalIgnoreCase) -ge 0
+}
+foreach ($payloadProcess in $payloadProcesses) {
+    & taskkill.exe /PID $payloadProcess.ProcessId /T /F | Out-Null
+}
+if ($payloadProcesses) { Start-Sleep -Seconds 2 }
 
 try {
     $stageOutput = & $core --state-dir $stateDir stage --source $ArtifactPath --version $version --sha256 $hash --size $size --key-id $keyId --signature $signature 2>&1 | Out-String

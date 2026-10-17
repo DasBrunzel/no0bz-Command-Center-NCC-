@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -102,6 +103,22 @@ if sys.platform == "win32":
                 root / "core" / "ncc-core.exe", ["service"],
                 root / "config" / self._config_name, root / "logs" / self._log_name,
             )
+
+        def SvcStop(self) -> None:  # noqa: N802 - Windows SCM contract
+            # A Rust Core owns a separately spawned payload.  On Windows the
+            # SCM can terminate the wrapper before the Core gets to reap that
+            # grandchild, leaving it alive with the SQLite buffer locked.
+            # ncc-payload.exe is NCC-specific, so clearing that process tree
+            # is narrower and more reliable than killing arbitrary children.
+            subprocess.run(
+                ["taskkill", "/IM", "ncc-payload.exe", "/T", "/F"],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+            super().SvcStop()
 
 else:
     AgentWindowsService: Any = None
