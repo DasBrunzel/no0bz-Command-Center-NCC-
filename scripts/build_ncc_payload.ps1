@@ -15,6 +15,10 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
     throw 'Dieses Skript bitte in einer als Administrator gestarteten PowerShell ausfuehren. Der private Release-Schluessel ist absichtlich nur fuer Administratoren und SYSTEM lesbar.'
 }
 $project = Split-Path -Parent $PSScriptRoot
+# Elevated PowerShell windows normally start in C:\Windows\System32.  Anchor
+# PyInstaller in the repository so an administrator launch behaves exactly like
+# a normal developer shell.
+Set-Location -LiteralPath $project
 $OutputDirectory = if ($OutputDirectory) { $OutputDirectory } else { Join-Path $project 'dist\payloads' }
 $python = Join-Path $project '.venv\Scripts\python.exe'
 $hardwareProject = Join-Path $project 'hardware\ncc-hardware-provider\NccHardwareProvider.csproj'
