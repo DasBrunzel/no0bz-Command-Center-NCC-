@@ -689,6 +689,81 @@ function AlternateFleet({
   return <StudioDashboard {...props} />;
 }
 
+function CommandDeck({
+  nodes,
+  groups,
+  selected,
+  points,
+  monthlyNetwork,
+  onSelect,
+  alerts,
+  dismissedAlerts,
+  onDismissAlert,
+  canDelete,
+  releases,
+  token,
+}: {
+  nodes: Node[];
+  groups: FleetGroup[];
+  selected: Node | null;
+  points: Telemetry[];
+  monthlyNetwork: NetworkUsageSummary | null;
+  onSelect: (id: string) => void;
+  alerts: AlertRecord[];
+  dismissedAlerts: Set<string>;
+  onDismissAlert: (id: string) => void;
+  canDelete: boolean;
+  releases: AgentRelease[];
+  token: string;
+}) {
+  if (!selected) return <section className="command-empty"><Server size={42} /><h1>Warte auf die erste Node</h1><p>Sobald ein NCC-Agent Telemetrie sendet, wird die Command Deck automatisch aktiviert.</p></section>;
+  const metrics = selected.latest?.metrics || {};
+  const cpu = metrics.cpu || {}, memory = metrics.memory || {}, gpu = metrics.gpus?.[0] || {}, network = metrics.network || {};
+  const activeAlerts = alerts.filter((alert) => alert.active && !dismissedAlerts.has(alert.alert_id));
+  const groupsWithNodes = groups.map((group) => ({ ...group, nodes: nodes.filter((node) => node.fleet_group_id === group.group_id) }));
+  const disks: Metrics[] = Array.isArray(metrics.disks) ? metrics.disks : [];
+  const onlineCount = nodes.filter((node) => node.online).length;
+  return (
+    <section className="command-deck">
+      <header className="deck-hero">
+        <div className="deck-hero-copy">
+          <span className="eyebrow">NCC / LIVE OPERATIONS</span>
+          <h1>Fleet Command Deck</h1>
+          <p>Deine Infrastruktur auf einen Blick – Zustand, Auslastung und nächste Aktion.</p>
+        </div>
+        <div className="deck-fleet-pulse">
+          <span><i className="pulse-dot" /> LIVE FLEET</span>
+          <strong>{onlineCount}<small> / {nodes.length} online</small></strong>
+          <em>{activeAlerts.length ? `${activeAlerts.length} Aufmerksamkeit` : "Alles stabil"}</em>
+        </div>
+      </header>
+      <div className="deck-layout">
+        <section className="deck-roster">
+          <header><span>FLEET ROSTER</span><b>{nodes.length.toString().padStart(2, "0")}</b></header>
+          <div className="deck-roster-scroll">
+            {groupsWithNodes.map((group) => group.nodes.length > 0 && <section key={group.group_id} className="deck-group"><h2>{group.name}<span>{group.nodes.length}</span></h2>{group.nodes.map((node) => <button key={node.node_id} type="button" className={node.node_id === selected.node_id ? "active" : ""} onClick={() => onSelect(node.node_id)}><i className={node.online ? "online" : "offline"} /><span><strong>{node.physical_device_name || node.display_name}</strong><small>{node.platform} · {node.agent_version || "Agent unbekannt"}</small></span>{node.gaming_mode_until && new Date(node.gaming_mode_until).getTime() > Date.now() && <Gamepad2 size={14} />}</button>)}</section>)}
+          </div>
+          <footer><ShieldCheck size={15} /><span>Synchronisiert</span><small>{ago(selected.last_seen_at)}</small></footer>
+        </section>
+        <div className="deck-canvas">
+          <section className="deck-focus">
+            <header><div><span className="eyebrow">AUSGEWÄHLTE NODE</span><h2>{selected.display_name}</h2><p>{selected.platform.toUpperCase()} · {selected.agent_version || "Version unbekannt"}</p></div><StatusDot online={selected.online} /></header>
+            <div className="deck-focus-grid">
+              <article className="deck-primary-metric"><div><Cpu size={21} /><span>COMPUTE</span></div><strong>{num(cpu.percent).toFixed(1)}<small>%</small></strong><p>{typeof cpu.temperature_c === "number" ? `${metric(cpu.temperature_c, 0)} °C · ` : ""}{typeof cpu.frequency_mhz === "number" ? `${metric(cpu.frequency_mhz, 0)} MHz` : "Live-Analyse aktiv"}</p><Sparkline points={points} metric={(item) => num(item.cpu?.percent)} /></article>
+              <article className="deck-small-metric memory"><MemoryStick size={18} /><span>MEMORY</span><strong>{num(memory.percent).toFixed(0)}%</strong><small>{metric(memory.used_gb)} / {metric(memory.total_gb)} GB</small></article>
+              <article className="deck-small-metric graphics"><MonitorCog size={18} /><span>GRAPHICS</span><strong>{num(gpu.percent).toFixed(0)}%</strong><small>{gpu.name || "Keine GPU-Daten"}</small></article>
+              <article className="deck-stream"><header><span><Network size={17} /> NETZWERKSTROM</span><b>{network.interface || "Automatisch"}</b></header><div><strong>↓ {num(network.download_mbps).toFixed(1)} Mbps</strong><strong>↑ {num(network.upload_mbps).toFixed(1)} Mbps</strong></div><Sparkline points={points} metric={(item) => num(item.network?.download_mbps)} maxValue={Math.max(10, ...points.map((point) => num(point.metrics.network?.download_mbps)))} color="var(--blue)" /></article>
+            </div>
+          </section>
+          {activeAlerts.length > 0 && <section className="deck-alerts"><header><AlertTriangle size={17} /><span>AKTIVE EREIGNISSE</span></header>{activeAlerts.slice(0, 3).map((alert) => <article key={alert.alert_id} className={alert.severity}><div><strong>{alert.display_name}</strong><span>{alert.message}</span></div><button type="button" onClick={() => onDismissAlert(alert.alert_id)} aria-label="Warnung ausblenden"><X size={15} /></button></article>)}</section>}
+          <section className="deck-storage"><header><div><HardDrive size={18} /><span>STORAGE MATRIX</span></div><small>{disks.length} Volumes erkannt</small></header><div>{disks.slice(0, 5).map((disk, index) => <article key={`${disk.mount}-${index}`}><span>{disk.mount || disk.name || `Disk ${index + 1}`}</span><i><em style={{ width: `${Math.min(100, num(disk.percent))}%` }} /></i><b>{num(disk.percent).toFixed(0)}%</b></article>)}{!disks.length && <p>Keine Laufwerksdaten vorhanden.</p>}</div></section>
+          <NodeOverview node={selected} points={points} monthlyNetwork={monthlyNetwork} canDelete={canDelete} releases={releases} token={token} />
+        </div>
+      </div>
+    </section>
+  );
+}
+
 type DashboardProps = Omit<AlternateFleetProps, "layout" | "alerts" | "dismissedAlerts" | "selected"> & {
   selected: Node;
   activeAlerts: AlertRecord[];
@@ -2863,7 +2938,7 @@ function App() {
             ? "Gerät hinzufügen"
             : "System Settings";
   return (
-    <div className={`shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
+    <div className={`shell command-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
       <aside className={`${sidebar ? "open" : ""} ${sidebarCollapsed ? "collapsed" : ""}`}>
         <div className="aside-top">
           <Brand />
@@ -2954,31 +3029,15 @@ function App() {
           </div>
         </header>
         <main>
-          {page === "fleet" ? isLayoutTheme(theme) ? (
-            <AlternateFleet
-              layout={theme}
-              nodes={nodes}
-              selected={selected}
-              onSelect={setSelectedId}
-              points={points}
-              monthlyNetwork={monthlyNetwork}
-              alerts={alerts}
-              dismissedAlerts={dismissedAlertIds}
-              onDismissAlert={dismissAlert}
-            />
-          ) : (
-            <Fleet
+          {page === "fleet" ? (
+            <CommandDeck
               nodes={nodes}
               groups={groups}
               selected={selected}
               onSelect={setSelectedId}
               points={points}
               monthlyNetwork={monthlyNetwork}
-              query={query}
-              onQuery={setQuery}
               alerts={alerts}
-              onCreateGroup={createFleetGroup}
-              onLayout={saveFleetLayout}
               canDelete={canManageAccess}
               releases={releases}
               token={token}
