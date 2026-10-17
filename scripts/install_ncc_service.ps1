@@ -170,6 +170,10 @@ if ($LASTEXITCODE -ne 0) { throw "Der Windows-Dienst konnte nicht registriert we
 & sc.exe failure $serviceName reset= 86400 actions= restart/5000/restart/15000/restart/60000 | Out-Null
 if ($serviceExists -and $serviceExists.Status -eq "Running") { Restart-Service -Name $serviceName }
 else { Start-Service -Name $serviceName }
+if ($Component -eq "Server") {
+    & (Join-Path $PSScriptRoot 'install_ncc_server_watchdog.ps1')
+    if ($LASTEXITCODE -ne 0) { throw 'Der NCC-Server-Watchdog konnte nicht eingerichtet werden.' }
+}
 Write-Host "[NCC] $Component-Dienst läuft. Konfiguration: $configPath"
 Write-Host "[NCC] Logdatei: $(Join-Path $installRoot "logs\$name.log")"
 if ($Component -eq "Agent" -and $pairingId) { Write-Host "[NCC] Browser-Freigabe: $configuredServerUrl/?pair=$pairingId" }

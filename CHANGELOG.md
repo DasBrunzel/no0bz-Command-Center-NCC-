@@ -2,6 +2,16 @@
 
 Alle wesentlichen Änderungen werden hier dokumentiert.
 
+## 0.6.0-beta.4 - in Arbeit
+
+- Der Windows-Servicewrapper meldet einen unerwartet beendeten NCC-Worker nun
+  als echten Dienstfehler. Die bestehenden SCM-Recovery-Aktionen können den
+  Dienst dadurch wieder starten, statt einen scheinbar sauberen Stopp zu sehen.
+- Neuer lokaler `NCC Server Watchdog`: prüft die Readiness von NccServer alle
+  fünf Minuten und startet ihn bei einem hängenden oder fehlenden HTTP-Worker
+  kontrolliert neu. Die Prüfung erfolgt ausschließlich über `127.0.0.1` und
+  öffnet keinerlei zusätzliche Netzwerkfläche.
+
 ## [Unreleased]
 
 ## [0.6.0-beta.4] - 2026-10-11

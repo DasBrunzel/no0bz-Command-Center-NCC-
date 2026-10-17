@@ -183,6 +183,16 @@ OpenSSH-**Server**-Komponente neu. Es behält vorhandene öffentliche
 Administratorschlüssel, verwendet eine frische Standardkonfiguration mit genau
 einem Wartungsbenutzer und lässt Port 22 weiterhin nur aus Tailscale zu.
 
+### Selbstheilung des Windows-NCC-Servers
+
+`install_ncc_server_watchdog.ps1` installiert für `NccServer` eine lokale
+SYSTEM-Aufgabe. Sie prüft alle fünf Minuten `/api/v1/status/ready` auf
+`127.0.0.1`. Falls der Dienst zwar als *Running* gemeldet wird, aber der
+HTTP-Worker nicht antwortet, startet sie nur `NccServer` neu und protokolliert
+den Vorgang in `C:\ProgramData\no0bz\NCC\logs\server-watchdog.log`.
+Der Watchdog wird bei einer erneuten Windows-Server-Installation automatisch
+eingerichtet.
+
 Für vorhandene Linux-Geräte gibt es denselben kontrollierten Pfad als
 `build_ncc_core_linux_bootstrap.sh`. Der Builder läuft auf einem Linux-x86_64-
 Buildsystem und erzeugt ein `.tar.gz` mit NccCore, systemd-Unit und ausschließlich

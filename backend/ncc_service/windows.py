@@ -60,6 +60,11 @@ if sys.platform == "win32":
                 servicemanager.LogErrorMsg(
                     f"{self._svc_display_name_} child exited with code {code}"
                 )
+                # Returning normally makes pywin32 report a clean service
+                # stop. That suppresses the Windows SCM recovery actions even
+                # though the NCC worker crashed. Raise after logging so SCM
+                # treats this as a genuine service failure and restarts it.
+                raise RuntimeError(f"NCC child process exited with code {code}")
             else:
                 servicemanager.LogInfoMsg(f"{self._svc_display_name_} stopped")
 
