@@ -15,6 +15,10 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 - `stage_ncc_core_local_release.ps1` erlaubt eine kontrollierte lokale Verteilung
   eines bereits signierten Payloads. Sie nutzt denselben Hash- und Ed25519-Check
   wie der Serverpfad und lässt den vorherigen Payload als Rollback erhalten.
+- Der Windows-Payload-Builder fügt nun auch bei einem Conda-basierten
+  Build-Python die SQLite-Erweiterung samt Laufzeitbibliothek explizit hinzu.
+  Ohne diese Bibliotheken konnte ein gepackter Payload vor dem Health-Signal mit
+  `ImportError: DLL load failed while importing _sqlite3` abbrechen.
 
 - Der Windows-Servicewrapper meldet einen unerwartet beendeten NCC-Worker nun
   als echten Dienstfehler. Die bestehenden SCM-Recovery-Aktionen können den

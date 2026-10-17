@@ -41,7 +41,16 @@ $work = Join-Path $env:TEMP ('ncc-payload-build-' + [guid]::NewGuid().ToString('
 New-Item -ItemType Directory -Force -Path $work, $OutputDirectory | Out-Null
 try {
     $dist = Join-Path $work 'dist'; $build = Join-Path $work 'build'
-    & $python -m PyInstaller --noconfirm --clean --onefile --name ncc-payload --paths (Join-Path $project 'backend') --collect-submodules ncc --collect-submodules ncc_agent --collect-submodules ncc_payload --distpath $dist --workpath $build --specpath $work (Join-Path $project 'backend\ncc_payload\__main__.py')
+    # Conda-backed virtual environments keep SQLite outside the venv.  PyInstaller
+    # cannot always discover those runtime DLLs, so add them explicitly.  Without
+    # them a payload exits before its ready health record is written.
+    $pythonBase = (& $python -c 'import sys; print(sys.base_prefix)').Trim()
+    $sqliteExtension = Join-Path $pythonBase 'DLLs\_sqlite3.pyd'
+    $sqliteRuntime = Join-Path $pythonBase 'Library\bin\sqlite3.dll'
+    if (!(Test-Path $sqliteExtension) -or !(Test-Path $sqliteRuntime)) {
+        throw "Die SQLite-Laufzeit des Build-Python fehlt: $sqliteExtension / $sqliteRuntime"
+    }
+    & $python -m PyInstaller --noconfirm --clean --onefile --name ncc-payload --paths (Join-Path $project 'backend') --collect-submodules ncc --collect-submodules ncc_agent --collect-submodules ncc_payload --add-binary "$sqliteExtension;." --add-binary "$sqliteRuntime;." --distpath $dist --workpath $build --specpath $work (Join-Path $project 'backend\ncc_payload\__main__.py')
     if ($LASTEXITCODE -ne 0) { throw 'PyInstaller konnte den NCC-Payload nicht bauen.' }
     $content = Join-Path $work 'content'; New-Item -ItemType Directory -Force -Path $content | Out-Null
     Copy-Item (Join-Path $dist 'ncc-payload.exe') (Join-Path $content 'ncc-payload.exe')
