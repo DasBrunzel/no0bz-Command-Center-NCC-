@@ -59,10 +59,13 @@ HttpOnly-Browsersitzung. Ein Widerruf beendet die zugehörige Sitzung.
 
 ### Dashboard, Fleet und Statistiken
 
-Das Dashboard enthält eine Fleet-Übersicht, einen sortierbaren **Fleet Navigator**
-mit frei anlegbaren Gruppen sowie eine Detailansicht für jedes Gerät. Die
-Detailansicht zeigt Betriebssystem, CPU-/GPU-Modell und — soweit erkannt — passende
-Herstellerlogos. Die Navigation und Gruppen können eingeklappt werden.
+Die Startseite ist als **Mission Control** aufgebaut: Fleet-Status, offene
+Ereignisse und Live-Traffic stehen an erster Stelle, darunter folgt der gruppierte
+**Fleet Explorer** und danach die vollständige Detailansicht der ausgewählten Node.
+Sie verwendet ausschließlich die echten NCC-API-Daten. Die Detailansicht zeigt
+Betriebssystem, CPU-/GPU-Modell und — soweit erkannt — passende Herstellerlogos;
+alle Aktionen wie Umbenennen, Gaming Mode, Release-Zuweisung und Geräteverwaltung
+bleiben dort verfügbar.
 
 Die Seite **Statistiken** fasst die gesamte Fleet zusammen: Verfügbarkeit je Agent,
 gewichtete CPU- und RAM-Kapazität, GPUs, eine kombinierte Auslastungsrangliste,
@@ -214,9 +217,10 @@ die Parallelphase kontrolliert. Der Befehl prüft den Core vor und nach dem
 Abschalten des alten Dienstes; bei einem Fehler wird der 0.5-Agent automatisch
 wiederhergestellt.
 
-Neben den Farbthemes stehen in den Einstellungen drei alternative Dashboard-Layouts
-bereit: **Orbit**, **Blueprint** und **Studio**. Die Auswahl wird nur im jeweiligen
-Browser gespeichert.
+Neben den Farbthemes stehen in den Einstellungen zusätzliche experimentelle
+Dashboard-Layouts bereit: **Orbit**, **Blueprint** und **Studio**. Die Auswahl
+wird nur im jeweiligen Browser gespeichert; die Mission-Control-Startseite bleibt
+die Standardansicht.
 
 ### Unraid
 

@@ -4,6 +4,13 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## 0.6.0-beta.4 - in Arbeit
 
+- Das Fleet-Dashboard wurde auf die neue **Mission-Control**-Informationsarchitektur
+  umgestellt: Zuerst erscheinen Fleet-Status, offene Ereignisse und Live-Traffic,
+  danach ein gruppierter Fleet Explorer und schließlich die vollständige Detail- und
+  Aktionsansicht der gewählten Node. Die Ansicht nutzt weiterhin ausschließlich
+  echte NCC-API-Daten; Rollen, Themes, Gaming-Mode, Umbenennen, Releases und
+  Geräteverwaltung bleiben unverändert verfügbar.
+
 - Das komplette Fleet-Dashboard erhielt das neue **Command Deck**-Design:
   ein Live-Roster der Fleet, eine fokussierte Node-Arbeitsfläche für Compute,
   Speicher, GPU, Netzwerk und Storage sowie eine integrierte Ereignisleiste.

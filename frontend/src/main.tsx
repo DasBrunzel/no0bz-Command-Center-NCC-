@@ -749,6 +749,183 @@ function CommandDeck({
   </section>;
 }
 
+/**
+ * The dashboard concept supplied with NCC uses a calm "Mission Control"
+ * hierarchy: fleet posture first, then traffic/incidents, then the explorer.
+ * Unlike the concept's mock implementation this component is deliberately
+ * backed by the real NCC models and keeps NodeOverview for every privileged
+ * action.
+ */
+function MissionControl({
+  nodes,
+  groups,
+  selected,
+  points,
+  monthlyNetwork,
+  onSelect,
+  alerts,
+  dismissedAlerts,
+  onDismissAlert,
+  canDelete,
+  releases,
+  token,
+}: {
+  nodes: Node[];
+  groups: FleetGroup[];
+  selected: Node | null;
+  points: Telemetry[];
+  monthlyNetwork: NetworkUsageSummary | null;
+  onSelect: (id: string) => void;
+  alerts: AlertRecord[];
+  dismissedAlerts: Set<string>;
+  onDismissAlert: (id: string) => void;
+  canDelete: boolean;
+  releases: AgentRelease[];
+  token: string;
+}) {
+  const [query, setQuery] = useState("");
+  const [detailsOpen, setDetailsOpen] = useState(true);
+  const activeAlerts = alerts.filter(
+    (alert) => alert.active && !dismissedAlerts.has(alert.alert_id),
+  );
+  const onlineNodes = nodes.filter((node) => node.online);
+  const selectedMetrics = selected?.latest?.metrics || {};
+  const selectedDisks = Array.isArray(selectedMetrics.disks)
+    ? selectedMetrics.disks as Metrics[]
+    : [];
+  const traffic = points.map((point) => ({
+    download: num(point.metrics.network?.download_mbps),
+    upload: num(point.metrics.network?.upload_mbps),
+  }));
+  const latestTraffic = traffic[traffic.length - 1];
+  const maxStorage = selectedDisks.length
+    ? Math.max(...selectedDisks.map((disk) => num(disk.percent)))
+    : 0;
+  const bytes = (value: number) =>
+    value >= 1024 ** 3
+      ? `${(value / 1024 ** 3).toFixed(1)} GB`
+      : value >= 1024 ** 2
+        ? `${(value / 1024 ** 2).toFixed(0)} MB`
+        : `${(value / 1024).toFixed(0)} KB`;
+  const representatives = Array.from(
+    nodes.reduce((result, node) => {
+      const key = node.physical_device_id || node.node_id;
+      const current = result.get(key);
+      if (!current || (node.online && !current.online)) result.set(key, node);
+      return result;
+    }, new Map<string, Node>()).values(),
+  );
+  const filtered = representatives.filter((node) =>
+    `${node.display_name} ${node.platform} ${node.machine_id}`
+      .toLowerCase()
+      .includes(query.trim().toLowerCase()),
+  );
+  const grouped = groups
+    .map((group) => ({
+      ...group,
+      nodes: filtered
+        .filter((node) => node.fleet_group_id === group.group_id)
+        .sort(
+          (left, right) =>
+            left.fleet_position - right.fleet_position ||
+            left.display_name.localeCompare(right.display_name, "de"),
+        ),
+    }))
+    .filter((group) => group.nodes.length);
+
+  const selectNode = (nodeId: string) => {
+    onSelect(nodeId);
+    setDetailsOpen(true);
+  };
+
+  return (
+    <section className="mission-control">
+      <header className="mission-heading">
+        <div>
+          <span className="eyebrow">NCC / MISSION CONTROL</span>
+          <h1>Command Overview</h1>
+          <p>Live-Zustand deiner Infrastruktur, priorisiert nach Aufmerksamkeit.</p>
+        </div>
+        <div className="mission-live"><Activity size={15} /><span>LIVE</span><small>Aktualisierung alle 5 Sekunden</small></div>
+      </header>
+
+      <section className="mission-kpis" aria-label="Fleet-Zusammenfassung">
+        <article className="mission-kpi fleet">
+          <span className="mission-icon"><Signal size={20} /></span>
+          <div><small>FLEET STATUS</small><strong>{onlineNodes.length}<em>/{nodes.length}</em></strong><p>Systeme erreichbar</p></div>
+          <i style={{ width: `${nodes.length ? (onlineNodes.length / nodes.length) * 100 : 0}%` }} />
+        </article>
+        <article className="mission-kpi alert">
+          <span className="mission-icon"><AlertTriangle size={20} /></span>
+          <div><small>OFFENE WARNUNGEN</small><strong>{activeAlerts.length}</strong><p>{activeAlerts.length ? "brauchen Aufmerksamkeit" : "alles im grünen Bereich"}</p></div>
+        </article>
+        <article className="mission-kpi network">
+          <span className="mission-icon"><Network size={20} /></span>
+          <div><small>TRAFFIC / LIVE</small><strong>↓ {latestTraffic?.download.toFixed(1) || "0.0"}</strong><p>↑ {latestTraffic?.upload.toFixed(1) || "0.0"} Mbps</p></div>
+        </article>
+        <article className="mission-kpi storage">
+          <span className="mission-icon"><HardDrive size={20} /></span>
+          <div><small>AKTIVE NODE</small><strong>{selectedDisks.length ? `${maxStorage.toFixed(0)}%` : "—"}</strong><p>{selectedDisks.length ? "höchste Speicherbelegung" : "keine Laufwerksdaten"}</p></div>
+        </article>
+      </section>
+
+      <section className="mission-primary-grid">
+        <article className="mission-panel mission-traffic">
+          <header><div><span className="eyebrow">LIVE TELEMETRIE</span><h2>Netzwerkverkehr</h2></div><div className="traffic-legend"><span><i /> Download</span><span><i /> Upload</span></div></header>
+          <TrafficHistoryChart values={traffic} />
+          <footer>
+            {monthlyNetwork?.available
+              ? <><b>{bytes(monthlyNetwork.received_bytes)}</b> empfangen <span>·</span> <b>{bytes(monthlyNetwork.sent_bytes)}</b> gesendet in diesem Monat</>
+              : "Monatszähler wird aus Telemetrie aufgebaut"}
+          </footer>
+        </article>
+        <article className="mission-panel mission-attention">
+          <header><div><span className="eyebrow">INCIDENT QUEUE</span><h2>Aufmerksamkeit erforderlich</h2></div><b>{activeAlerts.length}</b></header>
+          <div className="mission-alert-list">
+            {activeAlerts.slice(0, 4).map((alert) => (
+              <article key={alert.alert_id} className={alert.severity}>
+                <AlertTriangle size={15} />
+                <div><strong>{alert.display_name}</strong><span>{alert.message}</span><small>{ago(alert.opened_at)}</small></div>
+                <button type="button" onClick={() => onDismissAlert(alert.alert_id)} aria-label="Warnung ausblenden"><X size={14} /></button>
+              </article>
+            ))}
+            {!activeAlerts.length && <div className="mission-clear"><Check size={22} /><span>Keine aktiven Ereignisse</span></div>}
+          </div>
+        </article>
+      </section>
+
+      <section className="mission-panel mission-explorer">
+        <header>
+          <div><span className="eyebrow">FLEET EXPLORER</span><h2>Systeme &amp; Geräte</h2></div>
+          <label className="mission-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="System suchen …" /></label>
+        </header>
+        <div className="mission-groups">
+          {grouped.map((group) => <section key={group.group_id}>
+            <header><span>{group.name}</span><b>{group.nodes.length}</b></header>
+            <div>{group.nodes.map((node) => {
+              const metrics = node.latest?.metrics || {};
+              const gaming = !!node.gaming_mode_until && new Date(node.gaming_mode_until).getTime() > Date.now();
+              return <button type="button" key={node.node_id} className={selected?.node_id === node.node_id ? "selected" : ""} onClick={() => selectNode(node.node_id)}>
+                <div className="mission-node-top"><span className={`mission-node-icon ${node.online ? "online" : "offline"}`}><Server size={17} /></span><span className={`mission-node-state ${node.online ? "online" : "offline"}`} />{gaming && <Gamepad2 size={15} />}</div>
+                <strong>{node.physical_device_name || node.display_name}</strong>
+                <small>{node.platform} · {node.agent_version || "Agent unbekannt"}</small>
+                <div className="mission-node-meters"><span><i>CPU</i><b><em style={{ width: `${Math.min(100, num(metrics.cpu?.percent))}%` }} /></b><strong>{node.latest ? `${num(metrics.cpu?.percent).toFixed(0)}%` : "—"}</strong></span><span><i>RAM</i><b><em style={{ width: `${Math.min(100, num(metrics.memory?.percent))}%` }} /></b><strong>{node.latest ? `${num(metrics.memory?.percent).toFixed(0)}%` : "—"}</strong></span></div>
+                {gaming && <mark><Gamepad2 size={12} /> Gaming Mode aktiv</mark>}
+              </button>;
+            })}</div>
+          </section>)}
+          {!grouped.length && <div className="mission-empty"><Boxes size={28} /><strong>Keine Systeme gefunden</strong><span>Ändere die Suche oder prüfe den Verbindungsstatus der Agenten.</span></div>}
+        </div>
+      </section>
+
+      <section className="mission-detail">
+        <header><div><span className="eyebrow">NODE DETAIL</span><h2>{selected?.display_name || "Kein System ausgewählt"}</h2></div><button type="button" onClick={() => setDetailsOpen((current) => !current)}>{detailsOpen ? "Details einklappen" : "Details & Aktionen öffnen"}<ChevronRight size={15} /></button></header>
+        {detailsOpen && <NodeOverview node={selected} points={points} monthlyNetwork={monthlyNetwork} canDelete={canDelete} releases={releases} token={token} />}
+      </section>
+    </section>
+  );
+}
+
 type DashboardProps = Omit<AlternateFleetProps, "layout" | "alerts" | "dismissedAlerts" | "selected"> & {
   selected: Node;
   activeAlerts: AlertRecord[];
@@ -2881,7 +3058,7 @@ function App() {
     () => [
       {
         id: "fleet" as Page,
-        label: "Fleet Übersicht",
+        label: "Übersicht",
         icon: <LayoutDashboard size={17} />,
       },
       {
@@ -2912,7 +3089,7 @@ function App() {
     );
   const title =
     page === "fleet"
-      ? "Fleet Command"
+      ? "Command Overview"
       : page === "statistics"
         ? "Statistiken"
         : page === "alerts"
@@ -3017,7 +3194,7 @@ function App() {
         </header>
         <main>
           {page === "fleet" ? (
-            <CommandDeck
+            <MissionControl
               nodes={nodes}
               groups={groups}
               selected={selected}
