@@ -3100,7 +3100,7 @@ function App() {
             ? "Gerät hinzufügen"
             : "System Settings";
   return (
-    <div className={`shell command-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
+    <div className={`shell dashboard-v2 ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
       <aside className={`${sidebar ? "open" : ""} ${sidebarCollapsed ? "collapsed" : ""}`}>
         <div className="aside-top">
           <Brand />
