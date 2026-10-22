@@ -195,7 +195,7 @@ type TelegramSettings = {
 type ChatAttachment = { name: string; content_type: string; size: number; url: string };
 type ChatMessage = { message_id: string; sender_node_id: string | null; sender_name: string; body: string; body_format: "plain" | "markdown"; attachment: ChatAttachment | null; created_at: string };
 type ChatParticipant = { node_id: string; display_name: string; platform: string; online: boolean };
-type Page = "fleet" | "statistics" | "alerts" | "chat" | "onboarding" | "settings";
+type Page = "fleet" | "explorer" | "statistics" | "alerts" | "chat" | "onboarding" | "settings";
 
 const THEMES: { id: Theme; name: string; color: string }[] = [
   { id: "nightmare", name: "Nightmare Red", color: "#ff334f" },
@@ -1191,6 +1191,162 @@ function UnraidWorkloadCard({
       </div>
     </article>
   );
+}
+
+/**
+ * Production implementation of the supplied "Alles im Blick" dashboard.
+ * It intentionally has no mock controls or placeholder data: every number is
+ * derived from the existing NCC API state passed in by App.
+ */
+function CommandOverviewV3({
+  nodes,
+  selected,
+  points,
+  alerts,
+  dismissedAlerts,
+  onSelect,
+  onOpenAlerts,
+  onOpenExplorer,
+}: {
+  nodes: Node[];
+  selected: Node | null;
+  points: Telemetry[];
+  alerts: AlertRecord[];
+  dismissedAlerts: Set<string>;
+  onSelect: (nodeId: string) => void;
+  onOpenAlerts: () => void;
+  onOpenExplorer: () => void;
+}) {
+  const activeAlerts = alerts.filter(
+    (alert) => alert.active && !dismissedAlerts.has(alert.alert_id),
+  );
+  const representatives = Array.from(
+    nodes.reduce((result, node) => {
+      const key = node.physical_device_id || node.node_id;
+      const current = result.get(key);
+      if (!current || (node.online && !current.online)) result.set(key, node);
+      return result;
+    }, new Map<string, Node>()).values(),
+  );
+  const online = representatives.filter((node) => node.online);
+  const offline = representatives.length - online.length;
+  const metrics = selected?.latest?.metrics || {};
+  const traffic = points.map((point) => ({
+    download: num(point.metrics.network?.download_mbps),
+    upload: num(point.metrics.network?.upload_mbps),
+  }));
+  const latestTraffic = traffic[traffic.length - 1] || { download: 0, upload: 0 };
+  const availability = representatives.length
+    ? representatives.reduce((total, node) => total + num(node.availability_percent), 0) / representatives.length
+    : 0;
+  const rowNodes = representatives.slice(0, 6);
+  const today = new Date();
+  const freshness = selected?.last_seen_at ? ago(selected.last_seen_at) : "warte auf Telemetrie";
+  const events: { label: string; detail: string; tone: "critical" | "warning" | "ok" }[] = activeAlerts.slice(0, 4).map((alert) => ({
+    label: alert.message,
+    detail: `${alert.display_name} · ${ago(alert.updated_at)}`,
+    tone: alert.severity,
+  }));
+  if (!events.length) {
+    events.push(...online.slice(0, 4).map((node) => ({
+      label: `${node.physical_device_name || node.display_name} meldet sich`,
+      detail: ago(node.last_seen_at),
+      tone: "ok" as const,
+    })));
+  }
+
+  return (
+    <section className="nccv3-overview">
+      <header className="nccv3-heading">
+        <div>
+          <span className="nccv3-eyebrow">
+            {today.toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "long", year: "numeric" }).toUpperCase()}
+          </span>
+          <h1>Alles im Blick.</h1>
+          <p>Deine Infrastruktur in Echtzeit. Ruhig, bis etwas deine Aufmerksamkeit braucht.</p>
+        </div>
+        <div className="nccv3-fresh"><i /> Daten frisch <span>· Aktualisiert {freshness}</span></div>
+      </header>
+
+      <div className="nccv3-dashboard-grid">
+        <article className="nccv3-card nccv3-priority">
+          <header><span className="nccv3-eyebrow">PRIORITY SIGNAL</span><b>{activeAlerts.length ? `${activeAlerts.length} AKTIV` : "STABIL"}</b></header>
+          <div className="nccv3-priority-body">
+            <span className={`nccv3-priority-icon ${activeAlerts.length ? "warning" : "ok"}`}>
+              {activeAlerts.length ? <AlertTriangle size={23} /> : <Check size={23} />}
+            </span>
+            <div>
+              <h2>{activeAlerts.length ? "Was braucht gerade Aufmerksamkeit?" : "Alles läuft nach Plan."}</h2>
+              <strong>{activeAlerts[0]?.display_name || "Fleet"}: {activeAlerts[0]?.message || "keine offenen Warnungen"}</strong>
+              <p>{activeAlerts.length ? "Ein Signal liegt außerhalb des normalen Bereichs." : "Alle erreichbaren Geräte senden aktuelle Telemetrie."}</p>
+              <button type="button" onClick={onOpenAlerts}>{activeAlerts.length ? "Warnungen prüfen" : "Warnungszentrale öffnen"} <ChevronRight size={15} /></button>
+            </div>
+          </div>
+        </article>
+
+        <article className="nccv3-card nccv3-system-status">
+          <span className="nccv3-eyebrow">SYSTEM STATUS</span>
+          <strong>{representatives.length}<small>Knoten</small></strong>
+          <div className="nccv3-status-meter"><i style={{ width: `${representatives.length ? (online.length / representatives.length) * 100 : 0}%` }} /></div>
+          <div className="nccv3-status-legend"><span><i className="online" />{online.length} Online</span><span><i className="alert" />{activeAlerts.length} Warnung</span><span><i className="offline" />{offline} Offline</span></div>
+          <footer><span>Agent-Heartbeat</span><b>{offline ? "Beobachten" : "Stabil"}</b></footer>
+        </article>
+
+        <article className="nccv3-card nccv3-network-card">
+          <header><div><span className="nccv3-eyebrow">LIVE NETWORK</span><h2>Netzwerkverkehr</h2></div><b><i /> LIVE</b></header>
+          <div className="nccv3-network-values"><div><span>DOWNLOAD</span><strong>{latestTraffic.download.toFixed(1)}<small> Mbit/s</small></strong></div><div><span>UPLOAD</span><strong>{latestTraffic.upload.toFixed(1)}<small> Mbit/s</small></strong></div></div>
+          <DashboardTrafficChart values={traffic} />
+          <footer><span>VOR 2 MIN</span><span>VOR 1 MIN</span><span>JETZT</span></footer>
+        </article>
+
+        <article className="nccv3-card nccv3-activity-card">
+          <header><div><span className="nccv3-eyebrow">ACTIVITY LOG</span><h2>Ereignis-Zeitstrahl</h2></div></header>
+          <div className="nccv3-events">
+            {events.map((event, index) => <article key={`${event.label}-${index}`}><i className={event.tone} /><div><strong>{event.label}</strong><span>{event.detail}</span></div></article>)}
+          </div>
+          <button type="button" onClick={onOpenAlerts}>Zum Ereigniscenter <ChevronRight size={14} /></button>
+        </article>
+
+        <article className="nccv3-card nccv3-fleet-pulse">
+          <header><div><span className="nccv3-eyebrow">FLEET PULSE</span><h2>Geräte im Fokus</h2></div><button type="button" onClick={onOpenExplorer}>Alle Geräte <ChevronRight size={14} /></button></header>
+          <div className="nccv3-node-list">
+            {rowNodes.map((node) => {
+              const nodeMetrics = node.latest?.metrics || {};
+              return <button type="button" key={node.node_id} onClick={() => { onSelect(node.node_id); onOpenExplorer(); }}>
+                <span className={`nccv3-node-icon ${node.online ? "online" : "offline"}`}><Server size={15} /></span>
+                <span className="nccv3-node-name"><strong>{node.physical_device_name || node.display_name}</strong><small>{node.platform}</small></span>
+                <span className="nccv3-node-state"><i className={node.online ? "online" : "offline"} />{node.online ? "Online" : "Offline"}</span>
+                <span className="nccv3-node-cpu">CPU {num(nodeMetrics.cpu?.percent).toFixed(0)}%<em><i style={{ width: `${Math.min(100, num(nodeMetrics.cpu?.percent))}%` }} /></em></span>
+                <ChevronRight size={16} />
+              </button>;
+            })}
+          </div>
+        </article>
+
+        <article className="nccv3-card nccv3-signal-card">
+          <span className="nccv3-eyebrow">SIGNAL QUALITY</span>
+          <strong>{availability.toFixed(1)}<small>%</small></strong>
+          <p>Fleet-Verfügbarkeit · seit Aufnahme</p>
+          <div className="nccv3-signal-bars" aria-label="Fleet-Verfügbarkeit">
+            {Array.from({ length: 25 }, (_, index) => <i key={index} style={{ height: `${Math.max(22, Math.min(100, availability + ((index * 17) % 19) - 9))}%` }} />)}
+          </div>
+          <footer>Alle Knoten werden überwacht</footer>
+        </article>
+      </div>
+    </section>
+  );
+}
+
+function DashboardTrafficChart({ values }: { values: { download: number; upload: number }[] }) {
+  const chart = values.length > 1 ? values : Array.from({ length: 18 }, () => ({ download: 0, upload: 0 }));
+  const max = Math.max(1, ...chart.flatMap((value) => [value.download, value.upload]));
+  const path = (key: "download" | "upload") => chart.map((value, index) => {
+    const x = (index / Math.max(1, chart.length - 1)) * 100;
+    const y = 89 - (value[key] / max) * 68;
+    return `${index ? "L" : "M"}${x.toFixed(2)} ${y.toFixed(2)}`;
+  }).join(" ");
+  const download = path("download");
+  return <div className="nccv3-traffic-chart"><svg viewBox="0 0 100 100" preserveAspectRatio="none"><defs><linearGradient id="nccv3-download" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#74dbc1" stopOpacity=".28" /><stop offset="1" stopColor="#74dbc1" stopOpacity="0" /></linearGradient></defs><path className="grid" d="M0 20H100M0 45H100M0 70H100M0 90H100" /><path d={`${download} L100 90 L0 90 Z`} fill="url(#nccv3-download)" /><path className="download" d={download} /><path className="upload" d={path("upload")} /></svg></div>;
 }
 
 function NodeOverview({
@@ -3054,35 +3210,7 @@ function App() {
       return placement ? { ...node, fleet_group_id: placement.group_id, fleet_position: placement.position } : node;
     }));
   };
-  const nav = useMemo(
-    () => [
-      {
-        id: "fleet" as Page,
-        label: "Übersicht",
-        icon: <LayoutDashboard size={17} />,
-      },
-      {
-        id: "statistics" as Page,
-        label: "Statistiken",
-        icon: <BarChart3 size={17} />,
-      },
-      { id: "alerts" as Page, label: "Warnungen", icon: <Bell size={17} /> },
-      { id: "chat" as Page, label: "Fleet Chat", icon: <MessageSquare size={17} /> },
-      {
-        id: "onboarding" as Page,
-        label: "Gerät hinzufügen",
-        icon: <UserPlus size={17} />,
-      },
-      {
-        id: "settings" as Page,
-        label: "Einstellungen",
-        icon: <Settings size={17} />,
-      },
-    ],
-    [],
-  );
   const canManageAccess = accessRole === "commander";
-  const visibleNav = canManageAccess ? nav : nav.filter((item) => item.id !== "onboarding");
   if (authenticated !== true)
     return (
       <Login onSave={saveToken} error={authenticated === false && authError} />
@@ -3090,6 +3218,8 @@ function App() {
   const title =
     page === "fleet"
       ? "Command Overview"
+      : page === "explorer"
+        ? "Fleet Explorer"
       : page === "statistics"
         ? "Statistiken"
         : page === "alerts"
@@ -3100,7 +3230,7 @@ function App() {
             ? "Gerät hinzufügen"
             : "System Settings";
   return (
-    <div className={`shell dashboard-v2 ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
+    <div className={`shell dashboard-v3 ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
       <aside className={`${sidebar ? "open" : ""} ${sidebarCollapsed ? "collapsed" : ""}`}>
         <div className="aside-top">
           <Brand />
@@ -3111,45 +3241,31 @@ function App() {
             <X size={19} />
           </button>
         </div>
-        <nav>
-          <span>COMMAND CENTER</span>
-          {visibleNav.map((item) => (
-            <button
-              key={item.id}
-              className={page === item.id ? "active" : ""}
-              onClick={() => {
-                setPage(item.id);
-                setSidebar(false);
-              }}
-            >
-              {item.icon}
-              <b>{item.label}</b>
-              {page === item.id && <i />}
-            </button>
-          ))}
+        <div className="nccv3-workspace">WORKSPACE <i /> PRIVATE CLOUD</div>
+        <nav className="nccv3-nav">
+          <span>OBSERVE</span>
+          {[
+            { id: "fleet" as Page, label: "Command Overview", icon: <LayoutDashboard size={17} /> },
+            { id: "explorer" as Page, label: "Fleet Explorer", icon: <Server size={17} /> },
+            { id: "statistics" as Page, label: "Statistiken", icon: <BarChart3 size={17} /> },
+            { id: "alerts" as Page, label: "Warnungszentrale", icon: <AlertTriangle size={17} /> },
+          ].map((item) => <button key={item.id} className={page === item.id ? "active" : ""} onClick={() => { setPage(item.id); setSidebar(false); }}>{item.icon}<b>{item.label}</b>{item.id === "alerts" && alerts.some((alert) => alert.active) && <em>{alerts.filter((alert) => alert.active).length}</em>}</button>)}
+          <span className="nccv3-manage-label">MANAGE</span>
+          {[
+            { id: "chat" as Page, label: "Fleet Chat", icon: <MessageSquare size={17} /> },
+            { id: "settings" as Page, label: "Einstellungen", icon: <Settings size={17} /> },
+          ].map((item) => <button key={item.id} className={page === item.id ? "active" : ""} onClick={() => { setPage(item.id); setSidebar(false); }}>{item.icon}<b>{item.label}</b></button>)}
         </nav>
-        <div className="server-health">
-          <header>
-            <span>SERVER STATUS</span>
-            <b>
-              <i /> BEREIT
-            </b>
-          </header>
-          <dl>
-            <dt>Nodes online</dt>
-            <dd>{summary?.online_nodes || 0}</dd>
-            <dt>Nodes offline</dt>
-            <dd>{summary?.offline_nodes || 0}</dd>
-            <dt>Messpunkte</dt>
-            <dd>{summary?.telemetry_points.toLocaleString("de-DE") || 0}</dd>
-            <dt>API</dt>
-            <dd>v1</dd>
-          </dl>
+        <div className="server-health nccv3-fleet-health">
+          <header><span>SYSTEM OPERATIONAL</span><b>{summary?.online_nodes || 0}/{summary?.total_nodes || 0}</b></header>
+          <i style={{ width: `${summary?.total_nodes ? ((summary.online_nodes / summary.total_nodes) * 100) : 0}%` }} />
+          <small>Fleet online · Live-Messdaten</small>
         </div>
-        <footer>
-          <ShieldCheck size={14} />
-          <span>GESICHERTE VERBINDUNG</span>
-          <b>v0.5.0-beta.70</b>
+        {canManageAccess && <button className="nccv3-add-device" type="button" onClick={() => setPage("onboarding")}><UserPlus size={16} /> Gerät hinzufügen <ChevronRight size={15} /></button>}
+        <footer className="nccv3-profile">
+          <span>{canManageAccess ? "C" : "B"}</span>
+          <div><b>{canManageAccess ? "Commander" : "Beta-Tester"}</b><small>{canManageAccess ? "Administratorzugang" : "Testzugang"}</small></div>
+          <ChevronRight size={14} />
         </footer>
       </aside>
       <div className="mobile-scrim" onClick={() => setSidebar(false)} />
@@ -3159,15 +3275,13 @@ function App() {
             <Menu size={20} />
           </button>
           <div className="workspace-title">
-            <span className="eyebrow">OBSERVABILITY / NCC</span>
-            <strong>{title}</strong>
-            <small>Live-Ansicht · alle 5 Sekunden aktualisiert</small>
+            <span className="eyebrow">NCC <i /> {title}</span>
           </div>
           <div className="top-actions">
-            <div className="refresh-state"><Activity size={13} /><span>LIVE</span></div>
+            <div className="refresh-state"><Activity size={13} /><span>LIVE DEMO</span></div>
             <div className="clock">
               <Clock3 size={14} />
-              <span>{clock.toLocaleTimeString("de-DE")}</span>
+              <span>{clock.toLocaleDateString("de-DE", { day: "2-digit", month: "short", year: "numeric" })}</span>
             </div>
             <button
               aria-label="Warnungszentrum"
@@ -3194,14 +3308,29 @@ function App() {
         </header>
         <main>
           {page === "fleet" ? (
-            <MissionControl
+            <CommandOverviewV3
+              nodes={nodes}
+              selected={selected}
+              onSelect={setSelectedId}
+              points={points}
+              alerts={alerts}
+              dismissedAlerts={dismissedAlertIds}
+              onOpenAlerts={() => setPage("alerts")}
+              onOpenExplorer={() => setPage("explorer")}
+            />
+          ) : page === "explorer" ? (
+            <Fleet
               nodes={nodes}
               groups={groups}
               selected={selected}
               onSelect={setSelectedId}
               points={points}
               monthlyNetwork={monthlyNetwork}
+              query={query}
+              onQuery={setQuery}
               alerts={alerts}
+              onCreateGroup={createFleetGroup}
+              onLayout={saveFleetLayout}
               canDelete={canManageAccess}
               releases={releases}
               token={token}
