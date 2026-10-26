@@ -61,3 +61,5 @@
 .concept-core-bars > div { display: flex; gap: 7px; align-items: center; font-size: 10px; }
 .concept-core-bars .meter { flex: 1; }
 .concept-unraid { margin-top: 14px; }
+:root { --surface: var(--panel); --surface2: var(--panel2); --accent: var(--mint); --green: var(--mint); --purple: var(--blue); }
+:root[data-theme=mint] { --accent-rgb: 140, 229, 196; }
