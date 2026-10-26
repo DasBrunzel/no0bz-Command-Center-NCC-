@@ -12,6 +12,10 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 - Monats-Traffic und Telemetrie-Verlauf werden in den Statistiken unabhängig
   geladen. Ein vorübergehender Fehler einer Abfrage entfernt damit keine bereits
   erfolgreich geladenen Monatswerte mehr.
+- Der Windows-Server-Updater verwendet das mit dem Commit ausgelieferte
+  Frontend-Bundle und verändert dadurch keine versionierten Builddateien mehr.
+  Ein separater Update-Helfer sichert vorhandene lokale Dashboard-Dateien in
+  einem Git-Stash, bevor der Server aktualisiert wird.
 
 - Das Fleet-Dashboard wurde auf die neue **Mission-Control**-Informationsarchitektur
   umgestellt: Zuerst erscheinen Fleet-Status, offene Ereignisse und Live-Traffic,

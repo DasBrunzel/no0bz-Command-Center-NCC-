@@ -60,11 +60,19 @@ if ($LASTEXITCODE -ne 0) { throw "Could not switch to branch $Branch." }
 & git -C $projectRoot pull --ff-only origin $Branch
 if ($LASTEXITCODE -ne 0) { throw 'Git fast-forward update failed.' }
 
-Push-Location (Join-Path $projectRoot 'frontend')
-try {
-    & npm.cmd run build
-    if ($LASTEXITCODE -ne 0) { throw 'Frontend production build failed.' }
-} finally { Pop-Location }
+# The production assets are built and committed with the source revision.
+# Rebuilding on the server dirties tracked hashed assets and prevents the next
+# fast-forward update; verify the committed bundle instead.
+$staticRoot = Join-Path $projectRoot 'backend\ncc_server\static'
+$indexPath = Join-Path $staticRoot 'index.html'
+if (-not (Test-Path -LiteralPath $indexPath)) { throw 'Committed dashboard index.html is missing.' }
+$indexContents = Get-Content -LiteralPath $indexPath -Raw
+$assetReferences = [regex]::Matches($indexContents, '(?:src|href)="(/assets/[^"?]+)"')
+if ($assetReferences.Count -lt 2) { throw 'Committed dashboard asset references are incomplete.' }
+foreach ($reference in $assetReferences) {
+    $assetPath = Join-Path $staticRoot $reference.Groups[1].Value.TrimStart('/').Replace('/', '\')
+    if (-not (Test-Path -LiteralPath $assetPath)) { throw "Committed dashboard asset is missing: $assetPath" }
+}
 
 # Install only the Python package and server migration assets. Existing server
 # configuration stays in place; neither -ReplaceConfig nor Agent is used.
