@@ -4,6 +4,15 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## 0.6.0-beta.4 - in Arbeit
 
+- Das Dashboard übernimmt die dunkelgrüne „Alles im Blick“-Demo als neue
+  Oberfläche: Navigation, Command Overview, Fleet Explorer, Node-Detail,
+  Statistiken, Warnungen und Fleet Chat verwenden deren Layout und Design-Tokens.
+  Demo-Telemetrie wurde nicht übernommen; alle angezeigten Werte und Aktionen
+  bleiben an die produktiven NCC-Endpunkte gebunden.
+- Monats-Traffic und Telemetrie-Verlauf werden in den Statistiken unabhängig
+  geladen. Ein vorübergehender Fehler einer Abfrage entfernt damit keine bereits
+  erfolgreich geladenen Monatswerte mehr.
+
 - Das Fleet-Dashboard wurde auf die neue **Mission-Control**-Informationsarchitektur
   umgestellt: Zuerst erscheinen Fleet-Status, offene Ereignisse und Live-Traffic,
   danach ein gruppierter Fleet Explorer und schließlich die vollständige Detail- und

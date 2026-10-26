@@ -47,6 +47,8 @@ import {
 import "./index.css";
 import "./enrollment.css";
 import "./device-lifecycle.css";
+import "./concept/styles.css";
+import { Icon as ConceptIcon, Meter as ConceptMeter, SectionHead as ConceptSectionHead, Sparkline as ConceptSparkline, Status as ConceptStatus } from "./concept/components";
 
 type Metrics = Record<string, any>;
 type Telemetry = {
@@ -111,6 +113,7 @@ type NetworkUsageSummary = {
   available: boolean;
 };
 type Theme =
+  | "mint"
   | "nightmare"
   | "cachyos"
   | "cyber"
@@ -198,6 +201,7 @@ type ChatParticipant = { node_id: string; display_name: string; platform: string
 type Page = "fleet" | "explorer" | "statistics" | "alerts" | "chat" | "onboarding" | "settings";
 
 const THEMES: { id: Theme; name: string; color: string }[] = [
+  { id: "mint", name: "Command Mint", color: "#8ce5c4" },
   { id: "nightmare", name: "Nightmare Red", color: "#ff334f" },
   { id: "cachyos", name: "CachyOS Cyan", color: "#18d7ec" },
   { id: "cyber", name: "Cyber Neon", color: "#ff35d3" },
@@ -505,6 +509,7 @@ function Fleet({
   token,
   dismissedAlerts,
   onDismissAlert,
+  onAddDevice,
 }: {
   nodes: Node[];
   groups: FleetGroup[];
@@ -522,10 +527,14 @@ function Fleet({
   token: string;
   dismissedAlerts: Set<string>;
   onDismissAlert: (id: string) => void;
+  onAddDevice: () => void;
 }) {
   const [navigatorCollapsed, setNavigatorCollapsed] = useState(false),
     [editing, setEditing] = useState(false),
     [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
+  const [groupFilter, setGroupFilter] = useState("Alle Gruppen");
+  const [statusFilter, setStatusFilter] = useState("Alle Status");
+  const [sortFilter, setSortFilter] = useState("name");
   const fleetAlerts: FleetAlert[] = alerts.filter((alert) => alert.active && !dismissedAlerts.has(alert.alert_id)).map((alert) => ({
     id: alert.alert_id, title: alert.message, detail: `${alert.display_name} · seit ${ago(alert.opened_at)}`, severity: alert.severity,
   }));
@@ -564,80 +573,30 @@ function Fleet({
     setDraggedNodeId(null);
     await onLayout(placements);
   };
-  return (
-    <>
-      <AlertPanel alerts={fleetAlerts} onDismiss={onDismissAlert} />
-      <section className="surface fleet-navigator">
-        <header>
-          <button type="button" className="navigator-title" onClick={() => setNavigatorCollapsed((current) => !current)}>
-            <span className="eyebrow">FLEET NAVIGATOR</span>
-            <strong>{nodes.filter((node) => node.online).length}/{nodes.length} SYSTEME AKTIV · {navigatorCollapsed ? "AUSKLAPPEN" : "EINKLAPPEN"}</strong>
-          </button>
-          {!navigatorCollapsed && <>
-          <div className="navigator-actions">
-            {editing && (
-              <button
-                type="button"
-                onClick={() => {
-                  const name = window.prompt("Name der neuen Gruppe");
-                  if (name?.trim()) void onCreateGroup(name.trim());
-                }}
-              >
-                + Gruppe
-              </button>
-            )}
-            <button type="button" className={editing ? "active" : ""} onClick={() => setEditing((current) => !current)}>
-              {editing ? "Fertig" : "Bearbeiten"}
-            </button>
-          </div>
-          <label className="search">
-            <Search size={15} />
-            <input value={query} onChange={(event) => onQuery(event.target.value)} placeholder="Gerät suchen …" />
-          </label>
-          </>}
-        </header>
-        {!navigatorCollapsed && <div className="navigator-groups">
-          {grouped.map((group) => <section className="navigator-group" key={group.group_id}><h3>{group.name}<span>{group.nodes.length}</span></h3><div className={editing ? "editing" : ""} onDragOver={(event) => { if (editing) event.preventDefault(); }} onDrop={(event) => { if (editing) { event.preventDefault(); void moveNode(group.group_id); } }}>{group.nodes.map((node) => {
-              return (
-                <button
-                  key={node.node_id}
-                  className={`navigator-node ${selected?.node_id === node.node_id ? "selected" : ""}`}
-                  draggable={editing}
-                  onDragStart={() => setDraggedNodeId(node.node_id)}
-                  onDragEnd={() => setDraggedNodeId(null)}
-                  onDragOver={(event) => { if (editing) event.preventDefault(); }}
-                  onDrop={(event) => { if (editing) { event.preventDefault(); event.stopPropagation(); void moveNode(group.group_id, node.node_id); } }}
-                  onClick={() => { if (!editing) onSelect(node.node_id); }}
-                >
-                  <div className={`device-icon ${node.online ? "online" : ""}`}>
-                    <Server size={17} />
-                  </div>
-                  <div className="node-copy">
-                    <strong>{node.physical_device_name || node.display_name}</strong>
-                    <span>{node.platform} · {node.agent_version || "Agent unbekannt"}</span>
-                    {node.access_role === "beta_tester" && <small className="fleet-beta-badge">BETA-TESTER</small>}
-                    {!!node.gaming_mode_until && new Date(node.gaming_mode_until).getTime() > Date.now() && (
-                      <small className="fleet-gaming-badge"><Gamepad2 size={10} /> GAMING AKTIV</small>
-                    )}
-                  </div>
-                  <StatusDot online={node.online} />
-                </button>
-              );
-            })}{!group.nodes.length && <span className="navigator-placeholder">{editing ? "Gerät hierher ziehen" : "Platz für weitere Geräte"}</span>}</div></section>)}
-            {!filtered.length && (
-              <div className="navigator-empty">
-                <Boxes size={30} />
-                <strong>Keine Geräte gefunden</strong>
-                <span>Starte einen NCC-Agenten oder ändere die Suche.</span>
-              </div>
-            )}
-        </div>}
-      </section>
-      <div className="fleet-stage">
-        <NodeOverview node={selected} points={points} monthlyNetwork={monthlyNetwork} canDelete={canDelete} releases={releases} token={token} />
-      </div>
-    </>
-  );
+  const visibleNodes = representativeNodes(filtered).filter((node) =>
+    (groupFilter === "Alle Gruppen" || groups.find((group) => group.group_id === node.fleet_group_id)?.name === groupFilter) &&
+    (statusFilter === "Alle Status" ||
+      (statusFilter === "Online" && node.online) ||
+      (statusFilter === "Offline" && !node.online) ||
+      (statusFilter === "Gaming Mode" && !!node.gaming_mode_until && new Date(node.gaming_mode_until).getTime() > Date.now())),
+  ).sort((left, right) => sortFilter === "cpu"
+    ? num(right.latest?.metrics.cpu?.percent) - num(left.latest?.metrics.cpu?.percent)
+    : sortFilter === "group"
+      ? String(groups.find((group) => group.group_id === left.fleet_group_id)?.name || "").localeCompare(String(groups.find((group) => group.group_id === right.fleet_group_id)?.name || ""), "de")
+      : left.display_name.localeCompare(right.display_name, "de"));
+  return <>
+    <div className="page-intro"><div><div className="eyebrow">FLEET / EXPLORER</div><h1>Deine Fleet.</h1><p>Physische Geräte, Profile und Zustände an einem Ort.</p></div><button type="button" className="primary-button" onClick={onAddDevice}><ConceptIcon name="plus" size={17}/> Gerät hinzufügen</button></div>
+    <div className="summary-line"><span><b>{new Set(nodes.map((node) => node.physical_device_id || node.node_id)).size}</b> physische Geräte</span><span><b>{nodes.length}</b> OS-Profile</span><span><b>{nodes.filter((node) => node.online).length}</b> verbunden</span><span><b>{nodes.filter((node) => node.gaming_mode_until && new Date(node.gaming_mode_until).getTime() > Date.now()).length}</b> Gaming Mode</span></div>
+    <div className="filter-bar"><label className="search-box"><ConceptIcon name="search" size={17}/><input value={query} onChange={(event) => onQuery(event.target.value)} placeholder="Gerät oder Plattform suchen…"/></label><select value={groupFilter} onChange={(event) => setGroupFilter(event.target.value)}><option>Alle Gruppen</option>{groups.map((group) => <option key={group.group_id}>{group.name}</option>)}</select><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>{["Alle Status", "Online", "Offline", "Gaming Mode"].map((status) => <option key={status}>{status}</option>)}</select><select value={sortFilter} onChange={(event) => setSortFilter(event.target.value)}><option value="name">Name A–Z</option><option value="cpu">CPU-Last</option><option value="group">Gruppe</option></select></div>
+    <div className="fleet-list"><div className="table-heading"><span>GERÄT / PLATTFORM</span><span>STATUS</span><span>CPU / RAM</span><span>LETZTER KONTAKT</span><span/></div>{visibleNodes.length ? visibleNodes.map((node) => {
+      const cpu = num(node.latest?.metrics.cpu?.percent), ram = num(node.latest?.metrics.memory?.percent);
+      const profiles = nodes.filter((profile) => (profile.physical_device_id || profile.node_id) === (node.physical_device_id || node.node_id));
+      return <button type="button" className={`fleet-item ${selected?.node_id === node.node_id ? "selected" : ""}`} key={node.node_id} onClick={() => onSelect(node.node_id)}><div className="fleet-identity"><div className="fleet-icon">{node.platform.toLowerCase().includes("linux") ? "▤" : "▣"}</div><div><b>{node.physical_device_name || node.display_name}</b><small>{node.platform} · {groups.find((group) => group.group_id === node.fleet_group_id)?.name || "Fleet"}</small>{profiles.length > 1 && <span className="profile-count">{profiles.length} OS-PROFILE <span>Dualboot</span></span>}</div></div><ConceptStatus node={{online: node.online, gaming_mode_until: node.gaming_mode_until && new Date(node.gaming_mode_until).getTime() > Date.now() ? node.gaming_mode_until : null}}/><div className="fleet-meters"><div><span>CPU</span><ConceptMeter value={cpu}/><b>{cpu.toFixed(0)}%</b></div><div><span>RAM</span><ConceptMeter value={ram} color="var(--blue)"/><b>{ram.toFixed(0)}%</b></div></div><span className="last-seen">{node.online ? "Gerade eben" : ago(node.last_seen_at)}</span><ConceptIcon name="chevron" size={18}/></button>;
+    }) : <div className="empty">Keine Geräte entsprechen diesen Filtern.</div>}</div>
+    <div className="concept-fleet-actions"><button type="button" className="outline-button" onClick={() => setEditing((value) => !value)}>{editing ? "Gruppen schließen" : "Gruppen bearbeiten"}</button>{editing && <button type="button" className="outline-button" onClick={() => { const name = window.prompt("Name der neuen Gruppe"); if (name?.trim()) void onCreateGroup(name.trim()); }}>+ Gruppe</button>}</div>
+    {editing && <div className="concept-group-editor">{grouped.map((group) => <div key={group.group_id} className="detail-card" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); void moveNode(group.group_id); }}><strong>{group.name}</strong>{group.nodes.map((node) => <button type="button" key={node.node_id} draggable onDragStart={() => setDraggedNodeId(node.node_id)} onDragEnd={() => setDraggedNodeId(null)} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); event.stopPropagation(); void moveNode(group.group_id, node.node_id); }}>{node.display_name}</button>)}</div>)}</div>}
+    {selected && <div className="concept-selected-node"><NodeOverview node={selected} points={points} monthlyNetwork={monthlyNetwork} canDelete={canDelete} releases={releases} token={token}/></div>}
+  </>;
 }
 
 type AlternateFleetProps = {
@@ -1337,6 +1296,95 @@ function CommandOverviewV3({
   );
 }
 
+/** The overview uses the original markup and CSS from the approved local demo. */
+function CommandOverviewExact({
+  nodes, selected, points, alerts, dismissedAlerts, onSelect, onOpenAlerts, onOpenExplorer,
+}: {
+  nodes: Node[];
+  selected: Node | null;
+  points: Telemetry[];
+  alerts: AlertRecord[];
+  dismissedAlerts: Set<string>;
+  onSelect: (nodeId: string) => void;
+  onOpenAlerts: () => void;
+  onOpenExplorer: () => void;
+}) {
+  const active = alerts.filter((alert) => alert.active && !dismissedAlerts.has(alert.alert_id));
+  const representatives = Array.from(nodes.reduce((result, node) => {
+    const key = node.physical_device_id || node.node_id;
+    const current = result.get(key);
+    if (!current || (node.online && !current.online)) result.set(key, node);
+    return result;
+  }, new Map<string, Node>()).values());
+  const online = representatives.filter((node) => node.online).length;
+  const offline = representatives.length - online;
+  const onlineMetrics = representatives.filter((node) => node.online).map((node) => node.latest?.metrics.network || {});
+  const down = onlineMetrics.reduce((total, network) => total + num(network.download_mbps), 0);
+  const up = onlineMetrics.reduce((total, network) => total + num(network.upload_mbps), 0);
+  const netHistory = points.map((point) => num(point.metrics.network?.download_mbps));
+  const availability = representatives.length
+    ? representatives.reduce((total, node) => total + num(node.availability_percent), 0) / representatives.length
+    : 0;
+  const events = active.length
+    ? active.slice(0, 5).map((alert) => ({
+        label: `${alert.display_name}: ${alert.message}`,
+        when: ago(alert.updated_at),
+        hot: alert.severity === "critical",
+      }))
+    : representatives.filter((node) => node.online).slice(0, 5).map((node) => ({
+        label: `${node.display_name} meldet sich`, when: ago(node.last_seen_at), hot: false,
+      }));
+  const showNode = (node: Node) => { onSelect(node.node_id); onOpenExplorer(); };
+  return <>
+    <div className="page-intro">
+      <div>
+        <div className="eyebrow">{new Date().toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "long", year: "numeric" }).toUpperCase()}</div>
+        <h1>Alles im Blick.</h1>
+        <p>Deine Infrastruktur in Echtzeit. Ruhig, bis etwas deine Aufmerksamkeit braucht.</p>
+      </div>
+      <div className="freshness"><span className="pulse-dot"/> Daten frisch <b>·</b> {selected?.last_seen_at ? `Aktualisiert ${ago(selected.last_seen_at)}` : "Warte auf Telemetrie"}</div>
+    </div>
+    <div className="hero-grid">
+      <div className="attention-card">
+        <div className="attention-top"><span className="eyebrow">PRIORITY SIGNAL</span><span className={`severity ${active.length ? "critical" : "info"}`}>● {active.length ? `${active.length} AKTIV` : "STABIL"}</span></div>
+        <div className="attention-body"><div className="attention-icon"><ConceptIcon name={active.length ? "alert" : "check"} size={26}/></div><div><h2>{active.length ? "Was braucht gerade Aufmerksamkeit?" : "Alles läuft nach Plan."}</h2><p>{active[0]?.message || "Keine aktiven Vorfälle"}</p><small>{active.length ? `${active[0].display_name} · ${ago(active[0].updated_at)}` : "Alle erreichbaren Geräte senden aktuelle Telemetrie."}</small></div></div>
+        <button className="text-link" onClick={onOpenAlerts}>Warnungen prüfen <ConceptIcon name="arrow" size={16}/></button>
+      </div>
+      <div className="system-card">
+        <div className="eyebrow">SYSTEM STATUS</div>
+        <div className="system-big">{representatives.length}<span> Knoten</span></div>
+        <div className="system-bar"><span style={{width:`${representatives.length ? online / representatives.length * 100 : 0}%`}}/></div>
+        <div className="system-legend"><span><i className="legend-online"/> {online} Online</span><span><i className="legend-warn"/> {active.length} Warnung</span><span><i className="legend-offline"/> {offline} Offline</span></div>
+        <div className="system-foot">Agent-Heartbeat <b>{offline ? "Beobachten" : "Stabil"}</b></div>
+      </div>
+    </div>
+    <div className="overview-main">
+      <div className="overview-left">
+        <div className="traffic-card">
+          <div className="card-head"><div><div className="eyebrow">LIVE NETWORK</div><h2>Netzwerkverkehr</h2></div><span className="live-tag"><i/> LIVE</span></div>
+          <div className="traffic-values"><div><small>DOWNLOAD</small><strong>{down.toFixed(1)} <span>Mb/s</span></strong></div><div><small>UPLOAD</small><strong>{up.toFixed(1)} <span>Mb/s</span></strong></div></div>
+          <div className="traffic-chart"><div className="chart-grid"><span>{Math.ceil(Math.max(1, ...netHistory))}</span><span>{Math.ceil(Math.max(1, ...netHistory) / 2)}</span><span>0</span></div><ConceptSparkline values={netHistory} color="var(--mint)" height={188} fill/></div>
+          <div className="chart-axis"><span>VERLAUF: {selected?.display_name || "KEIN GERÄT"}</span><span>LETZTE MESSPUNKTE</span><span>JETZT</span></div>
+        </div>
+        <div className="fleet-strip">
+          <ConceptSectionHead eyebrow="FLEET PULSE" title="Geräte im Fokus" aside={<button className="text-link" onClick={onOpenExplorer}>Alle Geräte <ConceptIcon name="arrow" size={15}/></button>}/>
+          <div className="node-rows">{representatives.slice(0, 5).map((node) => <button className="node-row" key={node.node_id} onClick={() => showNode(node)}>
+            <div className="node-symbol">{node.fleet_group_id === "default-servers" ? "▤" : "▣"}</div>
+            <div className="node-row-name"><b>{node.physical_device_name || node.display_name}</b><small>{node.platform}</small></div>
+            <span className={`status ${node.online ? "online" : "offline"}`}><i/>{node.online ? "Online" : "Offline"}</span>
+            <div className="row-load"><span>CPU {num(node.latest?.metrics.cpu?.percent).toFixed(0)}%</span><ConceptMeter value={num(node.latest?.metrics.cpu?.percent)}/></div>
+            <ConceptIcon name="chevron" size={16}/>
+          </button>)}</div>
+        </div>
+      </div>
+      <div className="overview-right">
+        <div className="event-card"><ConceptSectionHead eyebrow="ACTIVITY LOG" title="Ereignis-Zeitstrahl"/><div className="timeline">{events.map((event, index) => <div className="timeline-item" key={`${event.label}-${index}`}><span className={`timeline-dot ${event.hot ? "hot" : ""}`}/><div><b>{event.label}</b><small>{event.when}</small></div></div>)}</div><button className="text-link" onClick={onOpenAlerts}>Zum Ereigniscenter <ConceptIcon name="arrow" size={15}/></button></div>
+        <div className="signal-card"><div className="eyebrow">SIGNAL QUALITY</div><div className="signal-score">{availability.toFixed(1)}<span>%</span></div><p>Fleet-Verfügbarkeit · seit Aufnahme</p><div className="signal-bars">{Array.from({length:28},(_,i)=><span key={i} style={{height:`${Math.max(20, Math.min(100, availability + ((i * 17) % 19) - 9))}%`}}/>)}</div><small>Alle Knoten werden überwacht</small></div>
+      </div>
+    </div>
+  </>;
+}
+
 function DashboardTrafficChart({ values }: { values: { download: number; upload: number }[] }) {
   const chart = values.length > 1 ? values : Array.from({ length: 18 }, () => ({ download: 0, upload: 0 }));
   const max = Math.max(1, ...chart.flatMap((value) => [value.download, value.upload]));
@@ -1364,6 +1412,7 @@ function NodeOverview({
   releases: AgentRelease[];
   token: string;
 }) {
+  const [actionOpen, setActionOpen] = useState(false);
   const [forgetting, setForgetting] = useState(false),
     [renaming, setRenaming] = useState(false),
     [updatingRole, setUpdatingRole] = useState(false),
@@ -1524,217 +1573,29 @@ function NodeOverview({
   const operatingSystem = isUnraid
     ? `Unraid ${m.unraid?.version || node.agent_version || ""}`.trim()
     : String(m.system?.platform || node.platform || "Betriebssystem unbekannt");
-  return (
-    <section className="node-overview">
-      <div className={`surface hero ${isUnraid ? "unraid-hero" : ""}`}>
-        <div>
-          <span className="eyebrow">
-            {isUnraid ? "UNRAID STORAGE SERVER" : "AUSGEWÄHLTER NODE"}
-          </span>
-          <h1>{node.display_name}</h1>
-          <p>
-            {isUnraid
-              ? `${operatingSystem} · UNRAID API`
-              : `${operatingSystem} · ${String(node.metadata.architecture || "Architektur unbekannt")}`}
-          </p>
-        </div>
-        <div className="node-hardware" aria-label="Erkannte Hardware">
-          <div title={cpuModel}>
-            {cpuLogo ? <img src={cpuLogo} alt="CPU-Hersteller" /> : <Cpu size={22} />}
-            <span>{cpuModel}</span>
-          </div>
-          {!isUnraid && <div title={gpuModel}>
-            {gpuLogo ? <img src={gpuLogo} alt="GPU-Hersteller" /> : <MonitorCog size={22} />}
-            <span>{gpuModel}</span>
-          </div>}
-        </div>
-        <div className="hero-side">
-          <div className="hero-status">
-            <StatusDot online={node.online} />
-            <small>{ago(node.last_seen_at)}</small>
-          </div>
-          <div className="node-actions node-actions-in-hero">
-            {!isUnraid && canDelete && <button className={`gaming-mode ${gamingActive ? "active" : ""}`} disabled={updatingGaming} onClick={() => void updateGamingMode(gamingActive ? 0 : 120)}>
-              <Gamepad2 size={15} />{updatingGaming ? "Wird gesetzt …" : gamingActive ? `Gaming aktiv bis ${new Date(node.gaming_mode_until!).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}` : "Gaming-Modus · 2 Std."}
-            </button>}
-            <button
-              className="rename-node"
-              disabled={renaming}
-              onClick={() => void rename()}
-            >
-              {renaming ? "Wird umbenannt …" : "Gerät umbenennen"}
-            </button>
-            {canDelete && <button
-              className="node-role"
-              disabled={updatingRole}
-              onClick={() => void toggleRole()}
-            >
-              {updatingRole
-                ? "Rolle wird geändert …"
-                : node.access_role === "beta_tester"
-                  ? "Zu Commander machen"
-                  : "Als Beta-Tester markieren"}
-            </button>}
-            {canDelete && !isUnraid && <button className="node-role" disabled={updatingRelease} onClick={() => void changeUpdateChannel()}>
-              {updatingRelease ? "Wird gesetzt …" : `Update-Kanal: ${node.update_channel.toUpperCase()}`}
-            </button>}
-            {canDelete && !isUnraid && <button className="node-role" disabled={updatingRelease} onClick={() => void assignRelease()}>
-              <Download size={15} />{pendingRelease ? `Freigabe aufheben: ${pendingRelease.payload_version}` : channelReleases.length > 1 ? "Release auswählen" : "Update bewusst freigeben"}
-            </button>}
-            {canDelete && !isUnraid && !pendingRelease && channelReleases.length > 1 && <select className="node-role" disabled={updatingRelease} defaultValue="" onChange={(event) => { const releaseId = event.target.value; if (releaseId) void setRelease(releaseId); }}>
-              <option value="" disabled>Release auswählen …</option>
-              {channelReleases.map((release) => <option key={release.release_id} value={release.release_id}>{release.payload_version} · {new Date(release.released_at).toLocaleDateString("de-DE")}</option>)}
-            </select>}
-            {canDelete && <button
-              className="forget-node"
-              disabled={forgetting}
-              onClick={() => void forget()}
-            >
-              <Trash2 size={15} />
-              {forgetting ? "Gerät wird entfernt …" : "Gerät vergessen"}
-            </button>}
-          </div>
-        </div>
-      </div>
-      <div className={`gauge-grid ${isUnraid ? "unraid-gauge-grid" : ""}`}>
-        <Gauge
-          label="CPU AUSLASTUNG"
-          value={num(cpu.percent)}
-          detail={typeof cpu.frequency_mhz === "number" ? `${metric(cpu.frequency_mhz, 0)} MHz` : "CPU"}
-        >
-          {Array.isArray(cpu.per_core) && cpu.per_core.length > 0 && <div className="cpu-threads"><div><span>CORE THREADS ({num(cpu.logical_cores) || cpu.per_core.length})</span><b>AVG: {num(cpu.percent).toFixed(0)}%</b></div><section>{cpu.per_core.map((value: unknown, index: number) => { const load = Math.max(0, Math.min(100, num(value))); return <i key={index} title={`Kern ${index + 1}: ${load.toFixed(1)}%`} style={{ height: `${Math.max(12, load)}%`, backgroundColor: `hsl(${145 - load * 1.45} 88% 55%)` }} />; })}</section></div>}
-        </Gauge>
-        <Gauge
-          label="ARBEITSSPEICHER"
-          value={num(memory.percent)}
-          tone="blue"
-          detail={`${num(memory.used_gb).toFixed(1)} / ${num(memory.total_gb).toFixed(1)} GB`}
-        />
-        {!isUnraid && (
-          <Gauge
-            label="GPU"
-            value={num(gpu.percent)}
-            tone="purple"
-            detail={gpu.name || "Nicht erkannt"}
-            footer={
-              typeof gpu.temperature_c === "number"
-                ? `${metric(gpu.temperature_c, 0)} °C GPU-Temperatur`
-                : undefined
-            }
-          />
-        )}
-      </div>
-      <div className="detail-grid">
-        <article className="surface compact">
-          <header>
-            <Network size={16} />
-            <span>NETZWERK</span>
-          </header>
-          <div className="network-graphs" aria-label="Netzwerkverlauf">
-            <div>
-              <small>DOWNLOAD-VERLAUF <b>↓ {num(network.download_mbps).toFixed(1)} Mbps</b></small>
-              <Sparkline
-                points={points}
-                metric={(point) => num(point.network?.download_mbps)}
-                maxValue={Math.max(10, ...points.map((point) => num(point.metrics.network?.download_mbps)))}
-                color="var(--blue)"
-              />
-            </div>
-            <div>
-              <small>UPLOAD-VERLAUF <b>↑ {num(network.upload_mbps).toFixed(1)} Mbps</b></small>
-              <Sparkline
-                points={points}
-                metric={(point) => num(point.network?.upload_mbps)}
-                maxValue={Math.max(10, ...points.map((point) => num(point.metrics.network?.upload_mbps)))}
-                color="var(--purple)"
-              />
-            </div>
-          </div>
-          <footer>
-            {network.interface || "Automatische Schnittstelle"} · {monthlyNetwork?.available
-              ? `Monat ${new Date(monthlyNetwork.period_start).toLocaleDateString("de-DE", { month: "short" })}: ↓ ${metric(monthlyNetwork.received_bytes / 1024 ** 3, 2)} GB · ↑ ${metric(monthlyNetwork.sent_bytes / 1024 ** 3, 2)} GB`
-              : "Monatsverkehr wird mit den nächsten Agent-Messungen erfasst"}
-            {(num(network.errors) > 0 || num(network.drops) > 0) && ` · Fehler ${num(network.errors)} · Drops ${num(network.drops)}`}
-          </footer>
-        </article>
-        {isUnraid ? (
-          <UnraidStorageCard metrics={m} />
-        ) : (
-          <article className="surface compact">
-            <header>
-              <HardDrive size={16} />
-              <span>LAUFWERKE</span>
-            </header>
-            <div className="disk-list">
-              {(m.disks || [])
-                .slice(0, 3)
-                .map((disk: Metrics, index: number) => (
-                  <article className="drive-card" key={`${disk.mount}-${index}`}>
-                    <header>
-                      <span><HardDrive size={15} />{disk.mount || disk.name || `Disk ${index + 1}`}</span>
-                      <b>{Math.min(100, num(disk.percent)).toFixed(0)}%</b>
-                    </header>
-                    <small>{disk.name || disk.mount || `Disk ${index + 1}`} · {disk.filesystem || "Lokales Laufwerk"}</small>
-                    <div className="drive-bar">
-                      <i style={{ width: `${Math.min(100, num(disk.percent))}%` }} />
-                    </div>
-                    <div className="drive-capacity"><span>{metric(disk.used_gb, 0)} GB belegt</span><span>{Math.max(0, num(disk.total_gb) - num(disk.used_gb)).toFixed(0)} GB frei</span></div>
-                    <div className="drive-rates">
-                      <div><ArrowDownToLine size={14} /><span>LESEN</span><b>{metric(disk.read_mbps)} <small>MiB/s</small></b></div>
-                      <div><ArrowUpToLine size={14} /><span>SCHREIBEN</span><b>{metric(disk.write_mbps)} <small>MiB/s</small></b></div>
-                    </div>
-                  </article>
-                ))}
-              {!(m.disks || []).length && <p>Keine Laufwerksdaten</p>}
-            </div>
-          </article>
-        )}
-      </div>
-      {!isUnraid && hardware.provider === "librehardwaremonitor" && (
-        <article className="surface hardware-sensors">
-          <header><div><Activity size={16} /><span>LIVE-HARDWARE-SENSOREN</span></div><b>LIBRE HARDWARE MONITOR</b></header>
-          <div className="hardware-sensor-grid">
-            <SensorValue label="CPU TEMPERATUR" value={cpu.temperature_c} unit="°C" />
-            <SensorValue label="CPU LEISTUNG" value={cpu.power_w} unit="W" />
-            <SensorValue label="CPU TAKT" value={cpu.frequency_mhz} unit="MHz" />
-            <SensorValue label="GPU TEMPERATUR" value={lhmGpu.temperature_c ?? gpu.temperature_c} unit="°C" />
-            <SensorValue label="GPU HOTSPOT" value={lhmGpu.hotspot_temperature_c} unit="°C" />
-            <SensorValue label="GPU LEISTUNG" value={lhmGpu.power_w ?? gpu.power_w} unit="W" />
-            <SensorValue label="GPU LÜFTER" value={lhmGpu.fan_rpm} unit="RPM" />
-            <SensorValue label="LÜFTER" value={hardware.fans?.[0]?.value} unit={hardware.fans?.[0]?.unit || "RPM"} />
-          </div>
-          <footer>{hardware.sensor_counts?.temperatures ?? hardware.temperatures?.length ?? 0} Temperaturen · {hardware.sensor_counts?.fans ?? hardware.fans?.length ?? 0} Lüfter · {hardware.sensor_counts?.voltages ?? hardware.voltages?.length ?? 0} Spannungen · rein lesend erfasst</footer>
-        </article>
-      )}
-      {isUnraid && (
-        <div className="unraid-services-grid">
-          <UnraidWorkloadCard
-            title="VIRTUAL MACHINES"
-            icon={<MonitorCog size={16} />}
-            items={m.vms || []}
-            kind="vm"
-          />
-          <UnraidWorkloadCard
-            title="DOCKER CONTAINER"
-            icon={<Boxes size={16} />}
-            items={m.containers || []}
-            kind="container"
-          />
-        </div>
-      )}
-      {!isUnraid && (
-        <div className="system-insights-grid">
-          <article className="surface system-insight process-insight">
-            <header><div><Activity size={16} /><span>AKTIVSTE PROZESSE</span></div><b>{processes.length} LIVE</b></header>
-            <div className="process-list">
-              {processes.slice(0, 6).map((process: Metrics, index: number) => <article key={process.pid}><span className="process-rank">{String(index + 1).padStart(2, "0")}</span><div><strong title={process.name}>{process.name || "Unbekannt"}</strong><small>PID {process.pid || "—"} · CPU {Math.min(100, num(process.cpu)).toFixed(1)}%</small><i><em style={{ width: `${Math.min(100, num(process.cpu))}%` }} /></i></div><dl><div><dt>RAM</dt><dd>{metric(process.memory)}%</dd></div><div><dt>GPU</dt><dd>{typeof m.process_gpu?.[String(process.pid)] === "number" ? `${Math.min(100, num(m.process_gpu[String(process.pid)])).toFixed(1)}%` : "—"}</dd></div></dl></article>)}
-              {!processes.length && <p>Keine Prozessdaten verfügbar.</p>}
-            </div>
-          </article>
-        </div>
-      )}
-    </section>
-  );
+  const cpuSeries = points.map((point) => num(point.metrics.cpu?.percent));
+  const gpuSeries = points.map((point) => num(point.metrics.gpus?.[0]?.percent));
+  const downSeries = points.map((point) => num(point.metrics.network?.download_mbps));
+  const storage = Array.isArray(m.disks) ? m.disks : [];
+  return <section className="concept-node-page">
+    <div className="node-header"><div className="node-header-left"><div className="node-large-icon">{isUnraid ? "▤" : "▣"}</div><div><div className="eyebrow">NODE / {node.machine_id}</div><h1>{node.display_name}</h1><div className="node-sub"><ConceptStatus node={{online:node.online,gaming_mode_until:gamingActive ? node.gaming_mode_until : null}}/><span>{operatingSystem}</span><span>Agent v{node.agent_version || "—"}</span><span>Kontakt {ago(node.last_seen_at)}</span></div></div></div><div className="node-actions">
+      {!isUnraid && canDelete && <button type="button" className="outline-button" disabled={updatingGaming} onClick={() => void updateGamingMode(gamingActive ? 0 : 120)}><ConceptIcon name="bolt" size={16}/>{gamingActive ? "Gaming Mode beenden" : "Gaming Mode"}</button>}
+      <button type="button" className="outline-button" onClick={() => setActionOpen((open) => !open)}>Aktionen ⌄</button>
+      {actionOpen && <div className="action-menu"><button type="button" disabled={renaming} onClick={() => void rename()}>Gerät umbenennen</button>{canDelete && <button type="button" disabled={updatingRole} onClick={() => void toggleRole()}>{node.access_role === "beta_tester" ? "Zu Commander machen" : "Als Beta-Tester markieren"}</button>}{canDelete && !isUnraid && <><button type="button" disabled={updatingRelease} onClick={() => void changeUpdateChannel()}>Update-Kanal: {node.update_channel.toUpperCase()}</button><button type="button" disabled={updatingRelease} onClick={() => void assignRelease()}>{pendingRelease ? `Freigabe aufheben: ${pendingRelease.payload_version}` : "Update bewusst freigeben"}</button>{!pendingRelease && channelReleases.length > 1 && <select aria-label="Release auswählen" defaultValue="" onChange={(event) => { if(event.target.value) void setRelease(event.target.value); }}><option value="">Release auswählen …</option>{channelReleases.map((release) => <option key={release.release_id} value={release.release_id}>{release.payload_version}</option>)}</select>}</>}{canDelete && <button type="button" className="danger" disabled={forgetting} onClick={() => void forget()}>Gerät vergessen</button>}</div>}
+    </div></div>
+    <div className="node-meta"><span>PHYSISCHES GERÄT <b>{node.physical_device_name || node.display_name}</b></span><span>PLATTFORM <b>{node.platform}</b></span><span>UPDATE <b>{pendingRelease?.payload_version || node.update_channel.toUpperCase()}</b></span><span>DATENFRISCHE <b>{node.online ? "Live" : ago(node.last_seen_at)}</b></span></div>
+    <div className="node-chart-card"><div className="card-head"><div><div className="eyebrow">PERFORMANCE HISTORY</div><h2>Ressourcen im Verlauf</h2></div><span className="muted-small">Letzte {points.length} Messpunkte</span></div><div className="chart-key"><span><i style={{background:"var(--mint)"}}/> CPU</span><span><i style={{background:"var(--blue)"}}/> GPU</span></div><div className="dual-chart"><ConceptSparkline values={cpuSeries} color="var(--mint)" height={190} fill/><ConceptSparkline values={gpuSeries} color="var(--blue)" height={190}/></div><div className="chart-axis"><span>VERLAUF</span><span>JETZT</span></div></div>
+    <div className="metric-grid">
+      <div className="metric-card"><div className="metric-title"><span>CPU</span><ConceptIcon name="activity" size={17}/></div><div className="metric-value">{num(cpu.percent).toFixed(1)}%</div><p>{cpuModel}</p><ConceptSparkline values={cpuSeries} height={48}/><div className="metric-items"><div><span>Temperatur</span><b>{typeof cpu.temperature_c === "number" ? `${num(cpu.temperature_c).toFixed(0)} °C` : "—"}</b></div><div><span>Takt</span><b>{typeof cpu.frequency_mhz === "number" ? `${num(cpu.frequency_mhz).toFixed(0)} MHz` : "—"}</b></div></div></div>
+      <div className="metric-card"><div className="metric-title"><span>Arbeitsspeicher</span><ConceptIcon name="grid" size={17}/></div><div className="metric-value">{num(memory.used_gb).toFixed(1)} GB</div><p>von {num(memory.total_gb).toFixed(1)} GB belegt</p><div className="metric-meter"><ConceptMeter value={num(memory.percent)}/></div><div className="metric-items"><div><span>Auslastung</span><b>{num(memory.percent).toFixed(1)}%</b></div></div></div>
+      {!isUnraid && <div className="metric-card"><div className="metric-title"><span>Grafikprozessor</span><ConceptIcon name="bolt" size={17}/></div><div className="metric-value">{m.gpus?.length ? `${num(gpu.percent).toFixed(1)}%` : "—"}</div><p>{gpuModel}</p><ConceptSparkline values={gpuSeries} color="var(--blue)" height={48}/><div className="metric-items"><div><span>Temperatur</span><b>{typeof (lhmGpu.temperature_c ?? gpu.temperature_c) === "number" ? `${num(lhmGpu.temperature_c ?? gpu.temperature_c).toFixed(0)} °C` : "—"}</b></div><div><span>Leistung</span><b>{typeof (lhmGpu.power_w ?? gpu.power_w) === "number" ? `${num(lhmGpu.power_w ?? gpu.power_w).toFixed(1)} W` : "—"}</b></div></div></div>}
+      <div className="metric-card"><div className="metric-title"><span>Netzwerk</span><ConceptIcon name="chart" size={17}/></div><div className="metric-value">{num(network.download_mbps).toFixed(1)} Mb/s</div><p>↓ Download · {network.interface || "Automatisch"}</p><ConceptSparkline values={downSeries} height={48}/><div className="metric-items"><div><span>Upload</span><b>{num(network.upload_mbps).toFixed(1)} Mb/s</b></div><div><span>Monat ↓ / ↑</span><b>{monthlyNetwork?.available ? `${(monthlyNetwork.received_bytes / 1024 ** 3).toFixed(1)} / ${(monthlyNetwork.sent_bytes / 1024 ** 3).toFixed(1)} GB` : "—"}</b></div></div></div>
+    </div>
+    <div className="detail-bottom"><div className="detail-card"><ConceptSectionHead eyebrow="STORAGE" title="Laufwerke"/>{storage.map((disk: Metrics, index: number) => <div className="disk-row" key={`${disk.mount || disk.name}-${index}`}><div><b>{disk.mount || disk.name || `Disk ${index + 1}`}</b><span>{num(disk.used_gb).toFixed(1)} / {num(disk.total_gb).toFixed(1)} GB</span></div><ConceptMeter value={num(disk.percent)}/><small>Lesen {num(disk.read_mbps).toFixed(1)} · Schreiben {num(disk.write_mbps).toFixed(1)} MiB/s</small></div>)}{!storage.length && <div className="empty">Keine Laufwerksdaten vorhanden.</div>}</div><div className="detail-card"><ConceptSectionHead eyebrow="HARDWARE" title="Sensoren"/><div className="sensor-row"><span>CPU Temperatur</span><b>{typeof cpu.temperature_c === "number" ? `${num(cpu.temperature_c).toFixed(1)} °C` : "—"}</b></div><div className="sensor-row"><span>GPU Temperatur</span><b>{typeof (lhmGpu.temperature_c ?? gpu.temperature_c) === "number" ? `${num(lhmGpu.temperature_c ?? gpu.temperature_c).toFixed(1)} °C` : "—"}</b></div><div className="sensor-row"><span>CPU Leistung</span><b>{typeof cpu.power_w === "number" ? `${num(cpu.power_w).toFixed(1)} W` : "—"}</b></div><div className="sensor-row"><span>GPU Lüfter</span><b>{typeof lhmGpu.fan_rpm === "number" ? `${num(lhmGpu.fan_rpm).toFixed(0)} RPM` : "—"}</b></div><div className="process-note">{processes.length ? `Top-Prozesse: ${processes.slice(0, 4).map((process: Metrics) => `${process.name} ${num(process.cpu).toFixed(0)}%`).join(" · ")}` : "Keine Prozessdaten verfügbar."}</div></div></div>
+    {Array.isArray(cpu.per_core) && cpu.per_core.length > 0 && <div className="detail-card concept-core-load"><ConceptSectionHead eyebrow="CPU THREADS" title="Last pro Kern"/><div className="concept-core-bars">{cpu.per_core.map((value: unknown, index: number) => <div key={index} title={`Kern ${index + 1}: ${num(value).toFixed(1)}%`}><span>{index + 1}</span><ConceptMeter value={num(value)}/></div>)}</div></div>}
+    {hardware.provider === "librehardwaremonitor" && <div className="detail-card concept-hardware"><ConceptSectionHead eyebrow="LIBRE HARDWARE MONITOR" title="Live-Hardware-Sensoren"/><div className="hardware-sensor-grid"><SensorValue label="CPU TEMPERATUR" value={cpu.temperature_c} unit="°C"/><SensorValue label="CPU LEISTUNG" value={cpu.power_w} unit="W"/><SensorValue label="CPU TAKT" value={cpu.frequency_mhz} unit="MHz"/><SensorValue label="GPU HOTSPOT" value={lhmGpu.hotspot_temperature_c} unit="°C"/><SensorValue label="GPU LEISTUNG" value={lhmGpu.power_w ?? gpu.power_w} unit="W"/><SensorValue label="GPU LÜFTER" value={lhmGpu.fan_rpm} unit="RPM"/></div></div>}
+    {isUnraid && <div className="detail-bottom concept-unraid"><UnraidStorageCard metrics={m}/><div className="unraid-services-grid"><UnraidWorkloadCard title="VIRTUAL MACHINES" icon={<MonitorCog size={16}/>} items={m.vms || []} kind="vm"/><UnraidWorkloadCard title="DOCKER CONTAINER" icon={<Boxes size={16}/>} items={m.containers || []} kind="container"/></div></div>}
+  </section>;
 }
 
 function SensorValue({ label, value, unit }: { label: string; value: unknown; unit: string }) {
@@ -1768,7 +1629,7 @@ function StatisticsPage({
         const entries = await Promise.all(
           trafficNodes.map(async (node) => {
             try {
-              const [monthly, history] = await Promise.all([
+              const [monthlyResult, historyResult] = await Promise.allSettled([
                 getJson<NetworkUsageSummary>(
                   `/api/v1/fleet/nodes/${node.node_id}/network/month`,
                   token,
@@ -1778,6 +1639,8 @@ function StatisticsPage({
                   token,
                 ),
               ]);
+              const monthly = monthlyResult.status === "fulfilled" ? monthlyResult.value : null;
+              const history = historyResult.status === "fulfilled" ? historyResult.value : [];
               return [node.node_id, monthly, history] as const;
             } catch {
               return [node.node_id, null, []] as const;
@@ -1785,13 +1648,10 @@ function StatisticsPage({
           }),
         );
         if (!current) return;
-        setTraffic(
-          Object.fromEntries(
-            entries
-              .filter((entry): entry is [string, NetworkUsageSummary, Telemetry[]] => entry[1] !== null)
-              .map(([nodeId, monthly]) => [nodeId, monthly]),
-          ),
-        );
+        setTraffic((previous) => ({
+          ...Object.fromEntries(Object.entries(previous).filter(([nodeId]) => trafficNodes.some((node) => node.node_id === nodeId))),
+          ...Object.fromEntries(entries.filter((entry): entry is [string, NetworkUsageSummary, Telemetry[]] => entry[1] !== null).map(([nodeId, monthly]) => [nodeId, monthly])),
+        }));
         setTrafficHistory(
           Object.fromEntries(
             entries.map(([nodeId, , history]) => [nodeId, [...history]]),
@@ -1886,108 +1746,44 @@ function StatisticsPage({
     );
   }, [trafficHistory]);
 
-  return (
-    <section className="statistics-page">
-      <header className="statistics-hero surface">
-        <div>
-          <span className="eyebrow">NCC INTELLIGENCE</span>
-          <h1>Statistiken</h1>
-          <p>
-            Momentaufnahme deiner Infrastruktur und Verkehr im aktuellen Monat.
-          </p>
-        </div>
-        <div className="statistics-hero-meta">
-          <BarChart3 size={25} />
-          <span>{summary ? `Aktualisiert ${new Date(summary.server_time).toLocaleTimeString("de-DE")}` : "Daten werden geladen"}</span>
-        </div>
-      </header>
-
-      <div className="statistics-kpis">
-        <article className="surface statistics-kpi availability">
-          <div><Wifi size={19} /><span>VERFÜGBARKEIT</span></div>
-          <div className="statistics-availability-content">
-            <div className="statistics-availability-total"><strong>{percentOnline}%</strong><small>{summary?.online_nodes || 0} von {summary?.total_nodes || 0} jetzt online</small></div>
-            <div className="statistics-availability-list">
-              {availability.map(({ node, value }) => <span key={node.node_id}><b>{node.display_name}</b><em className={node.online ? "online" : ""}>{value.toFixed(1)}% <small>Rekord {duration(node.uptime_record_seconds)}</small></em></span>)}
-            </div>
-          </div>
-        </article>
-        <article className="surface statistics-kpi">
-          <div><Cpu size={19} /><span>CPU-LAST</span></div>
-          <strong>{fleetCpu.toFixed(1)}%</strong>
-          <small>{usedCpuThreads.toFixed(1)} / {totalThreads} Threads in Nutzung</small>
-        </article>
-        <article className="surface statistics-kpi">
-          <div><MemoryStick size={19} /><span>RAM-LAST</span></div>
-          <strong>{fleetMemory.toFixed(1)}%</strong>
-          <small>{usedMemory.toFixed(1)} GB / {totalMemory.toFixed(1)} GB belegt</small>
-        </article>
-        <article className="surface statistics-kpi">
-          <div><MonitorCog size={19} /><span>GPU-LAST</span></div>
-          <strong>{fleetGpu.toFixed(1)}%</strong>
-          <small>{gpus.length} GPU{gpus.length === 1 ? "" : "s"} · {strongestGpu ? `Stärkste: ${strongestGpu.name || strongestGpu.model || strongestGpu.nodeName}` : "Keine GPU erkannt"}</small>
-        </article>
-        <article className="surface statistics-kpi">
-          <div><HardDrive size={19} /><span>FESTPLATTENSPEICHER</span></div>
-          <strong>{fleetDisk.toFixed(1)}%</strong>
-          <small>{usedDisk.toFixed(1)} GB / {totalDisk.toFixed(1)} GB belegt</small>
-        </article>
+  const [selectedTrafficDirection, setSelectedTrafficDirection] = useState<"download" | "upload">("download");
+  const selectedTotal = selectedTrafficDirection === "download" ? totalReceived : totalSent;
+  const trafficSeries = liveTraffic.map((sample) => selectedTrafficDirection === "download" ? sample.download : sample.upload);
+  const trafficRanking = [...nodes].sort((left, right) =>
+    (traffic[right.node_id]?.[selectedTrafficDirection === "download" ? "received_bytes" : "sent_bytes"] || 0) -
+    (traffic[left.node_id]?.[selectedTrafficDirection === "download" ? "received_bytes" : "sent_bytes"] || 0),
+  ).slice(0, 5);
+  const averageAvailability = availability.length
+    ? availability.reduce((total, entry) => total + entry.value, 0) / availability.length
+    : 0;
+  return <>
+    <div className="page-intro"><div><div className="eyebrow">INSIGHTS / FLEET</div><h1>Muster erkennen.</h1><p>Verfügbarkeit, Rekorde und Traffic über die gesamte Fleet.</p></div></div>
+    <div className="stats-summary">
+      <div><small>FLEET-VERFÜGBARKEIT · SEIT AUFNAHME</small><strong>{averageAvailability.toFixed(2)}<span>%</span></strong><p>Durchschnitt aller OS-Profile</p></div>
+      <div><small>GESAMT-DOWNLOAD · DIESER MONAT</small><strong>{trafficAvailable ? (totalReceived / 1024 ** 4).toFixed(2) : "—"}<span> TB</span></strong><p>Aktueller Kalendermonat</p></div>
+      <div><small>GESAMT-UPLOAD · DIESER MONAT</small><strong>{trafficAvailable ? (totalSent / 1024 ** 4).toFixed(2) : "—"}<span> TB</span></strong><p>Aktueller Kalendermonat</p></div>
+    </div>
+    <div className="stats-layout">
+      <div className="detail-card">
+        <ConceptSectionHead eyebrow="ALL-TIME LEADERBOARD" title="Verfügbarkeits-Rangliste" aside={<span className="muted-small">Seit Aufnahme des Geräts</span>}/>
+        <div className="ranking">{availability.map(({node, value}, index) => <div className="ranking-entry" key={node.node_id}>
+          <span className="rank-number">{String(index + 1).padStart(2, "0")}</span><span className="rank-name"><b>{node.display_name}</b><small>{node.platform}</small></span>
+          <span className="rank-bar"><ConceptMeter value={value}/></span><span className="rank-percent">{value.toFixed(2)}%</span><span className="rank-record">Rekord {duration(node.uptime_record_seconds)}</span>
+        </div>)}</div>
       </div>
-
-      <div className="statistics-layout">
-        <article className="surface statistics-ranking">
-          <header><div><span className="eyebrow">AKTUELL</span><h2>System-Rangliste</h2></div><Activity size={19} /></header>
-          <div className="statistics-bars">
-            {rankedLoad.map(({ node, value }) => {
-              return <div key={node.node_id}><span><i className={node.online ? "online" : ""} />{node.display_name}</span><em><b style={{ width: `${Math.min(100, value)}%` }} /></em><strong>{value.toFixed(1)}%</strong></div>;
-            })}
-            {!rankedLoad.length && <p>Es sind noch keine Live-Messwerte vorhanden.</p>}
-          </div>
-          <small className="statistics-note">Bewertung aus CPU-, RAM- und GPU-Auslastung; Geräte ohne GPU werden anhand von CPU und RAM gewertet.</small>
-        </article>
-        <article className="surface statistics-traffic">
-          <header><div><span className="eyebrow">AKTUELLER MONAT</span><h2>Netzwerkverkehr</h2></div><Network size={19} /></header>
-          <div className="traffic-total"><span>GESAMT</span><strong>{trafficAvailable ? bytes(totalReceived + totalSent) : "—"}</strong></div>
-          <div className="traffic-split"><div><ArrowDownToLine size={16} /><span>Empfangen</span><b>{trafficAvailable ? bytes(totalReceived) : "Noch keine Zähler"}</b></div><div><ArrowUpToLine size={16} /><span>Gesendet</span><b>{trafficAvailable ? bytes(totalSent) : "Noch keine Zähler"}</b></div></div>
-          <div className="traffic-live-mini">
-            <div><span>LIVE · ALLE GERÄTE</span><b>↓ {liveTraffic[liveTraffic.length - 1]?.download.toFixed(1) || "0.0"} · ↑ {liveTraffic[liveTraffic.length - 1]?.upload.toFixed(1) || "0.0"} Mbps</b></div>
-            <TrafficHistoryChart values={liveTraffic} />
-          </div>
-          <small>Wird aus den Rohdaten berechnet und am Monatsersten oder beim manuellen Reset neu angezeigt.</small>
-        </article>
+      <div className="detail-card">
+        <ConceptSectionHead eyebrow="TRAFFIC COMPARISON" title="Netzwerk nach Gerät"/>
+        <div className="segmented stats-tabs"><button type="button" className={selectedTrafficDirection === "download" ? "selected" : ""} onClick={() => setSelectedTrafficDirection("download")}>Download</button><button type="button" className={selectedTrafficDirection === "upload" ? "selected" : ""} onClick={() => setSelectedTrafficDirection("upload")}>Upload</button></div>
+        <ConceptSparkline values={trafficSeries} color="var(--mint)" height={172} fill/>
+        <div className="chart-axis"><span>LIVE-VERLAUF · LETZTE MESSPUNKTE</span><span>JETZT</span></div>
+        <div className="traffic-breakdown">{trafficRanking.map((node) => {
+          const value = traffic[node.node_id]?.[selectedTrafficDirection === "download" ? "received_bytes" : "sent_bytes"] || 0;
+          return <div key={node.node_id}><span>{node.display_name}</span><ConceptMeter value={selectedTotal ? value / selectedTotal * 100 : 0}/><b>{traffic[node.node_id]?.available ? bytes(value) : "—"}</b></div>;
+        })}</div>
       </div>
+    </div>
+  </>;
 
-      <div className="statistics-layout lower">
-        <article className="surface statistics-ranking traffic-ranking">
-          <header><div><span className="eyebrow">AKTUELLER MONAT</span><h2>Traffic pro Gerät</h2></div><ArrowDownToLine size={19} /></header>
-          <div className="statistics-bars">
-            {rankedTraffic.map((node) => {
-              const value = (traffic[node.node_id]?.received_bytes || 0) + (traffic[node.node_id]?.sent_bytes || 0);
-              const maximum = Math.max(1, ...rankedTraffic.map((item) => (traffic[item.node_id]?.received_bytes || 0) + (traffic[item.node_id]?.sent_bytes || 0)));
-              return <div key={node.node_id}><span><i className={node.online ? "online" : ""} />{node.display_name}</span><em><b style={{ width: `${(value / maximum) * 100}%` }} /></em><strong>{traffic[node.node_id]?.available ? bytes(value) : "—"}</strong></div>;
-            })}
-          </div>
-        </article>
-        <article className="surface statistics-quality">
-          <header><div><span className="eyebrow">DATENQUALITÄT</span><h2>Erfassung</h2></div><Activity size={19} /></header>
-          <dl><div><dt>Messpunkte gesamt</dt><dd>{summary?.telemetry_points.toLocaleString("de-DE") || "0"}</dd></div><div><dt>Geräte mit Live-Daten</dt><dd>{measured.length} / {nodes.length}</dd></div><div><dt>Offline-Geräte</dt><dd>{summary?.offline_nodes || 0}</dd></div><div><dt>Beta-Tester</dt><dd>{nodes.filter((node) => node.access_role === "beta_tester").length}</dd></div></dl>
-          <p>Mehr Langzeitvergleiche und Zeiträume bauen wir darauf als Nächstes auf.</p>
-        </article>
-      </div>
-
-      <section className="surface statistics-devices">
-        <header><div><span className="eyebrow">FLEET-INVENTAR</span><h2>Geräte im Vergleich</h2></div><Server size={19} /></header>
-        <div className="statistics-device-table">
-          <div className="statistics-table-head"><span>GERÄT</span><span>STATUS</span><span>CPU</span><span>RAM</span><span>NETZWERK</span><span>LETZTER KONTAKT</span></div>
-          {nodes.map((node) => {
-            const metrics = node.latest?.metrics || {};
-            return <div className="statistics-device-row" key={node.node_id}><span><b>{node.display_name}</b><small>{node.platform} · {node.agent_version || "Agent unbekannt"}{node.access_role === "beta_tester" && " · BETA-TESTER"}</small></span><span><StatusDot online={node.online} /></span><span>{node.latest ? `${num(metrics.cpu?.percent).toFixed(1)}%` : "—"}</span><span>{node.latest ? `${num(metrics.memory?.percent).toFixed(1)}%` : "—"}</span><span>{traffic[node.node_id]?.available ? bytes((traffic[node.node_id].received_bytes || 0) + (traffic[node.node_id].sent_bytes || 0)) : "—"}</span><span>{ago(node.last_seen_at)}</span></div>;
-          })}
-          {!nodes.length && <p>Noch keine Geräte in der Fleet.</p>}
-        </div>
-      </section>
-    </section>
-  );
 }
 
 function TelemetryPage({
@@ -2186,11 +1982,22 @@ function FleetChat({ token }: { token: string }) {
       await load();
     } finally { setSending(false); }
   };
-  return <section className="fleet-chat-page">
-    <header className="surface chat-hero"><div><span className="eyebrow">FLEET-KOMMUNIKATION</span><h1>Fleet Chat</h1><p>Nachrichten und Anhänge bleiben auf HorstServer erhalten – auch nach einem Browser-Neustart.</p></div><MessageSquare size={28} /></header>
-    <div className="chat-layout"><section className="surface chat-members"><header><span>CHATTER</span><b>{participants.length}</b></header>{participants.map((node) => <div key={node.node_id}><i className={node.online ? "online" : ""} /><span><strong>{node.display_name}</strong><small>{node.platform}</small></span></div>)}</section>
-      <section className="surface chat-thread"><header><div><span className="eyebrow">GEMEINSAMER VERLAUF</span><h2>{messages.length ? `${messages.length} Nachrichten` : "Noch keine Nachricht"}</h2></div></header><div className="chat-messages">{messages.map((message) => <article key={message.message_id}><div className="chat-avatar">{message.sender_name.slice(0, 1).toUpperCase()}</div><div><header><strong>{message.sender_name}</strong><small>{new Date(message.created_at).toLocaleString("de-DE")}</small>{message.body_format === "markdown" && <b>MARKDOWN</b>}</header>{message.body && <pre className={message.body_format === "markdown" ? "markdown-message" : ""}>{message.body}</pre>}{message.attachment && <ChatAttachmentView attachment={message.attachment} token={token} onOpen={(nextAttachment, url, kind) => setPreview({ attachment: nextAttachment, url, kind })} />}</div></article>)}{!messages.length && <div className="chat-empty"><MessageSquare size={34} /><strong>Der Fleet Chat ist bereit.</strong><span>Schreib die erste Nachricht an deine Geräte.</span></div>}</div>
-        <form className="chat-composer" onSubmit={(event) => void send(event)}><div><label>Absender<select value={senderNodeId} onChange={(event) => setSenderNodeId(event.target.value)}>{participants.map((node) => <option key={node.node_id} value={node.node_id}>{node.display_name}</option>)}</select></label><label>Format<select value={format} onChange={(event) => setFormat(event.target.value as "plain" | "markdown")}><option value="plain">Text</option><option value="markdown">Markdown</option></select></label></div><textarea value={body} onChange={(event) => setBody(event.target.value)} placeholder="Nachricht an die Fleet …" maxLength={20000} /><footer><label className="chat-file"><Paperclip size={15} /><span>{attachment?.name || "Datei anhängen"}</span><input id="fleet-chat-file" type="file" onChange={(event) => setAttachment(event.target.files?.[0] || null)} /></label><small>Maximal 100 MB</small><button className="primary" disabled={sending || (!body.trim() && !attachment)}><Send size={15} />{sending ? "Sende …" : "Senden"}</button></footer></form></section></div>
+  return <section className="concept-chat-page">
+    <div className="page-intro"><div><div className="eyebrow">COLLABORATION / FLEET</div><h1>Fleet Chat.</h1><p>Absprachen und Medien an einem eigenen Ort, getrennt von Telemetrie und Warnungen.</p></div></div>
+    <div className="chat-shell">
+      <div className="chat-heading"><div className="chat-channel-icon">#</div><div><b>fleet-operations</b><small>Private Fleet · Nachrichten bleiben auf dem NCC-Server</small></div><span className="chat-members">● {participants.length} Geräte</span></div>
+      <div className="chat-messages">
+        <div className="chat-day">FLEET-VERLAUF · {new Date().toLocaleDateString("de-DE", { day: "numeric", month: "long", year: "numeric" }).toUpperCase()}</div>
+        {messages.map((message) => <div className="chat-message" key={message.message_id}><div className="chat-avatar">{message.sender_name.slice(0, 1).toUpperCase()}</div><div><div className="message-meta"><b>{message.sender_name}</b><span>{new Date(message.created_at).toLocaleString("de-DE")}</span>{message.body_format === "markdown" && <span>MARKDOWN</span>}</div>{message.body && <p className="message-body">{message.body}</p>}{message.attachment && <ChatAttachmentView attachment={message.attachment} token={token} onOpen={(nextAttachment, url, kind) => setPreview({ attachment: nextAttachment, url, kind })} />}</div></div>)}
+        {!messages.length && <div className="chat-empty"><MessageSquare size={34} /><strong>Der Fleet Chat ist bereit.</strong><span>Schreib die erste Nachricht an deine Geräte.</span></div>}
+      </div>
+      <form className="chat-compose" onSubmit={(event) => void send(event)}>
+        <div className="chat-controls"><label>Absender<select value={senderNodeId} onChange={(event) => setSenderNodeId(event.target.value)}><option value="">NCC Dashboard</option>{participants.map((node) => <option key={node.node_id} value={node.node_id}>{node.display_name}</option>)}</select></label><label>Format<select value={format} onChange={(event) => setFormat(event.target.value as "plain" | "markdown")}><option value="plain">Text</option><option value="markdown">Markdown</option></select></label></div>
+        {attachment && <div className="attached">▧ {attachment.name} <button type="button" onClick={() => setAttachment(null)} aria-label="Anhang entfernen">×</button></div>}
+        <div className="compose-row"><label className="attach-button" title="Datei anhängen">＋<input id="fleet-chat-file" type="file" onChange={(event) => setAttachment(event.target.files?.[0] || null)} hidden /></label><input value={body} onChange={(event) => setBody(event.target.value)} placeholder="Nachricht an #fleet-operations…" maxLength={20000} /><button className="primary-button" disabled={sending || (!body.trim() && !attachment)} type="submit">{sending ? "Sende …" : "Senden"} <ConceptIcon name="arrow" size={16}/></button></div>
+        <small>Gespeichert auf dem NCC-Server · Anhänge bis 100 MB</small>
+      </form>
+    </div>
     {preview && <div className="chat-preview-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setPreview(null)}><section className="chat-preview"><header><div><span className="eyebrow">DATEIVORSCHAU</span><h2>{preview.attachment.name}</h2></div><button onClick={() => setPreview(null)} aria-label="Vorschau schließen"><X size={18} /></button></header><div className="chat-preview-content">{preview.kind === "image" ? <img src={preview.url} alt={preview.attachment.name} /> : <iframe src={preview.url} title={preview.attachment.name} />}</div><footer><span>{(preview.attachment.size / 1024 / 1024).toFixed(1)} MB</span><a href={preview.url} download={preview.attachment.name}><Download size={15} />Download</a></footer></section></div>}
   </section>;
 }
@@ -2198,60 +2005,16 @@ function FleetChat({ token }: { token: string }) {
 function AlertsPage({ alerts, canClear, onClear }: { alerts: AlertRecord[]; canClear: boolean; onClear: () => Promise<void> }) {
   const active = alerts.filter((alert) => alert.active);
   const [clearing, setClearing] = useState(false);
-  return (
-    <section className="alerts-page">
-      <div className="surface alerts-title">
-        <div>
-          <span className="eyebrow">FLEET-WARNUNGEN</span>
-          <h1>Warnungszentrum</h1>
-          <p>
-            {active.length
-              ? `${active.length} aktive ${active.length === 1 ? "Warnung" : "Warnungen"}`
-              : "Keine aktive Warnung"}
-          </p>
-        </div>
-        <div className="alerts-title-actions">{canClear && active.length > 0 && <button className="clear-alerts" disabled={clearing} onClick={() => { if (window.confirm("Alle aktuell sichtbaren Warnungen als erledigt markieren? Neue Probleme erscheinen weiterhin automatisch.")) { setClearing(true); void onClear().finally(() => setClearing(false)); } }}><Check size={15} />{clearing ? "Leere …" : "Alle erledigt"}</button>}<Bell size={25} /></div>
-      </div>
-      <div className="alerts-overview"><article className="surface"><AlertTriangle size={18} /><span>AKTIV</span><strong>{active.length}</strong></article><article className="surface"><Bell size={18} /><span>KRITISCH</span><strong>{active.filter((alert) => alert.severity === "critical").length}</strong></article><article className="surface"><Check size={18} /><span>BEHOBEN</span><strong>{alerts.filter((alert) => !alert.active).length}</strong></article></div>
-      <div className="alert-records">
-        {alerts.map((alert) => (
-          <article
-            key={alert.alert_id}
-            className={`surface ${alert.active ? alert.severity : "resolved"}`}
-          >
-            <AlertTriangle size={18} />
-            <div>
-              <strong>
-                {alert.active ? alert.message : `Entwarnt: ${alert.message}`}
-              </strong>
-              <span>
-                {alert.display_name} · {alert.kind.toUpperCase()} ·{" "}
-                {alert.active
-                  ? `seit ${new Date(alert.opened_at).toLocaleString("de-DE")}`
-                  : `behoben ${new Date(alert.resolved_at || alert.updated_at).toLocaleString("de-DE")}`}
-              </span>
-            </div>
-            <b>
-              {alert.active
-                ? alert.severity === "critical"
-                  ? "KRITISCH"
-                  : "WARNUNG"
-                : "BEHOBEN"}
-            </b>
-          </article>
-        ))}
-        {!alerts.length && (
-          <div className="surface empty-stage">
-            <Bell size={42} />
-            <h2>Alles ruhig</h2>
-            <p>
-              Aktive und behobene NCC-Warnungen erscheinen hier automatisch.
-            </p>
-          </div>
-        )}
-      </div>
-    </section>
-  );
+  const [filter, setFilter] = useState("Alle");
+  const [severity, setSeverity] = useState("Alle Schweregrade");
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const shown = alerts.filter((alert) => (filter === "Alle" || (filter === "Aktiv" ? alert.active : !alert.active)) && (severity === "Alle Schweregrade" || alert.severity === severity));
+  return <>
+    <div className="page-intro"><div><div className="eyebrow">INCIDENT / CENTER</div><h1>Warnungszentrale.</h1><p>Vorfälle mit Kontext, Verlauf und klaren nächsten Schritten.</p></div>{canClear && active.length > 0 && <button type="button" className="outline-button" disabled={clearing} onClick={() => { if (window.confirm("Alle aktiven Warnungen als erledigt markieren?")) { setClearing(true); void onClear().finally(() => setClearing(false)); } }}>{clearing ? "Wird erledigt …" : "Alle erledigt"}</button>}</div>
+    <div className="alert-summary"><div><strong>{active.length}</strong><span>Aktiv</span></div><div><strong>{active.filter((alert) => alert.severity === "critical").length}</strong><span>Kritisch</span></div><div><strong>{alerts.length - active.length}</strong><span>Gelöst</span></div></div>
+    <div className="filter-bar alert-filters"><div className="segmented">{["Alle", "Aktiv", "Gelöst"].map((value) => <button type="button" key={value} className={filter === value ? "selected" : ""} onClick={() => setFilter(value)}>{value}</button>)}</div><select value={severity} onChange={(event) => setSeverity(event.target.value)}><option>Alle Schweregrade</option><option value="critical">Kritisch</option><option value="warning">Warnung</option></select></div>
+    <div className="alert-list">{shown.length ? shown.map((alert) => <div className={`alert-item ${alert.active ? alert.severity : "resolved"}`} key={alert.alert_id}><div className="alert-item-main" role="button" tabIndex={0} onClick={() => setExpanded(expanded === alert.alert_id ? null : alert.alert_id)} onKeyDown={(event) => { if (event.key === "Enter") setExpanded(expanded === alert.alert_id ? null : alert.alert_id); }}><div className={`alert-indicator ${alert.active ? alert.severity : "info"}`}><ConceptIcon name="alert" size={19}/></div><div className="alert-copy"><div className="alert-title-line"><span className={`severity ${alert.severity}`}>{alert.severity.toUpperCase()}</span><span className="alert-state">{alert.active ? "Aktiv" : "Gelöst"}</span><span>{new Date(alert.opened_at).toLocaleString("de-DE")}</span></div><h3>{alert.message}</h3><p>{alert.display_name} · {alert.kind.toUpperCase()}</p></div><span className="expand-caret">{expanded === alert.alert_id ? "⌃" : "⌄"}</span></div>{expanded === alert.alert_id && <div className="alert-expanded"><div className="eyebrow">EREIGNISVERLAUF</div><div className="history-line"><span/>Erkannt {new Date(alert.opened_at).toLocaleString("de-DE")}</div>{!alert.active && <div className="history-line"><span/>Behoben {new Date(alert.resolved_at || alert.updated_at).toLocaleString("de-DE")}</div>}</div>}</div>) : <div className="empty">Keine Vorfälle in dieser Auswahl.</div>}</div>
+  </>;
 }
 
 function SettingsPage({
@@ -2296,7 +2059,7 @@ function SettingsPage({
   useEffect(() => setDraft(policy), [policy]);
   useEffect(() => setTelegramDraft(telegram), [telegram]);
   return (
-    <div className="settings-page">
+    <><div className="page-intro"><div><div className="eyebrow">PREFERENCES / CONTROL</div><h1>Einstellungen.</h1><p>Schwellenwerte, Benachrichtigungen und Zugänge für deine Fleet.</p></div></div><div className="settings-grid concept-settings-grid">
       <section className="surface settings-card">
         <header className="section-head">
           <div>
@@ -2438,7 +2201,7 @@ function SettingsPage({
           <KeyRound size={16} /> Zugang wechseln
         </button>
       </section>
-    </div>
+    </div></>
   );
 }
 
@@ -2562,10 +2325,10 @@ function EnrollmentPage({
   const platformName = platform === "linux" ? "Linux / CachyOS" : "Windows";
   return (
     <div className="enrollment-page">
-      <section className="surface enrollment-intro">
+      <section className="page-intro enrollment-intro">
         <div>
-          <span className="eyebrow">GERÄT AUFNEHMEN</span>
-          <h1>Agent-Einladung erstellen</h1>
+          <span className="eyebrow">FLEET / ONBOARDING</span>
+          <h1>Gerät hinzufügen.</h1>
           <p>
             Erstelle einen Token, wähle das Zielsystem und folge den drei klaren
             Schritten. Der Klartext wird nur einmal angezeigt; der Server
@@ -2970,7 +2733,7 @@ function Login({
 
 function App() {
   const [theme, setTheme] = useState<Theme>(
-    () => (localStorage.getItem("ncc-fleet-theme") as Theme) || "nightmare",
+    () => (localStorage.getItem("ncc-concept-theme") as Theme) || "mint",
   );
   const [token, setToken] = useState(
     () => localStorage.getItem("ncc-dashboard-token") || "",
@@ -3063,7 +2826,7 @@ function App() {
   );
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    localStorage.setItem("ncc-fleet-theme", theme);
+    localStorage.setItem("ncc-concept-theme", theme);
   }, [theme]);
   useEffect(() => localStorage.setItem("ncc-sidebar-collapsed", String(sidebarCollapsed)), [sidebarCollapsed]);
   useEffect(() => {
@@ -3230,85 +2993,73 @@ function App() {
             ? "Gerät hinzufügen"
             : "System Settings";
   return (
-    <div className={`shell dashboard-v3 ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
-      <aside className={`${sidebar ? "open" : ""} ${sidebarCollapsed ? "collapsed" : ""}`}>
-        <div className="aside-top">
-          <Brand />
-          <button className="sidebar-toggle" onClick={() => setSidebarCollapsed((current) => !current)} aria-label={sidebarCollapsed ? "Seitenmenü ausklappen" : "Seitenmenü einklappen"}>
-            <ChevronRight size={18} />
-          </button>
-          <button className="close-menu" onClick={() => setSidebar(false)}>
-            <X size={19} />
-          </button>
+    <div className="app-shell ncc-production">
+      <aside className={`sidebar ${sidebar ? "open" : ""}`}>
+        <div className="brand">
+          <div className="brand-mark"><span/><span/><span/><span/></div>
+          <div><strong>no0bz</strong><small>COMMAND CENTER</small></div>
+          <button className="mobile-close icon-button" onClick={() => setSidebar(false)} aria-label="Menü schließen"><ConceptIcon name="close" /></button>
         </div>
-        <div className="nccv3-workspace">WORKSPACE <i /> PRIVATE CLOUD</div>
-        <nav className="nccv3-nav">
-          <span>OBSERVE</span>
+        <div className="workspace-label">WORKSPACE <span className="tiny-dot"/> PRIVATE CLOUD</div>
+        <nav aria-label="Hauptnavigation">
+          <div className="nav-caption">OBSERVE</div>
           {[
             { id: "fleet" as Page, label: "Command Overview", icon: <LayoutDashboard size={17} /> },
             { id: "explorer" as Page, label: "Fleet Explorer", icon: <Server size={17} /> },
             { id: "statistics" as Page, label: "Statistiken", icon: <BarChart3 size={17} /> },
             { id: "alerts" as Page, label: "Warnungszentrale", icon: <AlertTriangle size={17} /> },
-          ].map((item) => <button key={item.id} className={page === item.id ? "active" : ""} onClick={() => { setPage(item.id); setSidebar(false); }}>{item.icon}<b>{item.label}</b>{item.id === "alerts" && alerts.some((alert) => alert.active) && <em>{alerts.filter((alert) => alert.active).length}</em>}</button>)}
-          <span className="nccv3-manage-label">MANAGE</span>
+          ].map((item) => <button key={item.id} className={`nav-item ${page === item.id ? "active" : ""}`} onClick={() => { setPage(item.id); setSidebar(false); }}>{item.icon}<span>{item.label}</span>{item.id === "alerts" && alerts.some((alert) => alert.active) && <em>{alerts.filter((alert) => alert.active).length}</em>}</button>)}
+          <div className="nav-caption nav-second">MANAGE</div>
           {[
             { id: "chat" as Page, label: "Fleet Chat", icon: <MessageSquare size={17} /> },
             { id: "settings" as Page, label: "Einstellungen", icon: <Settings size={17} /> },
-          ].map((item) => <button key={item.id} className={page === item.id ? "active" : ""} onClick={() => { setPage(item.id); setSidebar(false); }}>{item.icon}<b>{item.label}</b></button>)}
+          ].map((item) => <button key={item.id} className={`nav-item ${page === item.id ? "active" : ""}`} onClick={() => { setPage(item.id); setSidebar(false); }}>{item.icon}<span>{item.label}</span></button>)}
         </nav>
-        <div className="server-health nccv3-fleet-health">
-          <header><span>SYSTEM OPERATIONAL</span><b>{summary?.online_nodes || 0}/{summary?.total_nodes || 0}</b></header>
-          <i style={{ width: `${summary?.total_nodes ? ((summary.online_nodes / summary.total_nodes) * 100) : 0}%` }} />
-          <small>Fleet online · Live-Messdaten</small>
+        <div className="sidebar-bottom">
+          <div className="fleet-health">
+            <div className="fleet-health-top"><span><span className="pulse-dot"/> SYSTEM OPERATIONAL</span><b>{summary?.online_nodes || 0}/{summary?.total_nodes || 0}</b></div>
+            <div className="fleet-health-line"><span style={{ width: `${summary?.total_nodes ? (summary.online_nodes / summary.total_nodes) * 100 : 0}%` }} /></div>
+            <small>Fleet online · Live-Messdaten</small>
+          </div>
+          {canManageAccess && <button className="sidebar-add" type="button" onClick={() => setPage("onboarding")}><ConceptIcon name="plus" size={16} /> Gerät hinzufügen <ConceptIcon name="arrow" size={15} /></button>}
+          <div className="profile">
+            <div className="avatar">{canManageAccess ? "C" : "B"}</div>
+            <div><b>{canManageAccess ? "Commander" : "Beta-Tester"}</b><small>{canManageAccess ? "Administratorzugang" : "Testzugang"}</small></div>
+            <span>⌄</span>
+          </div>
         </div>
-        {canManageAccess && <button className="nccv3-add-device" type="button" onClick={() => setPage("onboarding")}><UserPlus size={16} /> Gerät hinzufügen <ChevronRight size={15} /></button>}
-        <footer className="nccv3-profile">
-          <span>{canManageAccess ? "C" : "B"}</span>
-          <div><b>{canManageAccess ? "Commander" : "Beta-Tester"}</b><small>{canManageAccess ? "Administratorzugang" : "Testzugang"}</small></div>
-          <ChevronRight size={14} />
-        </footer>
       </aside>
-      <div className="mobile-scrim" onClick={() => setSidebar(false)} />
-      <div className="content">
+      {sidebar && <div className="scrim" onClick={() => setSidebar(false)} />}
+      <div className="main">
         <header className="topbar">
-          <button className="menu" onClick={() => setSidebar(true)}>
-            <Menu size={20} />
-          </button>
-          <div className="workspace-title">
-            <span className="eyebrow">NCC <i /> {title}</span>
+          <div className="top-left">
+            <button className="mobile-menu icon-button" onClick={() => setSidebar(true)} aria-label="Menü öffnen"><Menu size={20} /></button>
+            <span className="breadcrumb">NCC <span>/</span> {title}</span>
           </div>
           <div className="top-actions">
-            <div className="refresh-state"><Activity size={13} /><span>LIVE DEMO</span></div>
-            <div className="clock">
-              <Clock3 size={14} />
-              <span>{clock.toLocaleDateString("de-DE", { day: "2-digit", month: "short", year: "numeric" })}</span>
-            </div>
+            <span className="live-pill"><i/> LIVE</span>
+            <span className="top-clock">{clock.toLocaleDateString("de-DE", { day: "2-digit", month: "short", year: "numeric" })}</span>
             <button
+              className="top-alert icon-button"
               aria-label="Warnungszentrum"
               onClick={() => setPage("alerts")}
             >
-              <Bell size={17} />
+              <ConceptIcon name="alert" size={19} />
               {alerts.some((alert) => alert.active) && <i />}
             </button>
             <button
-              className="refresh"
+              className="icon-button"
               onClick={() => void load()}
               aria-label="Aktualisieren"
             >
               <RefreshCw size={17} className={loading ? "spin" : ""} />
             </button>
-            <div className="commander">
-              <span>{canManageAccess ? "C" : "B"}</span>
-              <div>
-                <b>{canManageAccess ? "Commander" : "Beta-Tester"}</b>
-                <small className={canManageAccess ? "" : "beta-badge"}>{canManageAccess ? "Administrator" : "BETA-TESTER"}</small>
-              </div>
-            </div>
+            <div className="top-avatar">{canManageAccess ? "C" : "B"}</div>
           </div>
         </header>
-        <main>
+        <main className="content">
           {page === "fleet" ? (
-            <CommandOverviewV3
+            <CommandOverviewExact
               nodes={nodes}
               selected={selected}
               onSelect={setSelectedId}
@@ -3336,6 +3087,7 @@ function App() {
               token={token}
               dismissedAlerts={dismissedAlertIds}
               onDismissAlert={dismissAlert}
+              onAddDevice={() => setPage("onboarding")}
             />
           ) : page === "statistics" ? (
             <StatisticsPage nodes={nodes} summary={summary} token={token} />
@@ -3370,17 +3122,6 @@ function App() {
             />
           )}
         </main>
-        <footer className="statusbar">
-          <span>
-            <i /> NCC SERVER VERBUNDEN
-          </span>
-          <b>
-            {selected
-              ? `${selected.display_name} · ${ago(selected.last_seen_at)}`
-              : "WARTE AUF AGENTEN"}
-          </b>
-          <span>{clock.toLocaleDateString("de-DE")}</span>
-        </footer>
       </div>
     </div>
   );

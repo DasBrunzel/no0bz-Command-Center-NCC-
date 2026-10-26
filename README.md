@@ -59,13 +59,12 @@ HttpOnly-Browsersitzung. Ein Widerruf beendet die zugehörige Sitzung.
 
 ### Dashboard, Fleet und Statistiken
 
-Die Startseite ist als **Mission Control** aufgebaut: Fleet-Status, offene
-Ereignisse und Live-Traffic stehen an erster Stelle, darunter folgt der gruppierte
-**Fleet Explorer** und danach die vollständige Detailansicht der ausgewählten Node.
-Sie verwendet ausschließlich die echten NCC-API-Daten. Die Detailansicht zeigt
-Betriebssystem, CPU-/GPU-Modell und — soweit erkannt — passende Herstellerlogos;
-alle Aktionen wie Umbenennen, Gaming Mode, Release-Zuweisung und Geräteverwaltung
-bleiben dort verfügbar.
+Das Dashboard nutzt das dunkle **Command Mint**-Design der „Alles im Blick“-Demo.
+Die Startseite priorisiert Warnungen, Fleet-Status und Live-Netzwerkverkehr. Der
+Fleet Explorer bündelt Dualboot-Profile, bietet Suche und Filter und führt zur
+Detailansicht der gewählten Node. Statistiken, Warnungszentrale und Fleet Chat
+verwenden dieselbe Oberfläche. Alle Werte stammen weiterhin aus den NCC-APIs;
+Gaming Mode, Umbenennen, Release-Zuweisung und Geräteverwaltung bleiben verfügbar.
 
 Die Seite **Statistiken** fasst die gesamte Fleet zusammen: Verfügbarkeit je Agent,
 gewichtete CPU- und RAM-Kapazität, GPUs, eine kombinierte Auslastungsrangliste,
