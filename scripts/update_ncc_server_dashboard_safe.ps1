@@ -22,21 +22,30 @@ if ($unexpected.Count -gt 0) {
     throw "Tracked changes outside generated dashboard assets need review: $($unexpected -join ', ')"
 }
 
-$stashMessage = $null
+$backupPath = $null
 if ($modifiedPaths.Count -gt 0) {
-    $stashMessage = 'NCC dashboard assets before update ' + (Get-Date -Format 'yyyyMMdd-HHmmss')
-    & git -C $ProjectRoot stash push -m $stashMessage -- backend/ncc_server/static
-    if ($LASTEXITCODE -ne 0) { throw 'Could not preserve local dashboard assets in Git stash.' }
+    $backupRoot = Join-Path $env:ProgramData 'no0bz\NCC\server-update-backups'
+    New-Item -ItemType Directory -Path $backupRoot -Force | Out-Null
+    & icacls.exe $backupRoot /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Could not protect the dashboard backup directory.' }
+    $backupPath = Join-Path $backupRoot ('dashboard-static.' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
+    $staticRoot = Join-Path $ProjectRoot 'backend\ncc_server\static'
+    Copy-Item -LiteralPath $staticRoot -Destination $backupPath -Recurse -Force -ErrorAction Stop
+    if (-not (Test-Path -LiteralPath (Join-Path $backupPath 'index.html'))) {
+        throw 'Dashboard asset backup could not be verified; repository was not changed.'
+    }
+    & git -C $ProjectRoot restore --source=HEAD --worktree -- backend/ncc_server/static
+    if ($LASTEXITCODE -ne 0) { throw "Could not reset generated dashboard assets. Backup: $backupPath" }
     $remaining = @(& git -C $ProjectRoot status --porcelain --untracked-files=no)
-    if ($LASTEXITCODE -ne 0 -or $remaining.Count -gt 0) { throw 'Repository still has tracked changes after preserving dashboard assets.' }
+    if ($LASTEXITCODE -ne 0 -or $remaining.Count -gt 0) { throw "Repository still has tracked changes after preserving dashboard assets. Backup: $backupPath" }
 }
 
 & git -C $ProjectRoot pull --ff-only origin $Branch
-if ($LASTEXITCODE -ne 0) { throw 'Could not fast-forward NCC repository; saved dashboard assets remain in Git stash.' }
+if ($LASTEXITCODE -ne 0) { throw "Could not fast-forward NCC repository. Dashboard backup: $backupPath" }
 
 $updater = Join-Path $ProjectRoot 'scripts\update_ncc_server_release_distribution.ps1'
 if (-not (Test-Path -LiteralPath $updater)) { throw "Updated server installer is missing: $updater" }
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $updater -Branch $Branch
-if ($LASTEXITCODE -ne 0) { throw 'NCC server update failed. Inspect the preceding error; saved dashboard assets remain in Git stash.' }
+if ($LASTEXITCODE -ne 0) { throw "NCC server update failed. Inspect the preceding error. Dashboard backup: $backupPath" }
 
-if ($stashMessage) { Write-Output "Preserved former dashboard assets in Git stash: $stashMessage" }
+if ($backupPath) { Write-Output "Preserved former dashboard assets at: $backupPath" }
