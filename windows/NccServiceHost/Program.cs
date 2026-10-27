@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.ServiceProcess;
+using System.Text.Json;
 
 namespace NccServiceHost;
 
@@ -83,6 +84,25 @@ internal sealed class CoreService : ServiceBase
             if (value.Length >= 2 && value[0] == value[^1] && value[0] is '"' or '\'')
                 value = value[1..^1].Replace("\\\"", "\"").Replace("\\\\", "\\");
             result[line[..split].Trim()] = value;
+        }
+        // A fresh agent receives its bearer token only after browser pairing.
+        // Keep the token in the protected credential file and supply it to Core
+        // on the next restart, when the signed update check is performed.
+        if (!result.ContainsKey("NCC_AGENT_TOKEN") && result.TryGetValue("NCC_AGENT_DATA_DIR", out var dataDir))
+        {
+            var credential = Path.Combine(dataDir, "agent-credential.json");
+            try
+            {
+                using var json = JsonDocument.Parse(File.ReadAllText(credential));
+                if (json.RootElement.TryGetProperty("token", out var token))
+                {
+                    var value = token.GetString();
+                    if (!string.IsNullOrWhiteSpace(value)) result["NCC_AGENT_TOKEN"] = value;
+                }
+            }
+            catch (IOException) { }
+            catch (JsonException) { }
+            catch (UnauthorizedAccessException) { }
         }
         return result;
     }
