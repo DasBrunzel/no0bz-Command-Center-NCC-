@@ -4,6 +4,9 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [0.6.0-beta.8-dev.0] – Laufende Entwicklung
 
+- Beim Empfang von Telemetrie lädt der Server für die Doppeltelemetrie-Prüfung
+  nur noch den Zeitstempel des letzten Messpunkts statt dessen gesamten
+  Sensor- und Prozessdaten. Das reduziert Datenbankarbeit bei jedem Upload.
 - Windows- und Linux-Core-Bootstrap verwenden standardmäßig dieselbe
   Entwicklungsnummer wie Dashboard, Server und Core. Die Windows-Paketversion
   wird für Python korrekt als `0.6.0b8.dev0` geschrieben. Bereits installierte

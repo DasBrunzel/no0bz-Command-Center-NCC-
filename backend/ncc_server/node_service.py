@@ -134,13 +134,12 @@ def store_telemetry(
             )
         ).all()
     )
-    latest = session.scalar(
-        select(TelemetryPoint)
+    latest_recorded_at = session.scalar(
+        select(TelemetryPoint.recorded_at)
         .where(TelemetryPoint.node_id == node.id)
         .order_by(TelemetryPoint.recorded_at.desc())
         .limit(1)
     )
-    latest_recorded_at = latest.recorded_at if latest is not None else None
     accepted = 0
     duplicates = 0
     for point in points:
