@@ -1985,20 +1985,37 @@ function TelemetryPage({
 
 function ChatAttachmentView({ attachment, token, onOpen }: { attachment: ChatAttachment; token: string; onOpen: (attachment: ChatAttachment, url: string, kind: "image" | "video" | "audio" | "pdf") => void }) {
   const [url, setUrl] = useState("");
+  const [previewRequested, setPreviewRequested] = useState(false);
+  const [previewError, setPreviewError] = useState(false);
+  const [openPdfWhenReady, setOpenPdfWhenReady] = useState(false);
   const kind = attachment.content_type.startsWith("image/") ? "image" : attachment.content_type.startsWith("video/") ? "video" : attachment.content_type.startsWith("audio/") ? "audio" : attachment.content_type === "application/pdf" ? "pdf" : "file";
   useEffect(() => {
-    if (kind === "file") return;
+    // Videos, audio and PDFs can be large. The chat history must not download
+    // every old attachment just because its message was rendered.
+    if (kind === "file" || (kind !== "image" && !previewRequested)) return;
     let active = true;
     let objectUrl = "";
     fetch(attachment.url, { headers: headers(token) }).then(async (response) => {
-      if (!response.ok) return;
+      if (!response.ok) throw new Error("MEDIA_REQUEST");
       const blob = await response.blob();
       if (!active) return;
       objectUrl = URL.createObjectURL(blob);
       setUrl(objectUrl);
-    }).catch(() => undefined);
+    }).catch(() => {
+      if (active) {
+        setPreviewError(true);
+        setPreviewRequested(false);
+        setOpenPdfWhenReady(false);
+      }
+    });
     return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [attachment.url, kind, token]);
+  }, [attachment.url, kind, token, previewRequested]);
+  useEffect(() => {
+    if (kind === "pdf" && url && openPdfWhenReady) {
+      setOpenPdfWhenReady(false);
+      onOpen(attachment, url, "pdf");
+    }
+  }, [attachment, kind, onOpen, openPdfWhenReady, url]);
   const download = async () => {
     const response = await fetch(attachment.url, { headers: headers(token) });
     if (!response.ok) return;
@@ -2008,9 +2025,9 @@ function ChatAttachmentView({ attachment, token, onOpen }: { attachment: ChatAtt
     window.setTimeout(() => URL.revokeObjectURL(temporary), 60_000);
   };
   if (kind === "image") return <button type="button" className="chat-media image" onClick={() => url && onOpen(attachment, url, "image")}><img src={url} alt={attachment.name} /><span><ImageIcon size={14} />{attachment.name}<Maximize2 size={13} /></span></button>;
-  if (kind === "video") return <div className="chat-media video"><header><Film size={14} />{attachment.name}</header>{url && <video src={url} controls preload="metadata" />}</div>;
-  if (kind === "audio") return <div className="chat-media audio"><header><Music2 size={14} />{attachment.name}</header>{url && <audio src={url} controls />}</div>;
-  if (kind === "pdf") return <button type="button" className="chat-media document" onClick={() => url && onOpen(attachment, url, "pdf")}><FileText size={21} /><span><b>{attachment.name}</b><small>PDF-Vorschau öffnen</small></span><Maximize2 size={14} /></button>;
+  if (kind === "video") return <div className="chat-media video"><header><Film size={14} />{attachment.name}</header>{url ? <video src={url} controls preload="metadata" /> : <button type="button" onClick={() => { setPreviewError(false); setPreviewRequested(true); }} disabled={previewRequested}>{previewRequested ? "Vorschau wird geladen …" : previewError ? "Video-Vorschau erneut laden" : "Video-Vorschau laden"}</button>}</div>;
+  if (kind === "audio") return <div className="chat-media audio"><header><Music2 size={14} />{attachment.name}</header>{url ? <audio src={url} controls /> : <button type="button" onClick={() => { setPreviewError(false); setPreviewRequested(true); }} disabled={previewRequested}>{previewRequested ? "Vorschau wird geladen …" : previewError ? "Audio-Vorschau erneut laden" : "Audio-Vorschau laden"}</button>}</div>;
+  if (kind === "pdf") return <button type="button" className="chat-media document" onClick={() => { if (url) onOpen(attachment, url, "pdf"); else { setPreviewError(false); setOpenPdfWhenReady(true); setPreviewRequested(true); } }}><FileText size={21} /><span><b>{attachment.name}</b><small>{previewRequested && !url ? "PDF wird geladen …" : previewError ? "PDF-Vorschau erneut öffnen" : "PDF-Vorschau öffnen"}</small></span><Maximize2 size={14} /></button>;
   return <button type="button" className="chat-attachment" onClick={() => void download()}><Paperclip size={14} /><span>{attachment.name}</span><small>{trafficBytes(attachment.size)}</small><Download size={13} /></button>;
 }
 

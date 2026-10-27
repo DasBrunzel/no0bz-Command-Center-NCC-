@@ -4,6 +4,8 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [0.6.0-beta.8-dev.0] – Laufende Entwicklung
 
+- Der Fleet Chat lädt Video-, Audio- und PDF-Anhänge erst beim Öffnen der
+  Vorschau. Ein langer Verlauf löst dadurch keine unnötigen Mediendownloads aus.
 - Fleet-Chat-Anhänge zeigen kleine Dateien in KB oder Byte statt irreführend
   als „0,0 MB“ an.
 - Auf schmalen Bildschirmen bleiben im Fleet Chat der Nachrichtenverlauf und
