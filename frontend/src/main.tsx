@@ -2104,6 +2104,7 @@ function FleetChat({ token, identity }: { token: string; identity: DashboardUser
     try {
       const list = listRef.current;
       const older = await getJson<ChatMessage[]>(`/api/v1/fleet/chat/messages?limit=50&before=${encodeURIComponent(oldestIdRef.current)}`, token);
+      if (activeTokenRef.current !== token) return;
       setHasOlder(older.length === 50);
       if (older.length) {
         oldestIdRef.current = older[0].message_id;
@@ -2113,7 +2114,7 @@ function FleetChat({ token, identity }: { token: string; identity: DashboardUser
           return [...older.filter((message) => !seen.has(message.message_id)), ...previous];
         });
       }
-    } catch { setChatError("Ältere Nachrichten konnten nicht geladen werden."); }
+    } catch { if (activeTokenRef.current === token) setChatError("Ältere Nachrichten konnten nicht geladen werden."); }
     finally { setOlderLoading(false); }
   };
   const send = async (event: React.FormEvent) => {
@@ -2138,6 +2139,7 @@ function FleetChat({ token, identity }: { token: string; identity: DashboardUser
       } else {
         sent = await postJson<ChatMessage>("/api/v1/fleet/chat/messages", token, { body, body_format: format });
       }
+      if (activeTokenRef.current !== token) return;
       if (!oldestIdRef.current) oldestIdRef.current = sent.message_id;
       setBody("");
       setAttachment(null);
@@ -2149,7 +2151,7 @@ function FleetChat({ token, identity }: { token: string; identity: DashboardUser
       setMessages((previous) => previous.some((item) => item.message_id === sent.message_id) ? previous : [...previous, sent]);
       void loadLatest().catch(() => setChatError("Nachricht gesendet; der neueste Verlauf konnte nicht geladen werden."));
     } catch {
-      setChatError("Nachricht konnte nicht gesendet werden. Bitte erneut versuchen.");
+      if (activeTokenRef.current === token) setChatError("Nachricht konnte nicht gesendet werden. Bitte erneut versuchen.");
     } finally { setSending(false); }
   };
   return <section className="concept-chat-page">
@@ -3473,7 +3475,7 @@ function App() {
           ) : page === "alerts" ? (
             <AlertsPage alerts={alerts} canClear={canManageAccess} onClear={clearAllAlerts} />
           ) : page === "chat" ? (
-            <FleetChat token={token} identity={identity} />
+            <FleetChat key={`${identity?.user_id || identity?.username || "anonymous"}:${token}`} token={token} identity={identity} />
           ) : page === "onboarding" ? (
             <EnrollmentPage
               invitations={invitations}

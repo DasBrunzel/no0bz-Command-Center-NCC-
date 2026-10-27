@@ -10,6 +10,9 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   den Profilen wechseln.
 - Die Statistik „Netzwerk nach Gerät“ summiert die Monatswerte verknüpfter
   OS-Profile unter dem physischen Gerät und zählt dieses nur einmal.
+- Ein Kontowechsel setzt Chat-Entwürfe und Anhänge zurück. Verspätete Antworten
+  für ältere Nachrichten oder gesendete Nachrichten erscheinen nicht in der
+  Sitzung des nächsten Benutzers.
 - Inaktive Dualboot-Profile lösen keine Warnungen mehr durch alte CPU-, GPU-
   oder Agent-Messwerte aus, solange das andere OS-Profil online ist. Sind beide
   offline, bleibt die echte Offline-Warnung erhalten.
