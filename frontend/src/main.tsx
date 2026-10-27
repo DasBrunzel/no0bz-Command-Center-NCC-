@@ -2242,7 +2242,7 @@ function SettingsPage({
           </div>
           <Send size={19} />
         </header>
-        <p>{telegramDraft.configured ? "Der Bot ist serverseitig verbunden. Zugangsdaten bleiben geschützt auf HorstNexus und sind hier nicht sichtbar." : "Telegram ist auf dem Server noch nicht eingerichtet. Bot-Token und Chat-ID müssen weiterhin sicher auf HorstNexus hinterlegt werden."}</p>
+        <p>{telegramDraft.configured ? "Der Bot ist serverseitig verbunden. Zugangsdaten bleiben geschützt auf dem NCC-Server und sind hier nicht sichtbar." : "Telegram ist auf dem Server noch nicht eingerichtet. Bot-Token und Chat-ID müssen sicher auf dem NCC-Server hinterlegt werden."}</p>
         <form className="telegram-settings" onSubmit={(event) => { event.preventDefault(); setTelegramMessage(""); void onTelegram(telegramDraft).then(() => setTelegramMessage("Telegram-Einstellungen gespeichert.")).catch(() => setTelegramMessage("Speichern fehlgeschlagen.")); }}>
           <label className="telegram-enabled"><input type="checkbox" checked={telegramDraft.enabled} onChange={(event) => setTelegramDraft({ ...telegramDraft, enabled: event.target.checked })} /><span><b>Telegram-Benachrichtigungen aktiv</b><small>Unterbricht den Versand, ohne Bot-Zugangsdaten zu verändern.</small></span></label>
           <label>Überschrift · Warnung<input maxLength={128} value={telegramDraft.warning_title} onChange={(event) => setTelegramDraft({ ...telegramDraft, warning_title: event.target.value })} /></label>
