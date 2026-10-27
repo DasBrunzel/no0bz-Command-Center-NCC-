@@ -1,13 +1,13 @@
 # no0bz Command Center (NCC)
 
-![Entwicklungsstand](https://img.shields.io/badge/Entwicklung-0.6.0--beta.8--dev.0-ff334f)
+![Entwicklungsstand](https://img.shields.io/badge/Entwicklung-0.6.0--beta.8--dev.1-ff334f)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776ab)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 Real-Time System Monitor & Local Sync Hub (Python/FastAPI + React).
 
 > **NCC 0.6 befindet sich im kontrollierten Beta-Test.** Dieser Branch entwickelt
-> Dashboard und Server als `0.6.0-beta.8-dev.0`; der letzte veröffentlichte
+> Dashboard und Server als `0.6.0-beta.8-dev.1`; der letzte veröffentlichte
 > Pre-Release ist `0.6.0-beta.7`. Die tatsächlich installierte Version eines
 > Agenten stammt aus seinem verifizierten Payload-Manifest und kann abweichen.
 > Der produktive Server akzeptiert 0.5- und 0.6-Agenten parallel. Ausgewählte

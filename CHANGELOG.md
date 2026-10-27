@@ -2,6 +2,15 @@
 
 Alle wesentlichen Änderungen werden hier dokumentiert.
 
+## [0.6.0-beta.8-dev.1] – Laufende Entwicklung
+
+- Dashboard, Server, Core und neue Agent-Payload-Builds tragen konsistent die
+  nächste Entwicklungsnummer. Die Komponentenübersicht zeigt weiterhin die
+  tatsächlich installierten Versionen vorhandener Agenten an.
+- Der 0.5-Rückfallagent und bereits signierte 0.6-Payloads behalten ihre
+  veröffentlichten Versionsnummern; sie werden durch diese Quelländerung nicht
+  automatisch aktualisiert.
+
 ## [0.6.0-beta.8-dev.0] – Laufende Entwicklung
 
 - Die Netzwerk-Monatsstatistik zählt echte Zählerdifferenzen nach längeren
