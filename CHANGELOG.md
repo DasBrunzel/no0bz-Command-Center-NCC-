@@ -4,6 +4,11 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [0.6.0-beta.8-dev.0] – Laufende Entwicklung
 
+- Agenten senden Herzschläge und wiederholen fehlgeschlagene Verbindungen
+  unabhängig vom eingestellten Messintervall. Auch bei seltener Telemetrie
+  bleibt der Online-Status aktuell und der Wiederverbindungsversuch pünktlich.
+- Gepufferte Telemetrie wird erst entfernt, wenn der Server alle Messpunkte
+  einer Sendung als übernommen oder bereits vorhanden bestätigt hat.
 - Der Fleet Chat zählt beim Nachladen nur tatsächlich neue Nachrichten als
   ungelesen. Bereits gesendete oder zuvor geladene Nachrichten erhöhen den
   Zähler nicht noch einmal.

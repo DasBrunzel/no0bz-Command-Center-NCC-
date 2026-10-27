@@ -13,7 +13,7 @@ from ncc_agent.buffer import TelemetryBuffer
 from ncc_agent.client import AgentClient
 from ncc_agent.config import AgentSettings
 from ncc_agent.identity import load_or_create_machine_id
-from ncc_agent.runner import _is_new_snapshot
+from ncc_agent.runner import _is_new_snapshot, _next_wake_seconds
 from ncc_server.agent_tokens import issue_agent_token
 from ncc_server.app import create_app
 from ncc_server.config import ServerSettings
@@ -37,6 +37,13 @@ def test_agent_queues_each_collector_snapshot_only_once() -> None:
     assert _is_new_snapshot(1, 0)
     assert _is_new_snapshot(2, 1)
     assert not _is_new_snapshot(1, 1)
+
+
+def test_agent_wakes_for_heartbeat_and_retry_even_with_slow_collection() -> None:
+    assert _next_wake_seconds(300, 110, 100) == 10
+    assert _next_wake_seconds(300, 101, 100) == 1
+    assert _next_wake_seconds(300, 100, 100) == 0.1
+    assert _next_wake_seconds(5, 160, 100) == 5
 
 
 def test_collector_uses_collection_order_when_wall_clock_moves_backwards(
@@ -168,6 +175,28 @@ def test_failed_upload_stays_in_offline_buffer(tmp_path: Path) -> None:
         transport=httpx.MockTransport(lambda _: httpx.Response(503)),
     )
     with pytest.raises(httpx.HTTPStatusError):
+        client.flush()
+    assert buffer.count() == 1
+    client.close()
+    buffer.close()
+
+
+@pytest.mark.parametrize("acknowledgement", [
+    {"accepted": 0, "duplicates": 0},
+    {"accepted": 1},
+    {"accepted": 2, "duplicates": 0},
+])
+def test_incomplete_upload_acknowledgement_keeps_buffered_points(
+    tmp_path: Path, acknowledgement: dict[str, int],
+) -> None:
+    buffer = TelemetryBuffer(tmp_path / "queue.sqlite3", max_points=100)
+    buffer.append({"cpu": {"percent": 25}})
+    client = AgentClient(
+        AgentSettings(server_url="https://ncc.example.test", token=SecretStr("agent-token"), data_dir=tmp_path),
+        "ncc-12345678-1234-4234-8234-123456789abc", buffer,
+        transport=httpx.MockTransport(lambda _: httpx.Response(200, json=acknowledgement)),
+    )
+    with pytest.raises(httpx.RemoteProtocolError, match="complete telemetry batch"):
         client.flush()
     assert buffer.count() == 1
     client.close()

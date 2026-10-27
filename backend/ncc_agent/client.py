@@ -105,7 +105,7 @@ class AgentClient:
             batch = self.buffer.peek(self.settings.batch_size)
             if not batch:
                 break
-            self._request(
+            response = self._request(
                 "POST",
                 "/api/v1/nodes/telemetry",
                 json={
@@ -119,6 +119,21 @@ class AgentClient:
                     ]
                 },
             )
+            try:
+                result = response.json()
+                accepted = result["accepted"]
+                duplicates = result["duplicates"]
+                complete = (
+                    type(accepted) is int
+                    and type(duplicates) is int
+                    and accepted >= 0
+                    and duplicates >= 0
+                    and accepted + duplicates == len(batch)
+                )
+            except (ValueError, TypeError, KeyError):
+                complete = False
+            if not complete:
+                raise httpx.RemoteProtocolError("NCC Server did not confirm the complete telemetry batch")
             self.buffer.acknowledge([point.row_id for point in batch])
             sent += len(batch)
         return sent

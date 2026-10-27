@@ -59,7 +59,13 @@ class AgentRunner:
         last_buffered_generation = 0
         logger.info("NCC Agent %s started as %s", self.machine_id, self.settings.display_name or "host")
         try:
-            while not self.stop_event.wait(self.settings.collection_interval_seconds):
+            while not self.stop_event.wait(
+                _next_wake_seconds(
+                    self.settings.collection_interval_seconds,
+                    next_network_attempt,
+                    time.monotonic(),
+                )
+            ):
                 snapshot = self.collector.snapshot()
                 generation = int(snapshot["generation"])
                 snapshot_at = float(snapshot["timestamp"])
@@ -127,6 +133,13 @@ class AgentRunner:
 def _is_new_snapshot(generation: int, last_buffered_generation: int) -> bool:
     """Return whether a collector snapshot has not already been queued."""
     return generation > last_buffered_generation
+
+
+def _next_wake_seconds(
+    collection_interval: float, next_network_attempt: float, now: float,
+) -> float:
+    """Wake for either a new collector sample or the next server attempt."""
+    return min(collection_interval, max(0.1, next_network_attempt - now))
 
 
 def _metrics(snapshot: dict[str, Any]) -> dict[str, object]:
