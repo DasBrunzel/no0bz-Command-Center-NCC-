@@ -4,6 +4,9 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## 0.6.0-beta.4 - in Arbeit
 
+- Monatsverkehr wird in den Statistiken und Node-Ansichten automatisch als
+  B, KB, MB, GB oder TB angezeigt. Kleine Werte erscheinen dadurch nicht mehr
+  fälschlich als `0,00 TB` oder `0,0 GB`.
 - Der Windows-Server-Watchdog prüft nun die tatsächliche Bind-Adresse aus
   `server.env` statt immer `127.0.0.1`. Zwei fehlgeschlagene Prüfungen sind
   nötig, bevor er NccServer neu startet. Server-Updates erneuern einen bereits

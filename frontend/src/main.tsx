@@ -230,6 +230,15 @@ const metric = (value: unknown, digits = 1) =>
   typeof value === "number" && Number.isFinite(value)
     ? value.toFixed(digits)
     : "—";
+const trafficBytes = (value: unknown) => {
+  let amount = Math.max(0, num(value));
+  if (amount < 1024) return `${Math.round(amount)} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let unit = 0;
+  amount /= 1024;
+  while (amount >= 1024 && unit < units.length - 1) { amount /= 1024; unit++; }
+  return `${amount.toLocaleString("de-DE", { maximumFractionDigits: amount < 10 ? 2 : amount < 100 ? 1 : 0 })} ${units[unit]}`;
+};
 const ago = (value: string | null) => {
   if (!value) return "Noch nie";
   const seconds = Math.max(
@@ -703,7 +712,7 @@ function CommandDeck({
       <section className="obs-panel obs-stat cpu"><header><Cpu size={17} /><span>CPU usage</span><strong>{num(cpu.percent).toFixed(1)}%</strong></header><Sparkline points={points} metric={(point) => num(point.cpu?.percent)} /><footer>{typeof cpu.frequency_mhz === "number" ? `${metric(cpu.frequency_mhz, 0)} MHz` : "keine Taktdaten"}</footer></section>
       <section className="obs-panel obs-stat memory"><header><MemoryStick size={17} /><span>Memory</span><strong>{num(memory.percent).toFixed(1)}%</strong></header><Sparkline points={points} metric={(point) => num(point.memory?.percent)} color="var(--blue)" /><footer>{metric(memory.used_gb)} / {metric(memory.total_gb)} GB</footer></section>
       <section className="obs-panel obs-stat gpu"><header><MonitorCog size={17} /><span>GPU load</span><strong>{num(gpu.percent).toFixed(1)}%</strong></header><Sparkline points={points} metric={(point) => num(point.gpus?.[0]?.percent)} color="var(--purple)" /><footer>{gpu.name || "Kein GPU-Signal"}</footer></section>
-      <section className="obs-panel obs-network"><header><div><span className="eyebrow">NETWORK TRAFFIC</span><h2>{network.interface || "Primary interface"}</h2></div><div className="obs-network-values"><b>↓ {num(network.download_mbps).toFixed(1)} Mbps</b><b>↑ {num(network.upload_mbps).toFixed(1)} Mbps</b></div></header><div className="obs-chart-stack"><Sparkline points={points} metric={(point) => num(point.network?.download_mbps)} maxValue={maxNetwork} color="var(--blue)" /><Sparkline points={points} metric={(point) => num(point.network?.upload_mbps)} maxValue={maxNetwork} color="var(--purple)" /></div><footer>{monthlyNetwork?.available ? `${metric(monthlyNetwork.received_bytes / 1024 ** 3, 1)} GB empfangen · ${metric(monthlyNetwork.sent_bytes / 1024 ** 3, 1)} GB gesendet diesen Monat` : "Monatszähler wird aufgebaut"}</footer></section>
+      <section className="obs-panel obs-network"><header><div><span className="eyebrow">NETWORK TRAFFIC</span><h2>{network.interface || "Primary interface"}</h2></div><div className="obs-network-values"><b>↓ {num(network.download_mbps).toFixed(1)} Mbps</b><b>↑ {num(network.upload_mbps).toFixed(1)} Mbps</b></div></header><div className="obs-chart-stack"><Sparkline points={points} metric={(point) => num(point.network?.download_mbps)} maxValue={maxNetwork} color="var(--blue)" /><Sparkline points={points} metric={(point) => num(point.network?.upload_mbps)} maxValue={maxNetwork} color="var(--purple)" /></div><footer>{monthlyNetwork?.available ? `${trafficBytes(monthlyNetwork.received_bytes)} empfangen · ${trafficBytes(monthlyNetwork.sent_bytes)} gesendet diesen Monat` : "Monatszähler wird aufgebaut"}</footer></section>
       <section className="obs-panel obs-storage"><header><div><HardDrive size={17} /><span>STORAGE</span></div><small>{disks.length} Volumes</small></header><div>{disks.slice(0, 5).map((disk, index) => <article key={`${disk.mount}-${index}`}><span>{disk.mount || disk.name || `Disk ${index + 1}`}</span><i><em style={{ width: `${Math.min(100, num(disk.percent))}%` }} /></i><b>{num(disk.percent).toFixed(0)}%</b></article>)}{!disks.length && <p>Keine Laufwerksdaten vorhanden.</p>}</div></section>
       <section className="obs-panel obs-incidents"><header><div><AlertTriangle size={17} /><span>INCIDENTS</span></div><b>{activeAlerts.length}</b></header>{activeAlerts.length ? activeAlerts.slice(0, 4).map((alert) => <article key={alert.alert_id}><i className={alert.severity} /><div><strong>{alert.display_name}</strong><span>{alert.message}</span></div><button type="button" onClick={() => onDismissAlert(alert.alert_id)} aria-label="Warnung ausblenden"><X size={14} /></button></article>) : <p><Check size={18} /> Keine aktiven Ereignisse</p>}</section>
       <section className="obs-panel obs-host-table"><header><div><span className="eyebrow">HOSTS</span><h2>Fleet signals</h2></div><small>Live-Snapshot</small></header><div className="obs-table-head"><span>Host</span><span>Status</span><span>CPU</span><span>RAM</span><span>Letzter Kontakt</span></div>{nodes.map((node) => { const current = node.latest?.metrics || {}; return <button type="button" key={node.node_id} onClick={() => onSelect(node.node_id)} className={node.node_id === selected.node_id ? "active" : ""}><span><i className={node.online ? "online" : "offline"} />{node.physical_device_name || node.display_name}</span><span>{node.online ? "Online" : "Offline"}</span><span>{node.latest ? `${num(current.cpu?.percent).toFixed(0)}%` : "—"}</span><span>{node.latest ? `${num(current.memory?.percent).toFixed(0)}%` : "—"}</span><span>{ago(node.last_seen_at)}</span></button>})}</section>
@@ -764,12 +773,6 @@ function MissionControl({
   const maxStorage = selectedDisks.length
     ? Math.max(...selectedDisks.map((disk) => num(disk.percent)))
     : 0;
-  const bytes = (value: number) =>
-    value >= 1024 ** 3
-      ? `${(value / 1024 ** 3).toFixed(1)} GB`
-      : value >= 1024 ** 2
-        ? `${(value / 1024 ** 2).toFixed(0)} MB`
-        : `${(value / 1024).toFixed(0)} KB`;
   const representatives = Array.from(
     nodes.reduce((result, node) => {
       const key = node.physical_device_id || node.node_id;
@@ -838,7 +841,7 @@ function MissionControl({
           <TrafficHistoryChart values={traffic} />
           <footer>
             {monthlyNetwork?.available
-              ? <><b>{bytes(monthlyNetwork.received_bytes)}</b> empfangen <span>·</span> <b>{bytes(monthlyNetwork.sent_bytes)}</b> gesendet in diesem Monat</>
+              ? <><b>{trafficBytes(monthlyNetwork.received_bytes)}</b> empfangen <span>·</span> <b>{trafficBytes(monthlyNetwork.sent_bytes)}</b> gesendet in diesem Monat</>
               : "Monatszähler wird aus Telemetrie aufgebaut"}
           </footer>
         </article>
@@ -983,7 +986,7 @@ function OrbitDashboard({
         <article className="orbit-network">
           <header><Network size={17} /><span>DATENSTROM</span><b>↓ {num(network.download_mbps).toFixed(1)} · ↑ {num(network.upload_mbps).toFixed(1)} Mbps</b></header>
           <Sparkline points={points} metric={(point) => num(point.network?.download_mbps)} maxValue={Math.max(10, ...points.map((point) => num(point.metrics.network?.download_mbps)))} color="var(--blue)" />
-          <small>{monthlyNetwork?.available ? `Monat: ${metric(monthlyNetwork.received_bytes / 1024 ** 3, 1)} GB empfangen · ${metric(monthlyNetwork.sent_bytes / 1024 ** 3, 1)} GB gesendet` : "Monatsverkehr wird aufgebaut"}</small>
+          <small>{monthlyNetwork?.available ? `Monat: ${trafficBytes(monthlyNetwork.received_bytes)} empfangen · ${trafficBytes(monthlyNetwork.sent_bytes)} gesendet` : "Monatsverkehr wird aufgebaut"}</small>
         </article>
         <article className="orbit-disks">
           <header><HardDrive size={17} /><span>DATENTRÄGER</span></header>
@@ -1029,7 +1032,7 @@ function BlueprintDashboard({
           <header><Network size={18} /><span>NETWORK ROUTE</span><b>{network.interface || "Automatisch"}</b></header>
           <div><span>DOWN <strong>{num(network.download_mbps).toFixed(1)} Mbps</strong></span><Sparkline points={points} metric={(point) => num(point.network?.download_mbps)} maxValue={Math.max(10, ...points.map((point) => num(point.metrics.network?.download_mbps)))} color="var(--blue)" /></div>
           <div><span>UP <strong>{num(network.upload_mbps).toFixed(1)} Mbps</strong></span><Sparkline points={points} metric={(point) => num(point.network?.upload_mbps)} maxValue={Math.max(10, ...points.map((point) => num(point.metrics.network?.upload_mbps)))} color="var(--purple)" /></div>
-          <footer>{monthlyNetwork?.available ? `${metric(monthlyNetwork.received_bytes / 1024 ** 3, 1)} GB ↓ / ${metric(monthlyNetwork.sent_bytes / 1024 ** 3, 1)} GB ↑ in diesem Monat` : "Monatszähler wird aufgebaut"}</footer>
+          <footer>{monthlyNetwork?.available ? `${trafficBytes(monthlyNetwork.received_bytes)} ↓ / ${trafficBytes(monthlyNetwork.sent_bytes)} ↑ in diesem Monat` : "Monatszähler wird aufgebaut"}</footer>
         </article>
         <div className="blueprint-lower">
           <article className="blueprint-storage"><header><HardDrive size={17} /><span>STORAGE MAP</span></header>{(m.disks || []).slice(0, 5).map((disk: Metrics, index: number) => <div key={`${disk.mount}-${index}`}><span>{disk.mount || disk.name || `Disk ${index + 1}`}</span><i><em style={{ width: `${Math.min(100, num(disk.percent))}%` }} /></i><b>{num(disk.percent).toFixed(0)}%</b></div>)}</article>
@@ -1063,7 +1066,7 @@ function StudioDashboard({
         <article className="studio-feature"><span>CPU LOAD</span><strong>{num(cpu.percent).toFixed(0)}<small>%</small></strong><p>{typeof cpu.temperature_c === "number" ? `${metric(cpu.temperature_c, 0)} °C aktuell` : "Temperatur nicht verfügbar"}</p><div className="studio-bars">{Array.isArray(cpu.per_core) && cpu.per_core.slice(0, 16).map((value: unknown, index: number) => <i key={index} style={{ height: `${Math.max(8, num(value))}%` }} />)}</div></article>
         <article className="studio-feature memory"><span>MEMORY</span><strong>{num(memory.percent).toFixed(0)}<small>%</small></strong><p>{metric(memory.used_gb)} GB von {metric(memory.total_gb)} GB genutzt</p><div className="studio-meter"><i style={{ width: `${Math.min(100, num(memory.percent))}%` }} /></div></article>
         <article className="studio-feature graphics"><span>GRAPHICS</span><strong>{num(gpu.percent).toFixed(0)}<small>%</small></strong><p>{gpu.name || "Keine GPU-Telemetrie"}</p><div className="studio-meter"><i style={{ width: `${Math.min(100, num(gpu.percent))}%` }} /></div></article>
-        <article className="studio-traffic"><header><span>NETWORK STORY</span><b>↓ {num(network.download_mbps).toFixed(1)} Mbps</b></header><Sparkline points={points} metric={(point) => num(point.network?.download_mbps)} maxValue={Math.max(10, ...points.map((point) => num(point.metrics.network?.download_mbps)))} color="var(--blue)" /><footer>{monthlyNetwork?.available ? `${metric(monthlyNetwork.received_bytes / 1024 ** 3, 1)} GB diesen Monat empfangen` : "Verkehr wird erfasst"}</footer></article>
+        <article className="studio-traffic"><header><span>NETWORK STORY</span><b>↓ {num(network.download_mbps).toFixed(1)} Mbps</b></header><Sparkline points={points} metric={(point) => num(point.network?.download_mbps)} maxValue={Math.max(10, ...points.map((point) => num(point.metrics.network?.download_mbps)))} color="var(--blue)" /><footer>{monthlyNetwork?.available ? `${trafficBytes(monthlyNetwork.received_bytes)} diesen Monat empfangen` : "Verkehr wird erfasst"}</footer></article>
         <article className="studio-library"><header><HardDrive size={17} /><span>DEVICE LIBRARY</span></header>{(m.disks || []).slice(0, 4).map((disk: Metrics, index: number) => <div key={`${disk.mount}-${index}`}><b>{disk.mount || disk.name || `Disk ${index + 1}`}</b><span>{num(disk.percent).toFixed(0)}% belegt</span><i><em style={{ width: `${Math.min(100, num(disk.percent))}%` }} /></i></div>)}{!(m.disks || []).length && <p>Keine Laufwerksdaten</p>}</article>
       </div>
     </section>
@@ -1593,7 +1596,7 @@ function NodeOverview({
       <div className="metric-card"><div className="metric-title"><span>CPU</span><ConceptIcon name="activity" size={17}/></div><div className="metric-value">{num(cpu.percent).toFixed(1)}%</div><p>{cpuModel}</p><ConceptSparkline values={cpuSeries} height={48}/><div className="metric-items"><div><span>Temperatur</span><b>{typeof cpu.temperature_c === "number" ? `${num(cpu.temperature_c).toFixed(0)} °C` : "—"}</b></div><div><span>Takt</span><b>{typeof cpu.frequency_mhz === "number" ? `${num(cpu.frequency_mhz).toFixed(0)} MHz` : "—"}</b></div></div></div>
       <div className="metric-card"><div className="metric-title"><span>Arbeitsspeicher</span><ConceptIcon name="grid" size={17}/></div><div className="metric-value">{num(memory.used_gb).toFixed(1)} GB</div><p>von {num(memory.total_gb).toFixed(1)} GB belegt</p><div className="metric-meter"><ConceptMeter value={num(memory.percent)}/></div><div className="metric-items"><div><span>Auslastung</span><b>{num(memory.percent).toFixed(1)}%</b></div></div></div>
       {!isUnraid && <div className="metric-card"><div className="metric-title"><span>Grafikprozessor</span><ConceptIcon name="bolt" size={17}/></div><div className="metric-value">{m.gpus?.length ? `${num(gpu.percent).toFixed(1)}%` : "—"}</div><p>{gpuModel}</p><ConceptSparkline values={gpuSeries} color="var(--blue)" height={48}/><div className="metric-items"><div><span>Temperatur</span><b>{typeof (lhmGpu.temperature_c ?? gpu.temperature_c) === "number" ? `${num(lhmGpu.temperature_c ?? gpu.temperature_c).toFixed(0)} °C` : "—"}</b></div><div><span>Leistung</span><b>{typeof (lhmGpu.power_w ?? gpu.power_w) === "number" ? `${num(lhmGpu.power_w ?? gpu.power_w).toFixed(1)} W` : "—"}</b></div></div></div>}
-      <div className="metric-card"><div className="metric-title"><span>Netzwerk</span><ConceptIcon name="chart" size={17}/></div><div className="metric-value">{num(network.download_mbps).toFixed(1)} Mb/s</div><p>↓ Download · {network.interface || "Automatisch"}</p><ConceptSparkline values={downSeries} height={48}/><div className="metric-items"><div><span>Upload</span><b>{num(network.upload_mbps).toFixed(1)} Mb/s</b></div><div><span>Monat ↓ / ↑</span><b>{monthlyNetwork?.available ? `${(monthlyNetwork.received_bytes / 1024 ** 3).toFixed(1)} / ${(monthlyNetwork.sent_bytes / 1024 ** 3).toFixed(1)} GB` : "—"}</b></div></div></div>
+      <div className="metric-card"><div className="metric-title"><span>Netzwerk</span><ConceptIcon name="chart" size={17}/></div><div className="metric-value">{num(network.download_mbps).toFixed(1)} Mb/s</div><p>↓ Download · {network.interface || "Automatisch"}</p><ConceptSparkline values={downSeries} height={48}/><div className="metric-items"><div><span>Upload</span><b>{num(network.upload_mbps).toFixed(1)} Mb/s</b></div><div><span>Monat ↓ / ↑</span><b>{monthlyNetwork?.available ? `${trafficBytes(monthlyNetwork.received_bytes)} / ${trafficBytes(monthlyNetwork.sent_bytes)}` : "—"}</b></div></div></div>
     </div>
     <div className="detail-bottom"><div className="detail-card"><ConceptSectionHead eyebrow="STORAGE" title="Laufwerke"/>{storage.map((disk: Metrics, index: number) => <div className="disk-row" key={`${disk.mount || disk.name}-${index}`}><div><b>{disk.mount || disk.name || `Disk ${index + 1}`}</b><span>{num(disk.used_gb).toFixed(1)} / {num(disk.total_gb).toFixed(1)} GB</span></div><ConceptMeter value={num(disk.percent)}/><small>Lesen {num(disk.read_mbps).toFixed(1)} · Schreiben {num(disk.write_mbps).toFixed(1)} MiB/s</small></div>)}{!storage.length && <div className="empty">Keine Laufwerksdaten vorhanden.</div>}</div><div className="detail-card"><ConceptSectionHead eyebrow="HARDWARE" title="Sensoren"/><div className="sensor-row"><span>CPU Temperatur</span><b>{typeof cpu.temperature_c === "number" ? `${num(cpu.temperature_c).toFixed(1)} °C` : "—"}</b></div><div className="sensor-row"><span>GPU Temperatur</span><b>{typeof (lhmGpu.temperature_c ?? gpu.temperature_c) === "number" ? `${num(lhmGpu.temperature_c ?? gpu.temperature_c).toFixed(1)} °C` : "—"}</b></div><div className="sensor-row"><span>CPU Leistung</span><b>{typeof cpu.power_w === "number" ? `${num(cpu.power_w).toFixed(1)} W` : "—"}</b></div><div className="sensor-row"><span>GPU Lüfter</span><b>{typeof lhmGpu.fan_rpm === "number" ? `${num(lhmGpu.fan_rpm).toFixed(0)} RPM` : "—"}</b></div><div className="process-note">{processes.length ? `Top-Prozesse: ${processes.slice(0, 4).map((process: Metrics) => `${process.name} ${num(process.cpu).toFixed(0)}%`).join(" · ")}` : "Keine Prozessdaten verfügbar."}</div></div></div>
     {Array.isArray(cpu.per_core) && cpu.per_core.length > 0 && <div className="detail-card concept-core-load"><ConceptSectionHead eyebrow="CPU THREADS" title="Last pro Kern"/><div className="concept-core-bars">{cpu.per_core.map((value: unknown, index: number) => <div key={index} title={`Kern ${index + 1}: ${num(value).toFixed(1)}%`}><span>{index + 1}</span><ConceptMeter value={num(value)}/></div>)}</div></div>}
@@ -1724,12 +1727,6 @@ function StatisticsPage({
       return rightTotal - leftTotal;
     })
     .slice(0, 5);
-  const bytes = (value: number) =>
-    value >= 1024 ** 3
-      ? `${(value / 1024 ** 3).toFixed(1)} GB`
-      : value >= 1024 ** 2
-        ? `${(value / 1024 ** 2).toFixed(0)} MB`
-        : `${(value / 1024).toFixed(0)} KB`;
   const liveTraffic = useMemo(() => {
     const onlineIds = new Set(nodes.filter((node) => node.online).map((node) => node.node_id));
     const recent = Object.entries(trafficHistory)
@@ -1764,8 +1761,8 @@ function StatisticsPage({
     <div className="page-intro"><div><div className="eyebrow">INSIGHTS / FLEET</div><h1>Muster erkennen.</h1><p>Verfügbarkeit, Rekorde und Traffic über die gesamte Fleet.</p></div></div>
     <div className="stats-summary">
       <div><small>FLEET-VERFÜGBARKEIT · SEIT AUFNAHME</small><strong>{averageAvailability.toFixed(2)}<span>%</span></strong><p>Durchschnitt aller OS-Profile</p></div>
-      <div><small>GESAMT-DOWNLOAD · DIESER MONAT</small><strong>{trafficAvailable ? (totalReceived / 1024 ** 4).toFixed(2) : "…"}<span>{trafficAvailable ? " TB" : ""}</span></strong><p>{trafficAvailable ? `${Object.values(traffic).filter((item) => item.available).length}/${nodes.length} Geräte ausgewertet` : "Monatswerte werden berechnet"}</p></div>
-      <div><small>GESAMT-UPLOAD · DIESER MONAT</small><strong>{trafficAvailable ? (totalSent / 1024 ** 4).toFixed(2) : "…"}<span>{trafficAvailable ? " TB" : ""}</span></strong><p>{trafficAvailable ? `${Object.values(traffic).filter((item) => item.available).length}/${nodes.length} Geräte ausgewertet` : "Monatswerte werden berechnet"}</p></div>
+      <div><small>GESAMT-DOWNLOAD · DIESER MONAT</small><strong>{trafficAvailable ? trafficBytes(totalReceived) : "…"}</strong><p>{trafficAvailable ? `${Object.values(traffic).filter((item) => item.available).length}/${nodes.length} Geräte ausgewertet` : "Monatswerte werden berechnet"}</p></div>
+      <div><small>GESAMT-UPLOAD · DIESER MONAT</small><strong>{trafficAvailable ? trafficBytes(totalSent) : "…"}</strong><p>{trafficAvailable ? `${Object.values(traffic).filter((item) => item.available).length}/${nodes.length} Geräte ausgewertet` : "Monatswerte werden berechnet"}</p></div>
     </div>
     <div className="stats-layout">
       <div className="detail-card">
@@ -1782,7 +1779,7 @@ function StatisticsPage({
         <div className="chart-axis"><span>LIVE-VERLAUF · LETZTE MESSPUNKTE</span><span>JETZT</span></div>
         <div className="traffic-breakdown">{trafficRanking.map((node) => {
           const value = traffic[node.node_id]?.[selectedTrafficDirection === "download" ? "received_bytes" : "sent_bytes"] || 0;
-          return <div key={node.node_id}><span>{node.display_name}</span><ConceptMeter value={selectedTotal ? value / selectedTotal * 100 : 0}/><b>{traffic[node.node_id]?.available ? bytes(value) : "—"}</b></div>;
+          return <div key={node.node_id}><span>{node.display_name}</span><ConceptMeter value={selectedTotal ? value / selectedTotal * 100 : 0}/><b>{traffic[node.node_id]?.available ? trafficBytes(value) : "—"}</b></div>;
         })}</div>
       </div>
     </div>
