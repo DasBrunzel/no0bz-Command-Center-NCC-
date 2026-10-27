@@ -14,6 +14,8 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   über einen Cursor ab. Mitglieder werden seltener geladen; ausgeblendete Tabs
   pausieren die Abfrage. Tagestrenner, neue-Nachrichten-Hinweis und eine
   mehrzeilige Eingabe erleichtern längere Unterhaltungen.
+- Markdown-Nachrichten im Fleet Chat werden formatiert angezeigt. Eingebettetes
+  HTML und externe Bilder bleiben deaktiviert; Links öffnen in einem neuen Tab.
 - Die Migration `20261026_0018` verbindet Benutzerkonten mit Dashboard-Sitzungen
   und Chat-Nachrichten.
 - Der Agent ermittelt die statische Host-Kennung nur noch beim Start. Wiederholte

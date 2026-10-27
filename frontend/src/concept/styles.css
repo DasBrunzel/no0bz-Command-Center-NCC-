@@ -29,6 +29,14 @@
 .concept-chat-page .chat-message.mine .chat-message-content { border-color: color-mix(in srgb, var(--mint) 28%, var(--line)); border-radius: 13px 4px 13px 13px; background: color-mix(in srgb, var(--mint) 8%, var(--panel2)); }
 .concept-chat-page .chat-message.mine .message-meta { justify-content: flex-end; }
 .concept-chat-page .chat-message .message-body { margin: 8px 0 0; line-height: 1.5; }
+.concept-chat-page .message-body.markdown p { margin: 0 0 8px; }
+.concept-chat-page .message-body.markdown p:last-child { margin-bottom: 0; }
+.concept-chat-page .message-body.markdown a { color: var(--mint); text-decoration: underline; }
+.concept-chat-page .message-body.markdown code { padding: 2px 5px; border-radius: 4px; background: var(--bg); font-family: Consolas, monospace; }
+.concept-chat-page .message-body.markdown pre { max-width: 100%; overflow-x: auto; padding: 10px; border-radius: 6px; background: var(--bg); }
+.concept-chat-page .message-body.markdown pre code { padding: 0; }
+.concept-chat-page .message-body.markdown ul, .concept-chat-page .message-body.markdown ol { margin: 6px 0; padding-left: 20px; }
+.concept-chat-page .message-body.markdown blockquote { margin: 7px 0; padding-left: 10px; border-left: 2px solid var(--mint); color: var(--muted); }
 .concept-chat-page .compose-row textarea { flex: 1; min-width: 0; min-height: 46px; max-height: 160px; resize: vertical; padding: 10px 4px; border: 0; outline: 0; color: var(--text); background: transparent; font: inherit; line-height: 1.4; }
 .concept-chat-page .compose-row textarea:focus-visible { outline: 2px solid var(--mint); outline-offset: 2px; border-radius: 4px; }
 .concept-chat-page .compose-row textarea::placeholder { color: var(--muted); }

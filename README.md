@@ -421,6 +421,7 @@ Eine Rotation macht den bisherigen Token sofort ungültig. Danach müssen die ne
 - Standalone-, Server- und Client-Modus mit Offline-Erkennung
 - abgesicherter Prozess-Kill mit Schutzliste und Audit-Log
 - lokaler Chat-/Prompt-/Datei-Hub mit Upload-Härtung
+- Fleet Chat mit Nachrichtenverlauf, Anhängen und sicher gerendertem Markdown
 - responsive React-Oberfläche mit SVG-Gauges, Hardwarelogos, Netzwerkverläufen und
   einklappbarer Navigation
 - Farbthemes sowie drei vollständige alternative Layouts: Orbit, Blueprint und Studio

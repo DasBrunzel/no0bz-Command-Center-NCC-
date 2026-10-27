@@ -50,6 +50,8 @@ import "./device-lifecycle.css";
 import "./concept/styles.css";
 import { Icon as ConceptIcon, Meter as ConceptMeter, SectionHead as ConceptSectionHead, Sparkline as ConceptSparkline, Status as ConceptStatus } from "./concept/components";
 
+const Markdown = React.lazy(() => import("react-markdown"));
+
 type Metrics = Record<string, any>;
 type Telemetry = {
   point_id: string;
@@ -2094,7 +2096,7 @@ function FleetChat({ token, identity }: { token: string; identity: DashboardUser
             {date.toDateString() !== previousDay && <div className="chat-day">{day.toUpperCase()}</div>}
             <div className={`chat-message${mine ? " mine" : ""}`}>
               <div className="chat-avatar">{message.sender_name.slice(0, 1).toUpperCase()}</div>
-              <div className="chat-message-content"><div className="message-meta"><b>{message.sender_name}</b><span>{date.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}</span>{message.body_format === "markdown" && <span>MARKDOWN</span>}</div>{message.body && <p className="message-body">{message.body}</p>}{message.attachment && <ChatAttachmentView attachment={message.attachment} token={token} onOpen={(nextAttachment, url, kind) => setPreview({ attachment: nextAttachment, url, kind })} />}</div>
+              <div className="chat-message-content"><div className="message-meta"><b>{message.sender_name}</b><span>{date.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}</span>{message.body_format === "markdown" && <span>MARKDOWN</span>}</div>{message.body && (message.body_format === "markdown" ? <div className="message-body markdown"><React.Suspense fallback={<p>{message.body}</p>}><Markdown skipHtml disallowedElements={["img"]} components={{ a: ({ node: _node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" /> }}>{message.body}</Markdown></React.Suspense></div> : <p className="message-body">{message.body}</p>)}{message.attachment && <ChatAttachmentView attachment={message.attachment} token={token} onOpen={(nextAttachment, url, kind) => setPreview({ attachment: nextAttachment, url, kind })} />}</div>
             </div>
           </React.Fragment>;
         })}
