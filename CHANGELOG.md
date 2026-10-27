@@ -4,6 +4,8 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [0.6.0-beta.8-dev.0] – Laufende Entwicklung
 
+- Beim Wechsel zwischen Geräten zeigt die Netzwerk-Monatszahl keinen
+  zwischengespeicherten Wert des zuvor ausgewählten Geräts mehr an.
 - Agenten senden Herzschläge und wiederholen fehlgeschlagene Verbindungen
   unabhängig vom eingestellten Messintervall. Auch bei seltener Telemetrie
   bleibt der Online-Status aktuell und der Wiederverbindungsversuch pünktlich.

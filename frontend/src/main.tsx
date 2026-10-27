@@ -3263,6 +3263,9 @@ function App() {
     return () => { current = false; };
   }, [selected?.node_id, selected?.latest?.recorded_at, token]);
   useEffect(() => {
+    // Monthly totals belong to a specific node. Do not show the previous
+    // node's value while its replacement request is still in flight.
+    setMonthlyNetwork(null);
     if (!selected) return;
     let current = true;
     const refresh = () => getJson<NetworkUsageSummary>(
