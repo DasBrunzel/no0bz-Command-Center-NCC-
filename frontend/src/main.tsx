@@ -144,6 +144,7 @@ type Invitation = {
 type IssuedInvitation = Invitation & { token: string };
 type AccessRole = "commander" | "beta_tester";
 type DashboardAccess = { access_role: AccessRole };
+type DashboardUser = { user_id: string | null; username: string; role: AccessRole; active: boolean; managed: boolean; created_at?: string | null };
 type IssuedAdminCode = { code: string; expires_at: string; access_role: AccessRole };
 type AdminCode = {
   code_id: string;
@@ -196,8 +197,8 @@ type TelegramSettings = {
   footer: string;
 };
 type ChatAttachment = { name: string; content_type: string; size: number; url: string };
-type ChatMessage = { message_id: string; sender_node_id: string | null; sender_name: string; body: string; body_format: "plain" | "markdown"; attachment: ChatAttachment | null; created_at: string };
-type ChatParticipant = { node_id: string; display_name: string; platform: string; online: boolean };
+type ChatMessage = { message_id: string; sender_node_id: string | null; sender_user_id: string | null; sender_name: string; body: string; body_format: "plain" | "markdown"; attachment: ChatAttachment | null; created_at: string };
+type ChatParticipant = { user_id: string | null; display_name: string; role: AccessRole };
 type Page = "fleet" | "explorer" | "statistics" | "alerts" | "chat" | "onboarding" | "settings";
 
 const THEMES: { id: Theme; name: string; color: string }[] = [
@@ -1607,10 +1608,12 @@ function StatisticsPage({
   nodes,
   summary,
   token,
+  trafficResetRevision,
 }: {
   nodes: Node[];
   summary: Summary | null;
   token: string;
+  trafficResetRevision: number;
 }) {
   const [traffic, setTraffic] = useState<Record<string, NetworkUsageSummary>>({});
   const [trafficHistory, setTrafficHistory] = useState<Record<string, Telemetry[]>>({});
@@ -1624,50 +1627,37 @@ function StatisticsPage({
   );
   useEffect(() => {
     let current = true;
-    const loadTraffic = async () => {
+    let monthlyBusy = false;
+    if (trafficResetRevision > 0) setTraffic({});
+    const loadMonthly = async () => {
+      if (monthlyBusy) return;
+      monthlyBusy = true;
       try {
-        const entries = await Promise.all(
-          trafficNodes.map(async (node) => {
-            try {
-              const [monthlyResult, historyResult] = await Promise.allSettled([
-                getJson<NetworkUsageSummary>(
-                  `/api/v1/fleet/nodes/${node.node_id}/network/month`,
-                  token,
-                ),
-                getJson<Telemetry[]>(
-                  `/api/v1/fleet/nodes/${node.node_id}/telemetry?limit=48`,
-                  token,
-                ),
-              ]);
-              const monthly = monthlyResult.status === "fulfilled" ? monthlyResult.value : null;
-              const history = historyResult.status === "fulfilled" ? historyResult.value : [];
-              return [node.node_id, monthly, history] as const;
-            } catch {
-              return [node.node_id, null, []] as const;
-            }
-          }),
-        );
-        if (!current) return;
-        setTraffic((previous) => ({
-          ...Object.fromEntries(Object.entries(previous).filter(([nodeId]) => trafficNodes.some((node) => node.node_id === nodeId))),
-          ...Object.fromEntries(entries.filter((entry): entry is [string, NetworkUsageSummary, Telemetry[]] => entry[1] !== null).map(([nodeId, monthly]) => [nodeId, monthly])),
-        }));
-        setTrafficHistory(
-          Object.fromEntries(
-            entries.map(([nodeId, , history]) => [nodeId, [...history]]),
-          ) as Record<string, Telemetry[]>,
-        );
-      } catch {
-        if (current) {
-          setTraffic({});
-          setTrafficHistory({});
+        // Keep database work bounded: each month may contain many samples.
+        for (const node of trafficNodes) {
+          if (!current) break;
+          try {
+            const value = await getJson<NetworkUsageSummary>(`/api/v1/fleet/nodes/${node.node_id}/network/month`, token);
+            if (current) setTraffic((previous) => ({ ...previous, [node.node_id]: value }));
+          } catch { /* Retain the last successful value for this node. */ }
         }
-      }
+      } finally { monthlyBusy = false; }
     };
-    void loadTraffic();
-    const refresh = window.setInterval(() => void loadTraffic(), 30_000);
-    return () => { current = false; window.clearInterval(refresh); };
-  }, [trafficNodes, token]);
+    const loadHistory = async () => {
+      await Promise.all(trafficNodes.map(async (node) => {
+        try {
+          const value = await getJson<Telemetry[]>(`/api/v1/fleet/nodes/${node.node_id}/telemetry?limit=48`, token);
+          if (current) setTrafficHistory((previous) => ({ ...previous, [node.node_id]: value }));
+        } catch { /* A failed history request must not hide monthly totals. */ }
+      }));
+    };
+    setTraffic((previous) => Object.fromEntries(Object.entries(previous).filter(([id]) => trafficNodes.some((node) => node.node_id === id))));
+    void loadMonthly();
+    void loadHistory();
+    const monthlyRefresh = window.setInterval(() => void loadMonthly(), 300_000);
+    const historyRefresh = window.setInterval(() => void loadHistory(), 30_000);
+    return () => { current = false; window.clearInterval(monthlyRefresh); window.clearInterval(historyRefresh); };
+  }, [trafficNodes, token, trafficResetRevision]);
 
   const measured = nodes.filter((node) => node.latest);
   const cpuThreads = (metrics: Metrics) => Math.max(1, num(metrics.cpu?.logical_cores || metrics.cpu?.threads));
@@ -1731,9 +1721,13 @@ function StatisticsPage({
         ? `${(value / 1024 ** 2).toFixed(0)} MB`
         : `${(value / 1024).toFixed(0)} KB`;
   const liveTraffic = useMemo(() => {
-    const pointCount = Math.max(2, ...Object.values(trafficHistory).map((history) => history.length));
+    const onlineIds = new Set(nodes.filter((node) => node.online).map((node) => node.node_id));
+    const recent = Object.entries(trafficHistory)
+      .filter(([nodeId]) => onlineIds.has(nodeId))
+      .map(([, history]) => history.filter((point) => Date.now() - new Date(point.recorded_at).getTime() < 5 * 60_000));
+    const pointCount = Math.max(2, ...recent.map((history) => history.length));
     return Array.from({ length: pointCount }, (_, index) =>
-      Object.values(trafficHistory).reduce(
+      recent.reduce(
         (total, history) => {
           const point = history[history.length - pointCount + index];
           return {
@@ -1744,7 +1738,7 @@ function StatisticsPage({
         { download: 0, upload: 0 },
       ),
     );
-  }, [trafficHistory]);
+  }, [trafficHistory, nodes]);
 
   const [selectedTrafficDirection, setSelectedTrafficDirection] = useState<"download" | "upload">("download");
   const selectedTotal = selectedTrafficDirection === "download" ? totalReceived : totalSent;
@@ -1760,8 +1754,8 @@ function StatisticsPage({
     <div className="page-intro"><div><div className="eyebrow">INSIGHTS / FLEET</div><h1>Muster erkennen.</h1><p>Verfügbarkeit, Rekorde und Traffic über die gesamte Fleet.</p></div></div>
     <div className="stats-summary">
       <div><small>FLEET-VERFÜGBARKEIT · SEIT AUFNAHME</small><strong>{averageAvailability.toFixed(2)}<span>%</span></strong><p>Durchschnitt aller OS-Profile</p></div>
-      <div><small>GESAMT-DOWNLOAD · DIESER MONAT</small><strong>{trafficAvailable ? (totalReceived / 1024 ** 4).toFixed(2) : "—"}<span> TB</span></strong><p>Aktueller Kalendermonat</p></div>
-      <div><small>GESAMT-UPLOAD · DIESER MONAT</small><strong>{trafficAvailable ? (totalSent / 1024 ** 4).toFixed(2) : "—"}<span> TB</span></strong><p>Aktueller Kalendermonat</p></div>
+      <div><small>GESAMT-DOWNLOAD · DIESER MONAT</small><strong>{trafficAvailable ? (totalReceived / 1024 ** 4).toFixed(2) : "…"}<span>{trafficAvailable ? " TB" : ""}</span></strong><p>{trafficAvailable ? `${Object.values(traffic).filter((item) => item.available).length}/${nodes.length} Geräte ausgewertet` : "Monatswerte werden berechnet"}</p></div>
+      <div><small>GESAMT-UPLOAD · DIESER MONAT</small><strong>{trafficAvailable ? (totalSent / 1024 ** 4).toFixed(2) : "…"}<span>{trafficAvailable ? " TB" : ""}</span></strong><p>{trafficAvailable ? `${Object.values(traffic).filter((item) => item.available).length}/${nodes.length} Geräte ausgewertet` : "Monatswerte werden berechnet"}</p></div>
     </div>
     <div className="stats-layout">
       <div className="detail-card">
@@ -1939,11 +1933,11 @@ function ChatAttachmentView({ attachment, token, onOpen }: { attachment: ChatAtt
 function FleetChat({ token }: { token: string }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [participants, setParticipants] = useState<ChatParticipant[]>([]);
-  const [senderNodeId, setSenderNodeId] = useState("");
   const [body, setBody] = useState("");
   const [format, setFormat] = useState<"plain" | "markdown">("plain");
   const [attachment, setAttachment] = useState<File | null>(null);
   const [sending, setSending] = useState(false);
+  const [chatError, setChatError] = useState("");
   const [preview, setPreview] = useState<{ attachment: ChatAttachment; url: string; kind: "image" | "video" | "audio" | "pdf" } | null>(null);
   const load = useCallback(async () => {
     const [nextMessages, nextParticipants] = await Promise.all([
@@ -1952,49 +1946,52 @@ function FleetChat({ token }: { token: string }) {
     ]);
     setMessages(nextMessages);
     setParticipants(nextParticipants);
-    setSenderNodeId((current) => current || nextParticipants[0]?.node_id || "");
+    setChatError("");
   }, [token]);
   useEffect(() => {
-    void load();
-    const timer = window.setInterval(() => void load(), 5000);
+    void load().catch(() => setChatError("Fleet Chat ist gerade nicht erreichbar."));
+    const timer = window.setInterval(() => void load().catch(() => setChatError("Fleet Chat ist gerade nicht erreichbar.")), 5000);
     return () => clearInterval(timer);
   }, [load]);
   const send = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!body.trim() && !attachment) return;
     setSending(true);
+    setChatError("");
     try {
       if (attachment) {
         const data = new FormData();
         data.set("file", attachment);
-        data.set("sender_node_id", senderNodeId);
         data.set("body", body);
         data.set("body_format", format);
         const response = await fetch("/api/v1/fleet/chat/uploads", { method: "POST", headers: headers(token), body: data });
         if (!response.ok) throw new Error("REQUEST");
       } else {
-        await postJson("/api/v1/fleet/chat/messages", token, { sender_node_id: senderNodeId || null, body, body_format: format });
+        await postJson("/api/v1/fleet/chat/messages", token, { body, body_format: format });
       }
       setBody("");
       setAttachment(null);
       const input = document.getElementById("fleet-chat-file") as HTMLInputElement | null;
       if (input) input.value = "";
       await load();
+    } catch {
+      setChatError("Nachricht konnte nicht gesendet werden. Bitte erneut versuchen.");
     } finally { setSending(false); }
   };
   return <section className="concept-chat-page">
     <div className="page-intro"><div><div className="eyebrow">COLLABORATION / FLEET</div><h1>Fleet Chat.</h1><p>Absprachen und Medien an einem eigenen Ort, getrennt von Telemetrie und Warnungen.</p></div></div>
     <div className="chat-shell">
-      <div className="chat-heading"><div className="chat-channel-icon">#</div><div><b>fleet-operations</b><small>Private Fleet · Nachrichten bleiben auf dem NCC-Server</small></div><span className="chat-members">● {participants.length} Geräte</span></div>
+      <div className="chat-heading"><div className="chat-channel-icon">#</div><div><b>fleet-operations</b><small>Private Fleet · Nachrichten bleiben auf dem NCC-Server</small></div><span className="chat-members">● {participants.length} Mitglieder</span></div>
       <div className="chat-messages">
         <div className="chat-day">FLEET-VERLAUF · {new Date().toLocaleDateString("de-DE", { day: "numeric", month: "long", year: "numeric" }).toUpperCase()}</div>
         {messages.map((message) => <div className="chat-message" key={message.message_id}><div className="chat-avatar">{message.sender_name.slice(0, 1).toUpperCase()}</div><div><div className="message-meta"><b>{message.sender_name}</b><span>{new Date(message.created_at).toLocaleString("de-DE")}</span>{message.body_format === "markdown" && <span>MARKDOWN</span>}</div>{message.body && <p className="message-body">{message.body}</p>}{message.attachment && <ChatAttachmentView attachment={message.attachment} token={token} onOpen={(nextAttachment, url, kind) => setPreview({ attachment: nextAttachment, url, kind })} />}</div></div>)}
-        {!messages.length && <div className="chat-empty"><MessageSquare size={34} /><strong>Der Fleet Chat ist bereit.</strong><span>Schreib die erste Nachricht an deine Geräte.</span></div>}
+        {!messages.length && <div className="chat-empty"><MessageSquare size={34} /><strong>Der Fleet Chat ist bereit.</strong><span>Schreib die erste Nachricht an dein Team.</span></div>}
       </div>
       <form className="chat-compose" onSubmit={(event) => void send(event)}>
-        <div className="chat-controls"><label>Absender<select value={senderNodeId} onChange={(event) => setSenderNodeId(event.target.value)}><option value="">NCC Dashboard</option>{participants.map((node) => <option key={node.node_id} value={node.node_id}>{node.display_name}</option>)}</select></label><label>Format<select value={format} onChange={(event) => setFormat(event.target.value as "plain" | "markdown")}><option value="plain">Text</option><option value="markdown">Markdown</option></select></label></div>
+        <div className="chat-controls"><label>Format<select value={format} onChange={(event) => setFormat(event.target.value as "plain" | "markdown")}><option value="plain">Text</option><option value="markdown">Markdown</option></select></label></div>
         {attachment && <div className="attached">▧ {attachment.name} <button type="button" onClick={() => setAttachment(null)} aria-label="Anhang entfernen">×</button></div>}
         <div className="compose-row"><label className="attach-button" title="Datei anhängen">＋<input id="fleet-chat-file" type="file" onChange={(event) => setAttachment(event.target.files?.[0] || null)} hidden /></label><input value={body} onChange={(event) => setBody(event.target.value)} placeholder="Nachricht an #fleet-operations…" maxLength={20000} /><button className="primary-button" disabled={sending || (!body.trim() && !attachment)} type="submit">{sending ? "Sende …" : "Senden"} <ConceptIcon name="arrow" size={16}/></button></div>
+        {chatError && <small className="form-error" role="alert">{chatError}</small>}
         <small>Gespeichert auf dem NCC-Server · Anhänge bis 100 MB</small>
       </form>
     </div>
@@ -2017,6 +2014,72 @@ function AlertsPage({ alerts, canClear, onClear }: { alerts: AlertRecord[]; canC
   </>;
 }
 
+function DashboardUsers({ token, identity, canManage }: { token: string; identity: DashboardUser | null; canManage: boolean }) {
+  const [users, setUsers] = useState<DashboardUser[]>([]);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [role, setRole] = useState<AccessRole>("beta_tester");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  const refresh = useCallback(async () => {
+    if (canManage) setUsers(await getJson<DashboardUser[]>("/api/v1/users", token));
+  }, [canManage, token]);
+  useEffect(() => { void refresh().catch(() => setMessage("Benutzer konnten nicht geladen werden.")); }, [refresh]);
+  const create = async (event: React.FormEvent) => {
+    event.preventDefault(); setBusy(true); setMessage("");
+    try {
+      await postJson<DashboardUser>("/api/v1/users", token, { username: username.trim().toLowerCase(), password, role });
+      setUsername(""); setPassword(""); await refresh(); setMessage("Benutzerkonto erstellt.");
+    } catch { setMessage("Benutzerkonto konnte nicht erstellt werden. Name prüfen oder anderen Namen wählen."); }
+    finally { setBusy(false); }
+  };
+  const change = async (user: DashboardUser, patch: { role?: AccessRole; active?: boolean }) => {
+    setBusy(true); setMessage("");
+    try {
+      const response = await fetch(`/api/v1/users/${user.user_id}`, { method: "PATCH", headers: { ...headers(token), "Content-Type": "application/json" }, body: JSON.stringify(patch) });
+      if (!response.ok) throw new Error("REQUEST");
+      await refresh(); setMessage("Benutzerkonto aktualisiert.");
+    } catch { setMessage("Änderung fehlgeschlagen. Der letzte Commander muss aktiv bleiben."); }
+    finally { setBusy(false); }
+  };
+  const changePassword = async (event: React.FormEvent) => {
+    event.preventDefault(); setBusy(true); setMessage("");
+    try {
+      const response = await fetch("/api/v1/users/password", { method: "POST", headers: { ...headers(token), "Content-Type": "application/json" }, body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }) });
+      if (!response.ok) throw new Error("REQUEST");
+      setCurrentPassword(""); setNewPassword(""); setMessage("Passwort geändert; andere Sitzungen wurden abgemeldet.");
+    } catch { setMessage("Passwort konnte nicht geändert werden."); }
+    finally { setBusy(false); }
+  };
+  return <section className="surface settings-card dashboard-users-card">
+    <header className="section-head"><div><span className="eyebrow">ZUGANG / FLEET CHAT</span><h2>Benutzerkonten</h2></div><UserPlus size={19} /></header>
+    <p>Du bist als <b>{identity?.username || "Commander"}</b> angemeldet. Fleet Chat zeigt diesen Namen als Absender.</p>
+    {identity?.managed && <form className="dashboard-user-form" onSubmit={(event) => void changePassword(event)}>
+      <h3>Eigenes Passwort ändern</h3>
+      <input type="password" autoComplete="current-password" placeholder="Aktuelles Passwort" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} required />
+      <input type="password" autoComplete="new-password" placeholder="Neues Passwort (mindestens 12 Zeichen)" minLength={12} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} required />
+      <button className="outline-button" type="submit" disabled={busy}>Passwort ändern</button>
+    </form>}
+    {canManage && <>
+      <div className="dashboard-user-list">{users.map((user) => <div key={user.user_id} className="dashboard-user-row">
+        <span><b>{user.username}</b><small>{user.active ? "Aktiv" : "Deaktiviert"}</small></span>
+        <select aria-label={`Rolle von ${user.username}`} value={user.role} disabled={busy} onChange={(event) => void change(user, { role: event.target.value as AccessRole })}><option value="commander">Commander</option><option value="beta_tester">Beta-Tester</option></select>
+        <button type="button" className="outline-button" disabled={busy || user.user_id === identity?.user_id} onClick={() => void change(user, { active: !user.active })}>{user.active ? "Deaktivieren" : "Aktivieren"}</button>
+      </div>)}</div>
+      <form className="dashboard-user-form" onSubmit={(event) => void create(event)}>
+        <h3>Benutzer hinzufügen</h3>
+        <input aria-label="Benutzername" placeholder="Benutzername" autoComplete="off" value={username} onChange={(event) => setUsername(event.target.value)} required />
+        <input aria-label="Initiales Passwort" type="password" autoComplete="new-password" placeholder="Passwort (mindestens 12 Zeichen)" minLength={12} value={password} onChange={(event) => setPassword(event.target.value)} required />
+        <select aria-label="Neue Benutzerrolle" value={role} onChange={(event) => setRole(event.target.value as AccessRole)}><option value="beta_tester">Beta-Tester</option><option value="commander">Commander</option></select>
+        <button className="primary" type="submit" disabled={busy}>Benutzer erstellen</button>
+      </form>
+    </>}
+    {message && <small className="traffic-reset-message" role="status">{message}</small>}
+  </section>;
+}
+
 function SettingsPage({
   theme,
   onTheme,
@@ -2032,6 +2095,8 @@ function SettingsPage({
   releases,
   onRegisterRelease,
   canManageReleases,
+  token,
+  identity,
 }: {
   theme: Theme;
   onTheme: (v: Theme) => void;
@@ -2047,6 +2112,8 @@ function SettingsPage({
   releases: AgentRelease[];
   onRegisterRelease: (manifest: Record<string, unknown>) => Promise<void>;
   canManageReleases: boolean;
+  token: string;
+  identity: DashboardUser | null;
 }) {
   const [draft, setDraft] = useState<AlertPolicy | null>(policy);
   const [telegramDraft, setTelegramDraft] = useState<TelegramSettings | null>(telegram);
@@ -2060,6 +2127,7 @@ function SettingsPage({
   useEffect(() => setTelegramDraft(telegram), [telegram]);
   return (
     <><div className="page-intro"><div><div className="eyebrow">PREFERENCES / CONTROL</div><h1>Einstellungen.</h1><p>Schwellenwerte, Benachrichtigungen und Zugänge für deine Fleet.</p></div></div><div className="settings-grid concept-settings-grid">
+      <DashboardUsers token={token} identity={identity} canManage={canManageReleases} />
       <section className="surface settings-card">
         <header className="section-head">
           <div>
@@ -2662,10 +2730,27 @@ function Login({
   error: boolean;
 }) {
   const [value, setValue] = useState(""),
-    [localError, setLocalError] = useState(false);
+    [localError, setLocalError] = useState(false),
+    [mode, setMode] = useState<"code" | "account">("code"),
+    [username, setUsername] = useState(""),
+    [password, setPassword] = useState("");
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setLocalError(false);
+    if (mode === "account") {
+      try {
+        const response = await fetch("/api/v1/users/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: username.trim().toLowerCase(), password }),
+        });
+        if (!response.ok) throw new Error("LOGIN");
+        setPassword("");
+        localStorage.removeItem("ncc-dashboard-token");
+        onSave("");
+      } catch { setLocalError(true); }
+      return;
+    }
     const code = value.trim().toUpperCase();
     if (/^[A-Z0-9]{8}$/.test(code)) {
       try {
@@ -2694,12 +2779,10 @@ function Login({
         </div>
         <span className="eyebrow">GESCHÜTZTER ZUGANG</span>
         <h1>Willkommen, Commander.</h1>
-        <p>
-          Gib deinen achtstelligen Admin-Code ein. Er wird im Dashboard erzeugt
-          und gewährt vollständigen Admin-Zugang.
-        </p>
+        <p>{mode === "code" ? "Gib deinen achtstelligen Admin-Code ein. Er wird im Dashboard erzeugt und gewährt den vorgesehenen Zugang." : "Melde dich mit deinem persönlichen NCC-Konto an."}</p>
+        <div className="segmented login-methods"><button type="button" className={mode === "code" ? "selected" : ""} onClick={() => { setMode("code"); setLocalError(false); }}>Admin-Code</button><button type="button" className={mode === "account" ? "selected" : ""} onClick={() => { setMode("account"); setLocalError(false); }}>Benutzerkonto</button></div>
         <form onSubmit={(event) => void submit(event)}>
-          <label>
+          {mode === "code" ? <label>
             Admin-Code
             <input
               autoFocus
@@ -2709,10 +2792,10 @@ function Login({
               autoComplete="one-time-code"
               placeholder="z. B. AB12CD34"
             />
-          </label>
+          </label> : <><label>Benutzername<input autoFocus autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} required /></label><label>Passwort<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></label></>}
           {(error || localError) && (
             <small className="form-error">
-              Der Code wurde nicht akzeptiert oder ist abgelaufen.
+              {mode === "code" ? "Der Code wurde nicht akzeptiert oder ist abgelaufen." : "Benutzername oder Passwort wurde nicht akzeptiert."}
             </small>
           )}
           <button className="primary" type="submit">
@@ -2755,6 +2838,8 @@ function App() {
     () => new Set(JSON.parse(localStorage.getItem("ncc-dismissed-alerts") || "[]")),
   );
   const [accessRole, setAccessRole] = useState<AccessRole>("commander");
+  const [identity, setIdentity] = useState<DashboardUser | null>(null);
+  const [trafficResetRevision, setTrafficResetRevision] = useState(0);
   const [page, setPage] = useState<Page>("fleet"),
     [query, setQuery] = useState(""),
     [loading, setLoading] = useState(true),
@@ -2777,6 +2862,7 @@ function App() {
           nextTelegram,
           nextReleases,
           nextAccess,
+          nextIdentity,
         ] = await Promise.all([
           getJson<Node[]>("/api/v1/fleet/nodes", token),
           getJson<FleetGroup[]>("/api/v1/fleet/groups", token),
@@ -2787,6 +2873,7 @@ function App() {
           getJson<TelegramSettings>("/api/v1/fleet/telegram", token),
           getJson<AgentRelease[]>("/api/v1/releases", token),
           getJson<DashboardAccess>("/api/v1/admin-codes/access", token),
+          getJson<DashboardUser>("/api/v1/users/me", token),
         ]);
         setNodes(nextNodes);
         setGroups(nextGroups);
@@ -2806,6 +2893,7 @@ function App() {
         setTelegram(nextTelegram);
         setReleases(nextReleases);
         setAccessRole(nextAccess.access_role);
+        setIdentity(nextIdentity);
         setAuthenticated(true);
         setAuthError(false);
         setSelectedId((current) =>
@@ -2849,13 +2937,14 @@ function App() {
   }, [selected?.node_id, selected?.latest?.recorded_at, token]);
   useEffect(() => {
     if (!selected) return;
-    getJson<NetworkUsageSummary>(
-      `/api/v1/fleet/nodes/${selected.node_id}/network/month`,
-      token,
-    )
-      .then(setMonthlyNetwork)
-      .catch(() => setMonthlyNetwork(null));
-  }, [selected?.node_id, selected?.latest?.recorded_at, token]);
+    let current = true;
+    const refresh = () => getJson<NetworkUsageSummary>(
+      `/api/v1/fleet/nodes/${selected.node_id}/network/month`, token,
+    ).then((value) => { if (current) setMonthlyNetwork(value); }).catch(() => undefined);
+    void refresh();
+    const poll = window.setInterval(() => void refresh(), 300_000);
+    return () => { current = false; window.clearInterval(poll); };
+  }, [selected?.node_id, token, trafficResetRevision]);
   useEffect(() => {
     const pairingId = new URLSearchParams(window.location.search).get("pair");
     if (authenticated !== true || !pairingId) return;
@@ -2936,6 +3025,8 @@ function App() {
       headers: headers(token),
     });
     if (!response.ok) throw new Error("REQUEST");
+    setMonthlyNetwork(null);
+    setTrafficResetRevision((revision) => revision + 1);
   };
   const registerRelease = async (manifest: Record<string, unknown>) => {
     const created = await postJson<AgentRelease>("/api/v1/releases", token, { manifest });
@@ -3023,8 +3114,8 @@ function App() {
           </div>
           {canManageAccess && <button className="sidebar-add" type="button" onClick={() => setPage("onboarding")}><ConceptIcon name="plus" size={16} /> Gerät hinzufügen <ConceptIcon name="arrow" size={15} /></button>}
           <div className="profile">
-            <div className="avatar">{canManageAccess ? "C" : "B"}</div>
-            <div><b>{canManageAccess ? "Commander" : "Beta-Tester"}</b><small>{canManageAccess ? "Administratorzugang" : "Testzugang"}</small></div>
+            <div className="avatar">{(identity?.username || "C").slice(0, 1).toUpperCase()}</div>
+            <div><b>{identity?.username || (canManageAccess ? "Commander" : "Beta-Tester")}</b><small>{canManageAccess ? "Commander" : "Beta-Tester"}</small></div>
             <span>⌄</span>
           </div>
         </div>
@@ -3054,7 +3145,7 @@ function App() {
             >
               <RefreshCw size={17} className={loading ? "spin" : ""} />
             </button>
-            <div className="top-avatar">{canManageAccess ? "C" : "B"}</div>
+            <div className="top-avatar">{(identity?.username || "C").slice(0, 1).toUpperCase()}</div>
           </div>
         </header>
         <main className="content">
@@ -3090,7 +3181,7 @@ function App() {
               onAddDevice={() => setPage("onboarding")}
             />
           ) : page === "statistics" ? (
-            <StatisticsPage nodes={nodes} summary={summary} token={token} />
+            <StatisticsPage nodes={nodes} summary={summary} token={token} trafficResetRevision={trafficResetRevision} />
           ) : page === "alerts" ? (
             <AlertsPage alerts={alerts} canClear={canManageAccess} onClear={clearAllAlerts} />
           ) : page === "chat" ? (
@@ -3119,6 +3210,8 @@ function App() {
               releases={releases}
               onRegisterRelease={registerRelease}
               canManageReleases={canManageAccess}
+              token={token}
+              identity={identity}
             />
           )}
         </main>

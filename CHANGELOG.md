@@ -4,6 +4,14 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## 0.6.0-beta.4 - in Arbeit
 
+- Persönliche Dashboard-Konten mit Commander- und Beta-Tester-Rolle können nun in
+  den Einstellungen verwaltet werden. Login und Passwortwechsel verwenden
+  geschützte Browsersitzungen; das Sperren eines Kontos entzieht aktive Sitzungen.
+  Einmalige Admin-Codes bleiben als Einstieg und Rückfall erhalten.
+- Fleet-Chat-Nachrichten tragen den angemeldeten Benutzernamen. Ein vom Browser
+  übermittelter Node-Name kann den Absender nicht mehr vortäuschen.
+- Die Migration `20261026_0018` verbindet Benutzerkonten mit Dashboard-Sitzungen
+  und Chat-Nachrichten.
 - Das Dashboard übernimmt die dunkelgrüne „Alles im Blick“-Demo als neue
   Oberfläche: Navigation, Command Overview, Fleet Explorer, Node-Detail,
   Statistiken, Warnungen und Fleet Chat verwenden deren Layout und Design-Tokens.
@@ -12,10 +20,14 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 - Monats-Traffic und Telemetrie-Verlauf werden in den Statistiken unabhängig
   geladen. Ein vorübergehender Fehler einer Abfrage entfernt damit keine bereits
   erfolgreich geladenen Monatswerte mehr.
+- Monats-Traffic liest in der Datenbank nur Zeitstempel und Netzwerkzähler statt
+  vollständiger Telemetrie-Datensätze. Das Dashboard berechnet die Monatswerte
+  nacheinander und höchstens alle fünf Minuten; der Live-Verlauf lädt separat.
+  Alte Messwerte offline gegangener Nodes erscheinen nicht mehr als Live-Traffic.
 - Der Windows-Server-Updater verwendet das mit dem Commit ausgelieferte
   Frontend-Bundle und verändert dadurch keine versionierten Builddateien mehr.
   Ein separater Update-Helfer sichert vorhandene lokale Dashboard-Dateien in
-  einem Git-Stash, bevor der Server aktualisiert wird.
+  einem separaten Sicherungsordner, bevor der Server aktualisiert wird.
 
 - Das Fleet-Dashboard wurde auf die neue **Mission-Control**-Informationsarchitektur
   umgestellt: Zuerst erscheinen Fleet-Status, offene Ereignisse und Live-Traffic,

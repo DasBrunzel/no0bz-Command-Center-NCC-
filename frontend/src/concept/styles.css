@@ -63,3 +63,16 @@
 .concept-unraid { margin-top: 14px; }
 :root { --surface: var(--panel); --surface2: var(--panel2); --accent: var(--mint); --green: var(--mint); --purple: var(--blue); }
 :root[data-theme=mint] { --accent-rgb: 140, 229, 196; }
+.login-methods { display: flex; gap: 5px; margin: 18px 0; }
+.login-methods button { flex: 1; }
+.dashboard-users-card { display: grid; align-content: start; gap: 14px; }
+.dashboard-user-form { display: grid; gap: 10px; margin-top: 10px; }
+.dashboard-user-form h3 { margin: 0; font-size: 13px; }
+.dashboard-user-form input, .dashboard-user-form select { width: 100%; padding: 10px; }
+.dashboard-user-form button { justify-self: start; }
+.dashboard-user-list { display: grid; gap: 7px; }
+.dashboard-user-row { display: grid; grid-template-columns: minmax(120px,1fr) minmax(110px,auto) auto; align-items: center; gap: 8px; padding: 8px; border: 1px solid var(--line); border-radius: 6px; }
+.dashboard-user-row span { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.dashboard-user-row small { color: var(--muted); }
+.dashboard-user-row select { padding: 8px; }
+@media (max-width: 600px) { .dashboard-user-row { grid-template-columns: 1fr auto; } .dashboard-user-row select { grid-column: 1 / -1; grid-row: 2; } }

@@ -10,6 +10,7 @@ from ncc_server.api.v1.fleet import router as fleet_router
 from ncc_server.api.v1.invitations import router as invitations_router
 from ncc_server.api.v1.nodes import router as nodes_router
 from ncc_server.api.v1.releases import router as releases_router
+from ncc_server.api.v1.users import router as users_router
 
 router = APIRouter(prefix="/api/v1")
 router.include_router(nodes_router)
@@ -19,6 +20,7 @@ router.include_router(invitations_router)
 router.include_router(admin_codes_router)
 router.include_router(agent_pairings_router)
 router.include_router(releases_router)
+router.include_router(users_router)
 
 
 @router.get("/status/live", tags=["status"])

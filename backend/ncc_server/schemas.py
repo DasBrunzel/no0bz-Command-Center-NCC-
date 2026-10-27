@@ -273,7 +273,6 @@ class FleetNodeUpdateChannelRequest(BaseModel):
 
 
 class FleetChatMessageCreateRequest(BaseModel):
-    sender_node_id: str | None = Field(default=None, min_length=1, max_length=36)
     body: str = Field(default="", max_length=20_000)
     body_format: Literal["plain", "markdown"] = "plain"
 
@@ -293,6 +292,7 @@ class FleetChatAttachmentResponse(BaseModel):
 class FleetChatMessageResponse(BaseModel):
     message_id: str
     sender_node_id: str | None
+    sender_user_id: str | None
     sender_name: str
     body: str
     body_format: Literal["plain", "markdown"]
@@ -301,10 +301,9 @@ class FleetChatMessageResponse(BaseModel):
 
 
 class FleetChatParticipantResponse(BaseModel):
-    node_id: str
+    user_id: str | None
     display_name: str
-    platform: str
-    online: bool
+    role: Literal["commander", "beta_tester"]
 
 
 class AgentInvitationCreateRequest(BaseModel):
@@ -369,6 +368,42 @@ class AdminCodeResponse(BaseModel):
 
 class DashboardAccessResponse(BaseModel):
     access_role: Literal["commander", "beta_tester"]
+
+
+class DashboardUserResponse(BaseModel):
+    user_id: str | None
+    username: str
+    role: Literal["commander", "beta_tester"]
+    active: bool
+    managed: bool
+    created_at: datetime | None = None
+
+
+class DashboardUserCreateRequest(BaseModel):
+    username: str = Field(min_length=3, max_length=64, pattern=r"^[a-z0-9_.-]+$")
+    password: str = Field(min_length=12, max_length=256)
+    role: Literal["commander", "beta_tester"] = "beta_tester"
+
+
+class DashboardUserUpdateRequest(BaseModel):
+    role: Literal["commander", "beta_tester"] | None = None
+    active: bool | None = None
+
+    @model_validator(mode="after")
+    def require_change(self) -> "DashboardUserUpdateRequest":
+        if self.role is None and self.active is None:
+            raise ValueError("role or active must be supplied")
+        return self
+
+
+class DashboardUserLoginRequest(BaseModel):
+    username: str = Field(min_length=3, max_length=64)
+    password: str = Field(min_length=1, max_length=256)
+
+
+class DashboardUserPasswordRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=256)
+    new_password: str = Field(min_length=12, max_length=256)
 
 
 class AdminCodeRedeemRequest(BaseModel):

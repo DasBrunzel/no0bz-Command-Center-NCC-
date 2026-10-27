@@ -8,8 +8,8 @@ from sqlalchemy.orm import Session
 
 from ncc_server.config import ServerSettings
 from ncc_server.models import (
-    AlertState,
     AgentToken,
+    AlertState,
     AuditEvent,
     FleetChatMessage,
     FleetGroup,
@@ -221,39 +221,45 @@ def node_monthly_network_usage(
         # persisted value is UTC, just like PostgreSQL's server-side value.
         manual_reset = manual_reset.replace(tzinfo=timezone.utc)
     effective_start = max(period_start_utc, manual_reset) if manual_reset is not None else period_start_utc
-    previous = session.scalar(
-        select(TelemetryPoint)
+    # A telemetry payload also contains process lists and hardware sensors.
+    # Loading every full payload for a month can saturate the server's memory
+    # and delay all dashboard requests. Transfer only the network fragment.
+    network_value = TelemetryPoint.payload["network"]
+    previous = session.execute(
+        select(TelemetryPoint.recorded_at, network_value)
         .where(TelemetryPoint.node_id == node_id, TelemetryPoint.recorded_at < effective_start)
         .order_by(TelemetryPoint.recorded_at.desc())
         .limit(1)
-    )
-    points = session.scalars(
-        select(TelemetryPoint)
+    ).first()
+    points = session.execute(
+        select(TelemetryPoint.recorded_at, network_value)
         .where(TelemetryPoint.node_id == node_id, TelemetryPoint.recorded_at >= effective_start)
         .order_by(TelemetryPoint.recorded_at)
-    ).all()
-    previous_pair = _network_counters(previous.payload) if previous is not None else None
-    previous_recorded_at = previous.recorded_at if previous is not None else None
+        .execution_options(yield_per=1024)
+    )
+    previous_pair = _network_counters({"network": previous[1]}) if previous is not None else None
+    previous_recorded_at = previous[0] if previous is not None else None
     received = sent = 0
     samples = 0
-    for point in points:
-        current_pair = _network_counters(point.payload)
+    for recorded_at, network in points:
+        network_payload = {"network": network}
+        current_pair = _network_counters(network_payload)
         if current_pair is None:
             continue
         samples += 1
         if previous_pair is not None:
-            elapsed = _elapsed_seconds(previous_recorded_at, point.recorded_at)
+            elapsed = _elapsed_seconds(previous_recorded_at, recorded_at)
             received_delta = _plausible_counter_delta(
                 previous_pair[0],
                 current_pair[0],
                 elapsed,
-                _reported_rate_limit(point.payload, "download_mbps", elapsed),
+                _reported_rate_limit(network_payload, "download_mbps", elapsed),
             )
             sent_delta = _plausible_counter_delta(
                 previous_pair[1],
                 current_pair[1],
                 elapsed,
-                _reported_rate_limit(point.payload, "upload_mbps", elapsed),
+                _reported_rate_limit(network_payload, "upload_mbps", elapsed),
             )
             if received_delta is not None:
                 received += received_delta
@@ -268,7 +274,7 @@ def node_monthly_network_usage(
             )
         else:
             previous_pair = current_pair
-        previous_recorded_at = point.recorded_at
+        previous_recorded_at = recorded_at
     return NetworkUsageSummary(
         period_start=effective_start,
         received_bytes=received,

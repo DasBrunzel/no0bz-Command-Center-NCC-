@@ -147,7 +147,8 @@ def test_fleet_api_is_protected_and_returns_latest_metrics(tmp_path: Path) -> No
             json={"sender_node_id": online_id, "body": "**Hallo Fleet**", "body_format": "markdown"},
         )
         assert chat_message.status_code == 201
-        assert chat_message.json()["sender_name"] == "Root Server"
+        assert chat_message.json()["sender_name"] == "Commander"
+        assert chat_message.json()["sender_node_id"] is None
         uploaded = client.post(
             "/api/v1/fleet/chat/uploads",
             headers=headers,

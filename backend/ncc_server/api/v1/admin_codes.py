@@ -5,7 +5,7 @@ import string
 from datetime import datetime, timedelta, timezone
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from ncc.security import limited
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
@@ -98,8 +98,17 @@ async def redeem(
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-async def logout(response: Response) -> None:
-    """Forget only this browser session so another one-time code can be used."""
+async def logout(request: Request, response: Response, session: Session = Depends(database_session)) -> None:
+    """Revoke this browser session and forget its cookie."""
+    raw = request.cookies.get("ncc_dashboard_session")
+    if raw:
+        session.execute(
+            update(DashboardSession)
+            .where(DashboardSession.token_hash == digest(raw))
+            .where(DashboardSession.revoked_at.is_(None))
+            .values(revoked_at=utc_now())
+        )
+        session.commit()
     response.delete_cookie("ncc_dashboard_session", samesite="strict")
 
 

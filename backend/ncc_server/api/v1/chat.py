@@ -5,7 +5,12 @@ from fastapi.responses import FileResponse
 from ncc.security import limited
 from sqlalchemy.orm import Session
 
-from ncc_server.auth import database_session, require_dashboard_access
+from ncc_server.auth import (
+    DashboardIdentity,
+    database_session,
+    require_dashboard_access,
+    require_dashboard_identity,
+)
 from ncc_server.chat_service import (
     create_chat_message,
     find_chat_attachment,
@@ -31,18 +36,19 @@ async def messages(limit: int = 100, session: Session = Depends(database_session
 
 
 @router.get("/participants", response_model=list[FleetChatParticipantResponse])
-async def participants(request: Request, session: Session = Depends(database_session)) -> list[FleetChatParticipantResponse]:
-    return list_chat_participants(session, request.app.state.server_settings)
+async def participants(identity: DashboardIdentity = Depends(require_dashboard_identity), session: Session = Depends(database_session)) -> list[FleetChatParticipantResponse]:
+    return list_chat_participants(session, identity)
 
 
 @router.post("/messages", response_model=FleetChatMessageResponse, status_code=201)
 async def send_message(
     payload: FleetChatMessageCreateRequest,
+    identity: DashboardIdentity = Depends(require_dashboard_identity),
     session: Session = Depends(database_session),
 ) -> FleetChatMessageResponse:
     return create_chat_message(
         session,
-        sender_node_id=payload.sender_node_id,
+        identity=identity,
         body=payload.body,
         body_format=payload.body_format,
     )
@@ -52,16 +58,16 @@ async def send_message(
 async def send_attachment(
     request: Request,
     file: UploadFile = File(...),
-    sender_node_id: str | None = Form(default=None),
     body: str = Form(default=""),
     body_format: str = Form(default="plain"),
+    identity: DashboardIdentity = Depends(require_dashboard_identity),
     session: Session = Depends(database_session),
 ) -> FleetChatMessageResponse:
     if body_format not in {"plain", "markdown"}:
         raise HTTPException(status_code=422, detail="unsupported message format")
     return create_chat_message(
         session,
-        sender_node_id=sender_node_id or None,
+        identity=identity,
         body=body,
         body_format=body_format,
         attachment=file,

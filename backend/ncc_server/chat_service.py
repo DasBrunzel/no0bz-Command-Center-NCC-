@@ -9,9 +9,9 @@ from fastapi import HTTPException, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ncc_server.auth import DashboardIdentity
 from ncc_server.config import ServerSettings
-from ncc_server.models import FleetChatMessage, Node
-from ncc_server.node_service import is_online
+from ncc_server.models import FleetChatMessage, User
 from ncc_server.schemas import (
     FleetChatAttachmentResponse,
     FleetChatMessageResponse,
@@ -30,24 +30,26 @@ def list_chat_messages(session: Session, limit: int) -> list[FleetChatMessageRes
 
 
 def list_chat_participants(
-    session: Session, settings: ServerSettings
+    session: Session, identity: DashboardIdentity
 ) -> list[FleetChatParticipantResponse]:
-    nodes = session.scalars(select(Node).order_by(Node.display_name, Node.id)).all()
-    return [
+    users = session.scalars(select(User).where(User.active.is_(True)).order_by(User.username)).all()
+    participants = [
         FleetChatParticipantResponse(
-            node_id=node.id,
-            display_name=node.display_name,
-            platform=node.platform,
-            online=is_online(node, settings.node_offline_after_seconds),
+            user_id=user.id,
+            display_name=user.username,
+            role=user.role,
         )
-        for node in nodes
+        for user in users if user.role in {"commander", "beta_tester"}
     ]
+    if identity.user_id is None:
+        participants.append(FleetChatParticipantResponse(user_id=None, display_name=identity.username, role=identity.access_role))
+    return participants
 
 
 def create_chat_message(
     session: Session,
     *,
-    sender_node_id: str | None,
+    identity: DashboardIdentity,
     body: str,
     body_format: str,
     attachment: UploadFile | None = None,
@@ -56,12 +58,9 @@ def create_chat_message(
     body = body.rstrip()
     if not body and attachment is None:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="message is empty")
-    node = session.get(Node, sender_node_id) if sender_node_id else None
-    if sender_node_id and node is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="chat sender node not found")
     message = FleetChatMessage(
-        sender_node_id=node.id if node else None,
-        sender_name=node.display_name if node else "NCC Dashboard",
+        sender_user_id=identity.user_id,
+        sender_name=identity.username,
         body=body,
         body_format=body_format,
     )
@@ -120,6 +119,7 @@ def _message_response(message: FleetChatMessage) -> FleetChatMessageResponse:
     return FleetChatMessageResponse(
         message_id=message.id,
         sender_node_id=message.sender_node_id,
+        sender_user_id=message.sender_user_id,
         sender_name=message.sender_name,
         body=message.body,
         body_format=message.body_format,  # type: ignore[arg-type]

@@ -57,6 +57,13 @@ erstellen sowie keine Geräte, Einladungen oder Zugänge löschen oder widerrufe
 Admin-Codes werden nur einmal angezeigt, als Hash gespeichert und erzeugen eine
 HttpOnly-Browsersitzung. Ein Widerruf beendet die zugehörige Sitzung.
 
+Commander können unter **Einstellungen → Benutzerkonten** persönliche Konten
+für Commander und Beta-Tester anlegen, Rollen ändern und Konten deaktivieren.
+Die Anmeldung erfolgt dann mit Benutzername und Passwort; bestehende Admin-Codes
+bleiben gültig. Im Fleet Chat wird der angemeldete Name als Absender gespeichert.
+Persönliche Konten können ihr Passwort in den Einstellungen ändern. Dabei werden
+andere aktive Sitzungen dieses Kontos abgemeldet.
+
 ### Dashboard, Fleet und Statistiken
 
 Das Dashboard nutzt das dunkle **Command Mint**-Design der „Alles im Blick“-Demo.

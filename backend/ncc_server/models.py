@@ -191,7 +191,8 @@ class DashboardSession(Base):
     __tablename__ = "dashboard_sessions"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    code_id: Mapped[str] = mapped_column(ForeignKey("admin_codes.id", ondelete="CASCADE"), nullable=False)
+    code_id: Mapped[str | None] = mapped_column(ForeignKey("admin_codes.id", ondelete="CASCADE"))
+    user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -273,6 +274,7 @@ class FleetChatMessage(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     sender_node_id: Mapped[str | None] = mapped_column(ForeignKey("nodes.id", ondelete="SET NULL"))
+    sender_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     sender_name: Mapped[str] = mapped_column(String(128), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False, default="")
     body_format: Mapped[str] = mapped_column(String(16), nullable=False, default="plain")
