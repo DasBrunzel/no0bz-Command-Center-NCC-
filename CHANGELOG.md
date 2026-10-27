@@ -8,6 +8,8 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   physischen Gerät zuordnen oder wieder lösen. Der Navigator zeigt das Gerät
   dann einmal und bevorzugt das gerade aktive Profil; Commander können zwischen
   den Profilen wechseln.
+- Die Statistik „Netzwerk nach Gerät“ summiert die Monatswerte verknüpfter
+  OS-Profile unter dem physischen Gerät und zählt dieses nur einmal.
 - Inaktive Dualboot-Profile lösen keine Warnungen mehr durch alte CPU-, GPU-
   oder Agent-Messwerte aus, solange das andere OS-Profil online ist. Sind beide
   offline, bleibt die echte Offline-Warnung erhalten.

@@ -1749,6 +1749,19 @@ function StatisticsPage({
   const totalReceived = Object.values(traffic).reduce((total, item) => total + item.received_bytes, 0);
   const totalSent = Object.values(traffic).reduce((total, item) => total + item.sent_bytes, 0);
   const trafficAvailable = Object.values(traffic).some((item) => item.available);
+  const trafficDevices = Array.from(nodes.reduce((result, node) => {
+    const key = node.physical_device_id || node.node_id;
+    const current = result.get(key) || { key, name: node.physical_device_name || node.display_name, received: 0, sent: 0, available: false };
+    const usage = traffic[node.node_id];
+    if (usage?.available) {
+      current.received += usage.received_bytes;
+      current.sent += usage.sent_bytes;
+      current.available = true;
+    }
+    result.set(key, current);
+    return result;
+  }, new Map<string, { key: string; name: string; received: number; sent: number; available: boolean }>()).values());
+  const evaluatedDevices = trafficDevices.filter((device) => device.available).length;
   const percentOnline = summary?.total_nodes
     ? Math.round((summary.online_nodes / summary.total_nodes) * 100)
     : 0;
@@ -1796,9 +1809,8 @@ function StatisticsPage({
   const [selectedTrafficDirection, setSelectedTrafficDirection] = useState<"download" | "upload">("download");
   const selectedTotal = selectedTrafficDirection === "download" ? totalReceived : totalSent;
   const trafficSeries = liveTraffic.map((sample) => selectedTrafficDirection === "download" ? sample.download : sample.upload);
-  const trafficRanking = [...nodes].sort((left, right) =>
-    (traffic[right.node_id]?.[selectedTrafficDirection === "download" ? "received_bytes" : "sent_bytes"] || 0) -
-    (traffic[left.node_id]?.[selectedTrafficDirection === "download" ? "received_bytes" : "sent_bytes"] || 0),
+  const trafficRanking = [...trafficDevices].sort((left, right) =>
+    (selectedTrafficDirection === "download" ? right.received - left.received : right.sent - left.sent),
   ).slice(0, 5);
   const averageAvailability = availability.length
     ? availability.reduce((total, entry) => total + entry.value, 0) / availability.length
@@ -1807,8 +1819,8 @@ function StatisticsPage({
     <div className="page-intro"><div><div className="eyebrow">INSIGHTS / FLEET</div><h1>Muster erkennen.</h1><p>Verfügbarkeit, Rekorde und Traffic über die gesamte Fleet.</p></div></div>
     <div className="stats-summary">
       <div><small>FLEET-VERFÜGBARKEIT · SEIT AUFNAHME</small><strong>{averageAvailability.toFixed(2)}<span>%</span></strong><p>Durchschnitt aller OS-Profile</p></div>
-      <div><small>GESAMT-DOWNLOAD · DIESER MONAT</small><strong>{trafficAvailable ? trafficBytes(totalReceived) : "…"}</strong><p>{trafficAvailable ? `${Object.values(traffic).filter((item) => item.available).length}/${nodes.length} Geräte ausgewertet` : "Monatswerte werden berechnet"}</p></div>
-      <div><small>GESAMT-UPLOAD · DIESER MONAT</small><strong>{trafficAvailable ? trafficBytes(totalSent) : "…"}</strong><p>{trafficAvailable ? `${Object.values(traffic).filter((item) => item.available).length}/${nodes.length} Geräte ausgewertet` : "Monatswerte werden berechnet"}</p></div>
+      <div><small>GESAMT-DOWNLOAD · DIESER MONAT</small><strong>{trafficAvailable ? trafficBytes(totalReceived) : "…"}</strong><p>{trafficAvailable ? `${evaluatedDevices}/${trafficDevices.length} Geräte ausgewertet` : "Monatswerte werden berechnet"}</p></div>
+      <div><small>GESAMT-UPLOAD · DIESER MONAT</small><strong>{trafficAvailable ? trafficBytes(totalSent) : "…"}</strong><p>{trafficAvailable ? `${evaluatedDevices}/${trafficDevices.length} Geräte ausgewertet` : "Monatswerte werden berechnet"}</p></div>
     </div>
     <div className="stats-layout">
       <div className="detail-card">
@@ -1823,9 +1835,9 @@ function StatisticsPage({
         <div className="segmented stats-tabs"><button type="button" className={selectedTrafficDirection === "download" ? "selected" : ""} onClick={() => setSelectedTrafficDirection("download")}>Download</button><button type="button" className={selectedTrafficDirection === "upload" ? "selected" : ""} onClick={() => setSelectedTrafficDirection("upload")}>Upload</button></div>
         <ConceptSparkline values={trafficSeries} color="var(--mint)" height={172} fill/>
         <div className="chart-axis"><span>LIVE-VERLAUF · LETZTE MESSPUNKTE</span><span>JETZT</span></div>
-        <div className="traffic-breakdown">{trafficRanking.map((node) => {
-          const value = traffic[node.node_id]?.[selectedTrafficDirection === "download" ? "received_bytes" : "sent_bytes"] || 0;
-          return <div key={node.node_id}><span>{node.display_name}</span><ConceptMeter value={selectedTotal ? value / selectedTotal * 100 : 0}/><b>{traffic[node.node_id]?.available ? trafficBytes(value) : "—"}</b></div>;
+        <div className="traffic-breakdown">{trafficRanking.map((device) => {
+          const value = selectedTrafficDirection === "download" ? device.received : device.sent;
+          return <div key={device.key}><span>{device.name}</span><ConceptMeter value={selectedTotal ? value / selectedTotal * 100 : 0}/><b>{device.available ? trafficBytes(value) : "—"}</b></div>;
         })}</div>
       </div>
     </div>
