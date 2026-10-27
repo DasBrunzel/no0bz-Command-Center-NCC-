@@ -86,7 +86,9 @@ seltener geladen und ausgeblendete Browser-Tabs pausieren die Abfragen.
 Die Seite **Statistiken** zeigt die Verfügbarkeit seit Aufnahme samt Uptime-Rekord,
 Monatsverkehr und einen Live-Gesamtverlauf für Up- und Download. Zugeordnete
 Dualboot-Profile erscheinen in „Netzwerk nach Gerät“ zusammengefasst. Rohdaten
-bleiben erhalten; die Monatsanzeige beginnt am Monatsersten neu.
+bleiben erhalten; die Monatsanzeige beginnt am Monatsersten neu. Für den
+Live-Verlauf überträgt `/api/v1/fleet/nodes/{node_id}/network/history` nur
+Netzwerkwerte und Zeitstempel statt vollständiger Telemetrie.
 
 Der Server überwacht zudem die **Agent-Gesundheit** unabhängig vom Zugriff auf das
 jeweilige Gerät. Warnungen informieren über fehlende frische Telemetrie, alte
