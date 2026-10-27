@@ -147,7 +147,11 @@ def _active_alerts(
 ) -> list[tuple[str, str, str]]:
     name = node.display_name
     alerts: list[tuple[str, str, str]] = []
-    if not is_online(node, settings.node_offline_after_seconds) and not _physical_device_online(session, node, settings):
+    if not is_online(node, settings.node_offline_after_seconds):
+        if _physical_device_online(session, node, settings):
+            # A dualboot OS profile is dormant while its sibling is active.
+            # Its last telemetry values must not keep triggering alerts.
+            return []
         return [("offline", "critical", f"{name} ist offline.")]
     cpu = _number(_nested(metrics, "cpu", "percent"))
     memory = _number(_nested(metrics, "memory", "percent"))

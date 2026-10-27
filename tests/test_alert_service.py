@@ -11,7 +11,15 @@ from ncc_server.alert_service import (
 )
 from ncc_server.config import ServerSettings
 from ncc_server.database import Database
-from ncc_server.models import AlertState, AuditEvent, Base, Node, TelemetryPoint, utc_now
+from ncc_server.models import (
+    AlertState,
+    AuditEvent,
+    Base,
+    Node,
+    PhysicalDevice,
+    TelemetryPoint,
+    utc_now,
+)
 from ncc_server.telegram import format_telegram_alert
 
 
@@ -92,6 +100,36 @@ def test_alerts_notify_once_then_send_a_resolution(tmp_path: Path) -> None:
         assert len(notifications) == 1
         assert notifications[0].state == "resolved"
         assert session.query(AlertState).one().active is False
+
+
+def test_inactive_dualboot_profile_does_not_alert_on_stale_metrics(tmp_path: Path) -> None:
+    database = Database(f"sqlite+pysqlite:///{(tmp_path / 'dualboot-alerts.db').as_posix()}")
+    Base.metadata.create_all(database.engine)
+    settings = ServerSettings(database_url="sqlite+pysqlite://")
+    with database.session() as session:
+        device = PhysicalDevice(display_name="HorstPC")
+        session.add(device)
+        session.flush()
+        windows = Node(machine_id="dualboot-windows", display_name="HorstPC", platform="windows", approved=True, physical_device_id=device.id, last_seen_at=utc_now())
+        linux = Node(machine_id="dualboot-linux", display_name="CachyOS", platform="linux", approved=True, physical_device_id=device.id, last_seen_at=utc_now() - timedelta(minutes=5))
+        session.add_all([windows, linux])
+        session.flush()
+        session.add(TelemetryPoint(node_id=linux.id, recorded_at=utc_now() - timedelta(minutes=5), payload={"cpu": {"percent": 99.0}}))
+        session.commit()
+        linux_id = linux.id
+        windows_id = windows.id
+
+    with database.session() as session:
+        evaluate_alerts(session, settings)
+        assert session.query(AlertState).filter_by(node_id=linux_id, active=True).count() == 0
+        windows = session.get(Node, windows_id)
+        assert windows is not None
+        windows.last_seen_at = utc_now() - timedelta(minutes=5)
+        session.commit()
+
+    with database.session() as session:
+        evaluate_alerts(session, settings)
+        assert {alert.kind for alert in session.query(AlertState).filter_by(node_id=linux_id, active=True)} == {"offline"}
 
 
 def test_unraid_temperature_and_array_alerts_are_actionable(tmp_path: Path) -> None:

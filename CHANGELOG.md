@@ -4,6 +4,9 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## 0.6.0-beta.4 - in Arbeit
 
+- Inaktive Dualboot-Profile lösen keine Warnungen mehr durch alte CPU-, GPU-
+  oder Agent-Messwerte aus, solange das andere OS-Profil online ist. Sind beide
+  offline, bleibt die echte Offline-Warnung erhalten.
 - Der Fleet Chat zeigt während der ersten Abfrage einen Ladezustand statt
   fälschlich einen leeren Verlauf und null Mitglieder. Antworten aus einer
   vorherigen Anmeldung überschreiben den Chat nach einem Kontowechsel nicht mehr.
