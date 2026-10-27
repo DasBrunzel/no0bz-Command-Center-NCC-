@@ -1995,7 +1995,9 @@ function ChatAttachmentView({ attachment, token, onOpen }: { attachment: ChatAtt
     const response = await fetch(attachment.url, { headers: headers(token) });
     if (!response.ok) return;
     const temporary = URL.createObjectURL(await response.blob());
-    const link = document.createElement("a"); link.href = temporary; link.download = attachment.name; link.click(); URL.revokeObjectURL(temporary);
+    const link = document.createElement("a"); link.href = temporary; link.download = attachment.name; link.click();
+    // Keep the blob alive until the browser has started saving the download.
+    window.setTimeout(() => URL.revokeObjectURL(temporary), 60_000);
   };
   if (kind === "image") return <button type="button" className="chat-media image" onClick={() => url && onOpen(attachment, url, "image")}><img src={url} alt={attachment.name} /><span><ImageIcon size={14} />{attachment.name}<Maximize2 size={13} /></span></button>;
   if (kind === "video") return <div className="chat-media video"><header><Film size={14} />{attachment.name}</header>{url && <video src={url} controls preload="metadata" />}</div>;

@@ -6,6 +6,8 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 - Im Fleet Chat bleibt eine gerade gesendete Nachricht sichtbar, auch wenn
   die erste Verlaufsabfrage erst danach antwortet.
+- Dateidownloads im Fleet Chat behalten ihre temporäre Browser-Adresse bis
+  nach dem Start des Speichervorgangs, statt sie sofort freizugeben.
 - Ein Fehler der Warnungsabfrage verwirft geladene Fleet-Geräte nicht mehr;
   ein Fehler der Geräteabfrage lässt Warnungen und die angemeldete Ansicht
   bestehen. Nur ein echter HTTP-401-Fehler beendet die Sitzung.
