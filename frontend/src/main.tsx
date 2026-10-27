@@ -1372,10 +1372,14 @@ function CommandOverviewExact({
   }, new Map<string, Node>()).values());
   const online = representatives.filter((node) => node.online).length;
   const offline = representatives.length - online;
-  const onlineMetrics = representatives.filter((node) => node.online).map((node) => node.latest?.metrics.network || {});
-  const down = onlineMetrics.reduce((total, network) => total + num(network.download_mbps), 0);
-  const up = onlineMetrics.reduce((total, network) => total + num(network.upload_mbps), 0);
-  const netHistory = points.map((point) => num(point.metrics.network?.download_mbps));
+  // The chart below uses the selected node's samples. Its headline values
+  // must use that same node instead of an unrelated fleet-wide sum.
+  const selectedNetwork = selected?.online ? selected.latest?.metrics.network : null;
+  const down = num(selectedNetwork?.download_mbps);
+  const up = num(selectedNetwork?.upload_mbps);
+  const netHistory = selected?.online
+    ? points.map((point) => num(point.metrics.network?.download_mbps))
+    : [];
   const availability = representatives.length
     ? representatives.reduce((total, node) => total + num(node.availability_percent), 0) / representatives.length
     : 0;
@@ -1433,7 +1437,7 @@ function CommandOverviewExact({
       </div>
       <div className="overview-right">
         <div className="event-card"><ConceptSectionHead eyebrow="ACTIVITY LOG" title="Ereignis-Zeitstrahl"/><div className="timeline">{events.map((event, index) => <div className="timeline-item" key={`${event.label}-${index}`}><span className={`timeline-dot ${event.hot ? "hot" : ""}`}/><div><b>{event.label}</b><small>{event.when}</small></div></div>)}</div><button className="text-link" onClick={onOpenAlerts}>Zum Ereigniscenter <ConceptIcon name="arrow" size={15}/></button></div>
-        <div className="signal-card"><div className="eyebrow">SIGNAL QUALITY</div><div className="signal-score">{availability.toFixed(1)}<span>%</span></div><p>Fleet-Verfügbarkeit · seit Aufnahme</p><div className="signal-bars">{Array.from({length:28},(_,i)=><span key={i} style={{height:`${Math.max(20, Math.min(100, availability + ((i * 17) % 19) - 9))}%`}}/>)}</div><small>Alle Knoten werden überwacht</small></div>
+        <div className="signal-card"><div className="eyebrow">SIGNAL QUALITY</div><div className="signal-score">{availability.toFixed(1)}<span>%</span></div><p>Fleet-Verfügbarkeit · seit Aufnahme</p><div className="signal-bars" role="img" aria-label={`Fleet-Verfügbarkeit ${availability.toFixed(1)} Prozent`}>{Array.from({length:28},(_,i)=><span key={i} style={{height: i < Math.round(availability / 100 * 28) ? "100%" : "20%", opacity: i < Math.round(availability / 100 * 28) ? 0.65 : 0.18}}/>)}</div><small>Alle Knoten werden überwacht</small></div>
       </div>
     </div>
   </>;

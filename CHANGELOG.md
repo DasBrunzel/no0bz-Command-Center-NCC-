@@ -4,6 +4,9 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## Laufende Entwicklung auf dem 0.6-Branch
 
+- Im Command Overview zeigen die Netzwerkzahlen und die Verlaufskurve jetzt
+  dasselbe ausgewählte Gerät. Die Balken der Fleet-Verfügbarkeit bilden den
+  echten Prozentwert ab statt künstlich schwankende Messwerte vorzutäuschen.
 - Nach dem manuellen Zurücksetzen der Traffic-Statistik startet die
   Monatsberechnung mit dem ersten neuen Messpunkt. Ein Zählerstand vor dem
   Reset fließt nicht mehr erneut in die Anzeige ein.
