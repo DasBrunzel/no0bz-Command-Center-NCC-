@@ -4,6 +4,8 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [0.6.0-beta.8-dev.0] – Laufende Entwicklung
 
+- Auf schmalen Bildschirmen bleiben im Fleet Chat der Nachrichtenverlauf und
+  das Eingabefeld gemeinsam sichtbar; Nachrichtentext ist besser lesbar.
 - Beim Wechsel zwischen Geräten zeigt die Netzwerk-Monatszahl keinen
   zwischengespeicherten Wert des zuvor ausgewählten Geräts mehr an.
 - Agenten senden Herzschläge und wiederholen fehlgeschlagene Verbindungen

@@ -115,3 +115,18 @@
 .component-versions dd span{display:block;margin-top:4px}
 .component-versions dd small{color:var(--muted);font-size:11px}
 @media(max-width:760px){.component-versions{grid-template-columns:1fr}}
+
+/* Keep the latest messages and composer visible together on narrow screens. */
+@media (max-width: 620px) {
+  .concept-chat-page .chat-shell {
+    height: clamp(460px, calc(100dvh - 240px), 800px);
+    min-height: 0;
+  }
+  .concept-chat-page .chat-messages {
+    min-height: 0;
+    max-height: none;
+  }
+  .concept-chat-page .message-body {
+    font-size: 13px;
+  }
+}
