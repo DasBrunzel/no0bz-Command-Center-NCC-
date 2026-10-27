@@ -25,5 +25,7 @@ build/
 target/
 hardware/**/bin/
 hardware/**/obj/
+windows/**/bin/
+windows/**/obj/
 *.spec
 
