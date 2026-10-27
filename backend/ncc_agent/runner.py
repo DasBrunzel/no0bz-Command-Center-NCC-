@@ -56,21 +56,23 @@ class AgentRunner:
         backoff = 1.0
         next_network_attempt = 0.0
         heartbeat_interval = self.settings.heartbeat_interval_seconds
-        last_buffered_snapshot_at: float | None = None
+        last_buffered_generation = 0
         logger.info("NCC Agent %s started as %s", self.machine_id, self.settings.display_name or "host")
         try:
             while not self.stop_event.wait(self.settings.collection_interval_seconds):
                 snapshot = self.collector.snapshot()
+                generation = int(snapshot["generation"])
                 snapshot_at = float(snapshot["timestamp"])
                 # The collector runs independently from this upload loop. On a
                 # busy host the upload loop can read the same snapshot twice.
-                # Queue it once so a stale read is not reported as a second agent.
-                if _is_new_snapshot(snapshot_at, last_buffered_snapshot_at):
+                # Use collection order rather than wall time, which can move
+                # backwards when the system clock is corrected.
+                if _is_new_snapshot(generation, last_buffered_generation):
                     self.buffer.append(
                         _metrics(snapshot),
                         datetime.fromtimestamp(snapshot_at, timezone.utc),
                     )
-                    last_buffered_snapshot_at = snapshot_at
+                    last_buffered_generation = generation
                 if time.monotonic() < next_network_attempt:
                     continue
                 try:
@@ -122,9 +124,9 @@ class AgentRunner:
         self.stop_event.set()
 
 
-def _is_new_snapshot(snapshot_at: float, last_buffered_snapshot_at: float | None) -> bool:
+def _is_new_snapshot(generation: int, last_buffered_generation: int) -> bool:
     """Return whether a collector snapshot has not already been queued."""
-    return last_buffered_snapshot_at is None or snapshot_at > last_buffered_snapshot_at
+    return generation > last_buffered_generation
 
 
 def _metrics(snapshot: dict[str, Any]) -> dict[str, object]:

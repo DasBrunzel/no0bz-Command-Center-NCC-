@@ -102,7 +102,7 @@ class SnapshotCollector:
         self.interval = interval
         self.node_id = node_id
         self._lock = threading.Lock()
-        self._snapshot: dict[str, Any] = {"node_id": node_id, "timestamp": time.time(), "metrics": {}}
+        self._snapshot: dict[str, Any] = {"node_id": node_id, "timestamp": time.time(), "generation": 0, "metrics": {}}
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -123,9 +123,14 @@ class SnapshotCollector:
 
     def _run(self) -> None:
         while not self._stop.is_set():
-            snapshot = {"node_id": self.node_id, "timestamp": time.time(), "metrics": self.registry.collect()}
+            metrics = self.registry.collect()
             with self._lock:
-                self._snapshot = snapshot
+                self._snapshot = {
+                    "node_id": self.node_id,
+                    "timestamp": time.time(),
+                    "generation": int(self._snapshot["generation"]) + 1,
+                    "metrics": metrics,
+                }
             self._stop.wait(self.interval)
 
 

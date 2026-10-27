@@ -3,10 +3,12 @@ from __future__ import annotations
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import Mock
 
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from ncc.collectors.registry import SnapshotCollector
 from ncc_agent.buffer import TelemetryBuffer
 from ncc_agent.client import AgentClient
 from ncc_agent.config import AgentSettings
@@ -31,10 +33,31 @@ def test_machine_identity_is_stable_and_private(tmp_path: Path) -> None:
 
 
 def test_agent_queues_each_collector_snapshot_only_once() -> None:
-    assert _is_new_snapshot(10.0, None)
-    assert _is_new_snapshot(10.1, 10.0)
-    assert not _is_new_snapshot(10.0, 10.0)
-    assert not _is_new_snapshot(9.9, 10.0)
+    assert not _is_new_snapshot(0, 0)  # The collector has not produced data yet.
+    assert _is_new_snapshot(1, 0)
+    assert _is_new_snapshot(2, 1)
+    assert not _is_new_snapshot(1, 1)
+
+
+def test_collector_uses_collection_order_when_wall_clock_moves_backwards(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    timestamps = iter((100.0, 90.0, 80.0))
+    monkeypatch.setattr("ncc.collectors.registry.time.time", lambda: next(timestamps))
+    registry = Mock()
+    registry.collect.return_value = {"cpu": {"percent": 50}}
+    collector = SnapshotCollector(registry, interval=1, node_id="test-node")
+    assert collector.snapshot()["generation"] == 0
+
+    stop = Mock()
+    stop.is_set.side_effect = (False, False, True)
+    collector._stop = stop
+    collector._run()
+
+    snapshot = collector.snapshot()
+    assert snapshot["timestamp"] == 80.0
+    assert snapshot["generation"] == 2
+    assert _is_new_snapshot(snapshot["generation"], 1)
 
 
 def test_invalid_machine_identity_is_not_silently_replaced(tmp_path: Path) -> None:
