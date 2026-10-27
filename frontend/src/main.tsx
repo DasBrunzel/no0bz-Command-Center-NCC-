@@ -3100,30 +3100,46 @@ function App() {
       if (!silent) setLoading(true);
       if (full) void loadConfiguration();
       try {
-        const [nextNodes, nextAlerts] = await Promise.all([
+        const [nextNodes, nextAlerts] = await Promise.allSettled([
           getJson<Node[]>("/api/v1/fleet/nodes", token),
           getJson<AlertRecord[]>("/api/v1/fleet/alerts", token),
         ]);
         if (activeTokenRef.current !== token || authEpochRef.current !== authEpoch) return;
-        setNodes(nextNodes);
-        setAlerts(nextAlerts);
-        const activeAlertIds = new Set(
-          nextAlerts.filter((alert) => alert.active).map((alert) => alert.alert_id),
-        );
-        setDismissedAlertIds((current) => {
-          const next = new Set([...current].filter((id) => activeAlertIds.has(id)));
-          if (next.size === current.size && [...next].every((id) => current.has(id))) return current;
-          localStorage.setItem("ncc-dismissed-alerts", JSON.stringify([...next]));
-          return next;
-        });
+        if ([nextNodes, nextAlerts].some((result) =>
+          result.status === "rejected" && (result.reason as { status?: number }).status === 401
+        )) {
+          setAuthenticated(false);
+          setAuthError(true);
+          setConnectionOnline(false);
+          return;
+        }
+        if (nextNodes.status === "rejected" && nextAlerts.status === "rejected") {
+          setConnectionOnline(false);
+          return;
+        }
+        if (nextNodes.status === "fulfilled") {
+          setNodes(nextNodes.value);
+          setSelectedId((current) =>
+            nextNodes.value.some((node) => node.node_id === current)
+              ? current
+              : nextNodes.value[0]?.node_id || "",
+          );
+        }
+        if (nextAlerts.status === "fulfilled") {
+          setAlerts(nextAlerts.value);
+          const activeAlertIds = new Set(
+            nextAlerts.value.filter((alert) => alert.active).map((alert) => alert.alert_id),
+          );
+          setDismissedAlertIds((current) => {
+            const next = new Set([...current].filter((id) => activeAlertIds.has(id)));
+            if (next.size === current.size && [...next].every((id) => current.has(id))) return current;
+            localStorage.setItem("ncc-dismissed-alerts", JSON.stringify([...next]));
+            return next;
+          });
+        }
         setAuthenticated(true);
-        setConnectionOnline(true);
+        setConnectionOnline(nextNodes.status === "fulfilled");
         setAuthError(false);
-        setSelectedId((current) =>
-          nextNodes.some((node) => node.node_id === current)
-            ? current
-            : nextNodes[0]?.node_id || "",
-        );
       } catch (error) {
         if (activeTokenRef.current !== token || authEpochRef.current !== authEpoch) return;
         setConnectionOnline(false);

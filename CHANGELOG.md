@@ -4,6 +4,9 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## Laufende Entwicklung auf dem 0.6-Branch
 
+- Ein Fehler der Warnungsabfrage verwirft geladene Fleet-Geräte nicht mehr;
+  ein Fehler der Geräteabfrage lässt Warnungen und die angemeldete Ansicht
+  bestehen. Nur ein echter HTTP-401-Fehler beendet die Sitzung.
 - Die Statistik lädt Monatsverkehr für höchstens zwei Geräte gleichzeitig.
   Eine langsame Geräteabfrage hält die Werte aller anderen Geräte nicht mehr auf.
 - Der Agent zählt abgeschlossene Messungen nun unabhängig von der Systemuhr.
