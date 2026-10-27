@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from ncc_server.alert_service import AlertNotification, get_alert_policy, update_alert_policy
 from ncc_server.auth import database_session, require_commander_access, require_dashboard_access
 from ncc_server.fleet_service import (
+    attach_physical_device_node,
     clear_active_alerts,
     create_fleet_group,
     create_physical_device,
@@ -108,6 +109,19 @@ async def create_device(
 async def detach_device_node(device_id: str, node_id: str, session: Session = Depends(database_session)) -> None:
     if not detach_physical_device_node(session, device_id, node_id):
         raise HTTPException(status_code=404, detail="physical device or node not found")
+
+
+@router.post("/physical-devices/{device_id}/nodes/{node_id}", response_model=PhysicalDeviceResponse,
+             dependencies=[Depends(require_commander_access)])
+async def attach_device_node(device_id: str, node_id: str, session: Session = Depends(database_session)) -> PhysicalDeviceResponse:
+    try:
+        device = attach_physical_device_node(session, device_id, node_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if device is None:
+        raise HTTPException(status_code=404, detail="physical device or node not found")
+    session.expire(device, ["nodes"])
+    return _physical_device_response(device)
 
 
 @router.post("/groups", response_model=FleetGroupResponse, status_code=201)

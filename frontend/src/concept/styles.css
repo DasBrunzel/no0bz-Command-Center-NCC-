@@ -99,3 +99,11 @@
 .dashboard-user-row small { color: var(--muted); }
 .dashboard-user-row select { padding: 8px; }
 @media (max-width: 600px) { .dashboard-user-row { grid-template-columns: 1fr auto; } .dashboard-user-row select { grid-column: 1 / -1; grid-row: 2; } }
+
+.concept-profile-link { display: grid; gap: 14px; margin-top: 16px; padding: 18px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.concept-profile-link h3 { margin: 5px 0 0; font-size: 16px; }
+.concept-profile-tabs, .concept-profile-attach { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; }
+.concept-profile-tabs button { padding: 8px 12px; border: 1px solid var(--line); border-radius: 7px; background: transparent; color: var(--text); cursor: pointer; }
+.concept-profile-tabs button.active { border-color: var(--mint); color: var(--mint); }
+.concept-profile-attach label { display: grid; gap: 6px; min-width: min(100%, 220px); color: var(--muted); font-size: 12px; }
+.concept-profile-attach select { width: 100%; padding: 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); color: var(--text); }

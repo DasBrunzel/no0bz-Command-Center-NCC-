@@ -68,6 +68,30 @@ def seed(database: Database) -> tuple[str, str]:
         return online.id, offline.id
 
 
+def test_physical_device_linking_combines_dualboot_profiles(tmp_path: Path) -> None:
+    database = make_database(tmp_path / "physical-device.db")
+    windows_id, linux_id = seed(database)
+    settings = ServerSettings(database_url="sqlite+pysqlite://", dashboard_token=SecretStr("dashboard-secret"))
+    headers = {"X-NCC-Dashboard-Token": "dashboard-secret"}
+    with TestClient(create_app(settings, database)) as client:
+        created = client.post("/api/v1/fleet/physical-devices", headers=headers, json={"display_name": "HorstPC", "node_ids": [windows_id]})
+        assert created.status_code == 201
+        device_id = created.json()["device_id"]
+        linked = client.post(f"/api/v1/fleet/physical-devices/{device_id}/nodes/{linux_id}", headers=headers)
+        assert linked.status_code == 200
+        assert set(linked.json()["node_ids"]) == {windows_id, linux_id}
+        assert client.get("/api/v1/fleet/summary", headers=headers).json()["total_nodes"] == 1
+        assert client.get("/api/v1/fleet/nodes", headers=headers).json()[1]["physical_device_id"] == device_id
+        assert client.post(f"/api/v1/fleet/physical-devices/{device_id}/nodes/{linux_id}", headers=headers).status_code == 200
+        assert client.post(f"/api/v1/fleet/physical-devices/{device_id}/nodes/missing", headers=headers).status_code == 404
+        assert client.delete(f"/api/v1/fleet/physical-devices/{device_id}/nodes/{windows_id}", headers=headers).status_code == 204
+        other = client.post("/api/v1/fleet/physical-devices", headers=headers, json={"display_name": "Other PC", "node_ids": [windows_id]})
+        assert other.status_code == 201
+        assert client.post(f"/api/v1/fleet/physical-devices/{other.json()['device_id']}/nodes/{linux_id}", headers=headers).status_code == 409
+        assert client.delete(f"/api/v1/fleet/physical-devices/{device_id}/nodes/{linux_id}", headers=headers).status_code == 204
+        assert client.get("/api/v1/fleet/summary", headers=headers).json()["total_nodes"] == 2
+
+
 def test_fleet_api_is_protected_and_returns_latest_metrics(tmp_path: Path) -> None:
     database = make_database(tmp_path / "fleet.db")
     online_id, _ = seed(database)

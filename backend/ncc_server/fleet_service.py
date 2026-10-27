@@ -73,11 +73,32 @@ def create_physical_device(session: Session, display_name: str, node_ids: list[s
     return device
 
 
+def attach_physical_device_node(session: Session, device_id: str, node_id: str) -> PhysicalDevice | None:
+    device = session.get(PhysicalDevice, device_id)
+    node = session.get(Node, node_id)
+    if device is None or node is None:
+        return None
+    if node.physical_device_id not in (None, device_id):
+        raise ValueError("node already belongs to another physical device")
+    if node.physical_device_id != device_id:
+        node.physical_device_id = device_id
+        session.add(AuditEvent(
+            actor_type="dashboard", actor_id=node.id, action="physical-device.node-attached",
+            details=json.dumps({"device_id": device_id}),
+        ))
+        session.commit()
+    return device
+
+
 def detach_physical_device_node(session: Session, device_id: str, node_id: str) -> bool:
     node = session.get(Node, node_id)
     if node is None or node.physical_device_id != device_id:
         return False
     node.physical_device_id = None
+    session.add(AuditEvent(
+        actor_type="dashboard", actor_id=node.id, action="physical-device.node-detached",
+        details=json.dumps({"device_id": device_id}),
+    ))
     session.commit()
     return True
 

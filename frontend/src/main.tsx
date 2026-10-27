@@ -523,6 +523,8 @@ function Fleet({
   alerts,
   onCreateGroup,
   onLayout,
+  onAttachProfile,
+  onDetachProfile,
   canDelete,
   releases,
   token,
@@ -541,6 +543,8 @@ function Fleet({
   alerts: AlertRecord[];
   onCreateGroup: (name: string) => Promise<void>;
   onLayout: (placements: FleetPlacement[]) => Promise<void>;
+  onAttachProfile: (deviceId: string, nodeId: string) => Promise<void>;
+  onDetachProfile: (deviceId: string, nodeId: string) => Promise<void>;
   canDelete: boolean;
   releases: AgentRelease[];
   token: string;
@@ -554,6 +558,32 @@ function Fleet({
   const [groupFilter, setGroupFilter] = useState("Alle Gruppen");
   const [statusFilter, setStatusFilter] = useState("Alle Status");
   const [sortFilter, setSortFilter] = useState("name");
+  const [linkTarget, setLinkTarget] = useState("");
+  const [linkBusy, setLinkBusy] = useState(false);
+  const [linkError, setLinkError] = useState("");
+  useEffect(() => { setLinkTarget(""); setLinkError(""); }, [selected?.node_id]);
+  const physicalDevices = Array.from(nodes.reduce((result, node) => {
+    if (node.physical_device_id && !result.has(node.physical_device_id)) {
+      result.set(node.physical_device_id, node.physical_device_name || node.display_name);
+    }
+    return result;
+  }, new Map<string, string>()));
+  const selectedProfiles = selected?.physical_device_id
+    ? nodes.filter((node) => node.physical_device_id === selected.physical_device_id)
+    : [];
+  const changeProfileLink = async (attach: boolean) => {
+    if (!selected) return;
+    const deviceId = attach ? linkTarget : selected.physical_device_id;
+    if (!deviceId) return;
+    setLinkBusy(true);
+    setLinkError("");
+    try {
+      if (attach) await onAttachProfile(deviceId, selected.node_id);
+      else await onDetachProfile(deviceId, selected.node_id);
+      setLinkTarget("");
+    } catch { setLinkError("Das OS-Profil konnte nicht zugeordnet werden. Bitte erneut versuchen."); }
+    finally { setLinkBusy(false); }
+  };
   const fleetAlerts: FleetAlert[] = alerts.filter((alert) => alert.active && !dismissedAlerts.has(alert.alert_id)).map((alert) => ({
     id: alert.alert_id, title: alert.message, detail: `${alert.display_name} · seit ${ago(alert.opened_at)}`, severity: alert.severity,
   }));
@@ -614,7 +644,17 @@ function Fleet({
     }) : <div className="empty">Keine Geräte entsprechen diesen Filtern.</div>}</div>
     <div className="concept-fleet-actions"><button type="button" className="outline-button" onClick={() => setEditing((value) => !value)}>{editing ? "Gruppen schließen" : "Gruppen bearbeiten"}</button>{editing && <button type="button" className="outline-button" onClick={() => { const name = window.prompt("Name der neuen Gruppe"); if (name?.trim()) void onCreateGroup(name.trim()); }}>+ Gruppe</button>}</div>
     {editing && <div className="concept-group-editor">{grouped.map((group) => <div key={group.group_id} className="detail-card" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); void moveNode(group.group_id); }}><strong>{group.name}</strong>{group.nodes.map((node) => <button type="button" key={node.node_id} draggable onDragStart={() => setDraggedNodeId(node.node_id)} onDragEnd={() => setDraggedNodeId(null)} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); event.stopPropagation(); void moveNode(group.group_id, node.node_id); }}>{node.display_name}</button>)}</div>)}</div>}
-    {selected && <div className="concept-selected-node"><NodeOverview node={selected} points={points} monthlyNetwork={monthlyNetwork} canDelete={canDelete} releases={releases} token={token}/></div>}
+    {selected && <div className="concept-selected-node">
+      <NodeOverview node={selected} points={points} monthlyNetwork={monthlyNetwork} canDelete={canDelete} releases={releases} token={token}/>
+      {(selectedProfiles.length > 1 || canDelete) && <section className="concept-profile-link">
+        <div><span className="eyebrow">OS-PROFILE</span><h3>Physisches Gerät</h3></div>
+        {selectedProfiles.length > 1 && <div className="concept-profile-tabs">{selectedProfiles.map((profile) => <button type="button" className={profile.node_id === selected.node_id ? "active" : ""} key={profile.node_id} onClick={() => onSelect(profile.node_id)}>{profile.platform} · {profile.online ? "Online" : "Offline"}</button>)}</div>}
+        {canDelete && (selected.physical_device_id
+          ? <button type="button" className="outline-button" disabled={linkBusy} onClick={() => void changeProfileLink(false)}>Profil vom Gerät lösen</button>
+          : <div className="concept-profile-attach"><label>Diesem Gerät zuordnen<select value={linkTarget} onChange={(event) => setLinkTarget(event.target.value)}><option value="">Physisches Gerät wählen</option>{physicalDevices.map(([id, name]) => <option value={id} key={id}>{name}</option>)}</select></label><button type="button" className="outline-button" disabled={!linkTarget || linkBusy} onClick={() => void changeProfileLink(true)}>Profil verknüpfen</button></div>)}
+        {linkError && <small role="alert" className="form-error">{linkError}</small>}
+      </section>}
+    </div>}
   </>;
 }
 
@@ -3281,6 +3321,22 @@ function App() {
       return placement ? { ...node, fleet_group_id: placement.group_id, fleet_position: placement.position } : node;
     }));
   };
+  const attachProfile = async (deviceId: string, nodeId: string) => {
+    const response = await fetch(`/api/v1/fleet/physical-devices/${encodeURIComponent(deviceId)}/nodes/${encodeURIComponent(nodeId)}`, {
+      method: "POST", headers: headers(token),
+    });
+    if (!response.ok) throw new Error("REQUEST");
+    const onlineProfile = nodes.find((node) => node.physical_device_id === deviceId && node.online);
+    if (onlineProfile) setSelectedId(onlineProfile.node_id);
+    await load(false, false);
+  };
+  const detachProfile = async (deviceId: string, nodeId: string) => {
+    const response = await fetch(`/api/v1/fleet/physical-devices/${encodeURIComponent(deviceId)}/nodes/${encodeURIComponent(nodeId)}`, {
+      method: "DELETE", headers: headers(token),
+    });
+    if (!response.ok) throw new Error("REQUEST");
+    await load(false, false);
+  };
   const canManageAccess = accessRole === "commander";
   if (authenticated === null) return <div className="login"><section><Brand /><span className="eyebrow">NCC-VERBINDUNG</span><h1>{loading ? "Verbindung wird hergestellt." : "NCC-Server nicht erreichbar."}</h1><p>{loading ? "Das Dashboard lädt die aktuellen Fleet-Daten." : "Die Anmeldung wurde nicht zurückgesetzt. Prüfe die Verbindung und versuche es erneut."}</p>{!loading && <button className="primary-button" type="button" onClick={() => void load()}>Erneut verbinden <RefreshCw size={16} /></button>}</section></div>;
   if (authenticated === false)
@@ -3391,6 +3447,8 @@ function App() {
               alerts={alerts}
               onCreateGroup={createFleetGroup}
               onLayout={saveFleetLayout}
+              onAttachProfile={attachProfile}
+              onDetachProfile={detachProfile}
               canDelete={canManageAccess}
               releases={releases}
               token={token}
