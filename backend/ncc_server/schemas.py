@@ -390,7 +390,7 @@ class DashboardUserUpdateRequest(BaseModel):
     active: bool | None = None
 
     @model_validator(mode="after")
-    def require_change(self) -> "DashboardUserUpdateRequest":
+    def require_change(self) -> DashboardUserUpdateRequest:
         if self.role is None and self.active is None:
             raise ValueError("role or active must be supplied")
         return self

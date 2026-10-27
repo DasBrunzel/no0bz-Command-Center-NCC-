@@ -30,6 +30,9 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   Frontend-Bundle und verändert dadurch keine versionierten Builddateien mehr.
   Ein separater Update-Helfer sichert vorhandene lokale Dashboard-Dateien in
   einem separaten Sicherungsordner, bevor der Server aktualisiert wird.
+- Der Server-Updater vergleicht das Dashboard im Repository, im installierten
+  Python-Paket und in der laufenden HTTP-Antwort. Ein Dienstneustart mit einem
+  veralteten Dashboard gilt dadurch nicht mehr als erfolgreiches Update.
 
 - Das Fleet-Dashboard wurde auf die neue **Mission-Control**-Informationsarchitektur
   umgestellt: Zuerst erscheinen Fleet-Status, offene Ereignisse und Live-Traffic,

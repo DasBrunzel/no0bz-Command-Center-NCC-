@@ -52,9 +52,13 @@ def test_service_migration_uses_external_environment_file(
     engine = create_engine(f"sqlite+pysqlite:///{database_path.as_posix()}")
     with engine.connect() as connection:
         revision = connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-        assert revision == "20261008_0017"
+        assert revision == "20261026_0018"
         assert connection.execute(text("SELECT COUNT(*) FROM nodes")).scalar_one() == 0
         assert connection.execute(text("SELECT COUNT(*) FROM fleet_groups")).scalar_one() == 0
+        session_columns = {row[1] for row in connection.execute(text("PRAGMA table_info(dashboard_sessions)"))}
+        chat_columns = {row[1] for row in connection.execute(text("PRAGMA table_info(fleet_chat_messages)"))}
+        assert "user_id" in session_columns
+        assert "sender_user_id" in chat_columns
     engine.dispose()
 
 

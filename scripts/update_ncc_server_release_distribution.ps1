@@ -73,6 +73,7 @@ foreach ($reference in $assetReferences) {
     $assetPath = Join-Path $staticRoot $reference.Groups[1].Value.TrimStart('/').Replace('/', '\')
     if (-not (Test-Path -LiteralPath $assetPath)) { throw "Committed dashboard asset is missing: $assetPath" }
 }
+$expectedAssets = @($assetReferences | ForEach-Object { $_.Groups[1].Value })
 
 # Install only the Python package and server migration assets. Existing server
 # configuration stays in place; neither -ReplaceConfig nor Agent is used.
@@ -81,6 +82,14 @@ foreach ($reference in $assetReferences) {
 # copied into site-packages as well; dependencies are deliberately untouched.
 & $venvPython -m pip install --upgrade --force-reinstall --no-deps $projectRoot
 if ($LASTEXITCODE -ne 0) { throw 'NCC server package update failed.' }
+$installedStaticRoot = & $venvPython -c 'import ncc_server.app; print(ncc_server.app.STATIC_DIR)'
+if ($LASTEXITCODE -ne 0 -or -not $installedStaticRoot) { throw 'Could not locate installed dashboard assets.' }
+$installedIndex = Join-Path $installedStaticRoot 'index.html'
+if (-not (Test-Path -LiteralPath $installedIndex)) { throw "Installed dashboard is missing: $installedIndex" }
+$installedAssets = @([regex]::Matches((Get-Content -LiteralPath $installedIndex -Raw), '(?:src|href)="(/assets/[^"?]+)"') | ForEach-Object { $_.Groups[1].Value })
+if (($installedAssets -join '|') -ne ($expectedAssets -join '|')) {
+    throw "Installed dashboard assets do not match Git HEAD. Expected: $($expectedAssets -join ', '); installed: $($installedAssets -join ', ')"
+}
 if (Test-Path -LiteralPath $migrationRoot) { Remove-Item -LiteralPath $migrationRoot -Recurse -Force }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'migrations') -Destination $migrationRoot -Recurse
 Copy-Item -LiteralPath (Join-Path $projectRoot 'alembic.ini') -Destination (Join-Path $installRoot 'alembic.ini') -Force
@@ -95,8 +104,13 @@ if ((Get-Service -Name NccServer).Status -ne 'Running') { throw 'NccServer did n
 
 $serverUrl = & $venvPython -c "from pathlib import Path; from ncc_service.environment import load_environment_file; env=load_environment_file(Path(r'$configPath')); print('http://' + env['NCC_SERVER_HOST'].strip(chr(34)) + ':' + env.get('NCC_SERVER_PORT', '8350').strip(chr(34)))"
 if ($LASTEXITCODE -ne 0 -or -not $serverUrl) { throw 'Could not derive the local NCC server URL.' }
-$ready = Invoke-WebRequest -Uri "$serverUrl/api/v1/status/ready" -UseBasicParsing -TimeoutSec 15
-$version = Invoke-WebRequest -Uri "$serverUrl/api/v1/version" -UseBasicParsing -TimeoutSec 15
+$ready = Invoke-WebRequest -Uri "$serverUrl/api/v1/status/ready" -UseBasicParsing -TimeoutSec 45
+$version = Invoke-WebRequest -Uri "$serverUrl/api/v1/version" -UseBasicParsing -TimeoutSec 45
+$dashboard = Invoke-WebRequest -Uri "$serverUrl/" -UseBasicParsing -TimeoutSec 45
+$servedAssets = @([regex]::Matches($dashboard.Content, '(?:src|href)="(/assets/[^"?]+)"') | ForEach-Object { $_.Groups[1].Value })
+if (($servedAssets -join '|') -ne ($expectedAssets -join '|')) {
+    throw "NccServer is serving an older dashboard. Expected: $($expectedAssets -join ', '); served: $($servedAssets -join ', ')"
+}
 try {
     $releaseRoute = Invoke-WebRequest -Uri "$serverUrl/api/v1/releases" -UseBasicParsing -TimeoutSec 15
     $releaseStatus = [int]$releaseRoute.StatusCode
@@ -116,4 +130,6 @@ if ($ready.StatusCode -ne 200 -or $version.StatusCode -ne 200 -or $releaseStatus
     ReadyStatus = [int]$ready.StatusCode
     VersionStatus = [int]$version.StatusCode
     ReleaseRouteStatus = $releaseStatus
+    DashboardAssets = $servedAssets
+    Commit = (& git -C $projectRoot rev-parse --short HEAD)
 } | ConvertTo-Json
