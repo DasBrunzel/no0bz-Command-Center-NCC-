@@ -6,7 +6,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$PublicKey,
     [ValidatePattern('^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$')]
-    [string]$Version = '0.6.0-beta.4',
+    [string]$Version = '0.6.0-beta.8-dev.0',
     [string]$OutputDirectory = ''
 )
 
@@ -19,7 +19,7 @@ if ($keyBytes.Length -ne 32) { throw 'PublicKey muss ein 32-Byte Ed25519-Public-
 
 $project = Split-Path -Parent $PSScriptRoot
 $OutputDirectory = if ($OutputDirectory) { $OutputDirectory } else { Join-Path $project 'dist\bootstrap' }
-$packageVersion = $Version -replace '-beta\.', 'b' -replace '-alpha\.', 'a' -replace '-rc\.', 'rc'
+$packageVersion = $Version -replace '-beta\.', 'b' -replace '-alpha\.', 'a' -replace '-rc\.', 'rc' -replace '-dev\.', '.dev'
 $core = Join-Path $project 'core\ncc-core\target\release\ncc-core.exe'
 $installer = Join-Path $PSScriptRoot 'install_ncc_core_bootstrap.ps1'
 $rollback = Join-Path $PSScriptRoot 'rollback_ncc_core_to_agent.ps1'

@@ -5,7 +5,7 @@ set -euo pipefail
 
 KEY_ID=''
 PUBLIC_KEY=''
-VERSION='0.6.0-beta.4'
+VERSION='0.6.0-beta.8-dev.0'
 OUTPUT_DIRECTORY=''
 CORE_BINARY=''
 BUILD_CORE=0

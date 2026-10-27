@@ -4,6 +4,10 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [0.6.0-beta.8-dev.0] – Laufende Entwicklung
 
+- Windows- und Linux-Core-Bootstrap verwenden standardmäßig dieselbe
+  Entwicklungsnummer wie Dashboard, Server und Core. Die Windows-Paketversion
+  wird für Python korrekt als `0.6.0b8.dev0` geschrieben. Bereits installierte
+  signierte Agent-Payloads behalten weiterhin ihre tatsächliche Release-Version.
 - Bilder im Fleet Chat werden erst in der Nähe des sichtbaren Verlaufs
   abgerufen; ältere Bilder bleiben als anklickbare Vorschauhalter sichtbar.
 - Der Fleet Chat lädt Video-, Audio- und PDF-Anhänge erst beim Öffnen der
