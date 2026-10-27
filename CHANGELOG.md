@@ -4,6 +4,8 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [0.6.0-beta.8-dev.0] – Laufende Entwicklung
 
+- Fleet-Chat-Anhänge zeigen kleine Dateien in KB oder Byte statt irreführend
+  als „0,0 MB“ an.
 - Auf schmalen Bildschirmen bleiben im Fleet Chat der Nachrichtenverlauf und
   das Eingabefeld gemeinsam sichtbar; Nachrichtentext ist besser lesbar.
 - Beim Wechsel zwischen Geräten zeigt die Netzwerk-Monatszahl keinen

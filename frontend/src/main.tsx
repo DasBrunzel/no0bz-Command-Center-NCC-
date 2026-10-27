@@ -2011,7 +2011,7 @@ function ChatAttachmentView({ attachment, token, onOpen }: { attachment: ChatAtt
   if (kind === "video") return <div className="chat-media video"><header><Film size={14} />{attachment.name}</header>{url && <video src={url} controls preload="metadata" />}</div>;
   if (kind === "audio") return <div className="chat-media audio"><header><Music2 size={14} />{attachment.name}</header>{url && <audio src={url} controls />}</div>;
   if (kind === "pdf") return <button type="button" className="chat-media document" onClick={() => url && onOpen(attachment, url, "pdf")}><FileText size={21} /><span><b>{attachment.name}</b><small>PDF-Vorschau öffnen</small></span><Maximize2 size={14} /></button>;
-  return <button type="button" className="chat-attachment" onClick={() => void download()}><Paperclip size={14} /><span>{attachment.name}</span><small>{(attachment.size / 1024 / 1024).toFixed(1)} MB</small><Download size={13} /></button>;
+  return <button type="button" className="chat-attachment" onClick={() => void download()}><Paperclip size={14} /><span>{attachment.name}</span><small>{trafficBytes(attachment.size)}</small><Download size={13} /></button>;
 }
 
 function FleetChat({ token, identity }: { token: string; identity: DashboardUser | null }) {
