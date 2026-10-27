@@ -178,6 +178,16 @@ def test_fleet_api_is_protected_and_returns_latest_metrics(tmp_path: Path) -> No
         ).json()
         assert len(telemetry) == 1
         assert telemetry[0]["metrics"]["cpu"]["percent"] == 42.0
+        history = client.get(f"/api/v1/fleet/nodes/{online_id}/telemetry?limit=2", headers=headers).json()
+        assert len(history) == 2
+        assert all(point["point_id"] for point in history)
+        delta = client.get(
+            f"/api/v1/fleet/nodes/{online_id}/telemetry?after={history[0]['point_id']}", headers=headers
+        ).json()
+        assert [point["point_id"] for point in delta] == [history[1]["point_id"]]
+        assert client.get(
+            f"/api/v1/fleet/nodes/{online_id}/telemetry?after=missing", headers=headers
+        ).status_code == 404
         assert client.get("/api/v1/fleet/nodes/missing", headers=headers).status_code == 404
 
         renamed = client.patch(

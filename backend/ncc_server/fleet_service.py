@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from ncc_server.config import ServerSettings
@@ -185,15 +185,21 @@ def set_fleet_gaming_mode(session: Session, node_id: str, minutes: int) -> Node 
 
 
 def node_telemetry(
-    session: Session, node_id: str, limit: int
+    session: Session, node_id: str, limit: int, *, after: str | None = None
 ) -> list[FleetTelemetryPoint] | None:
     if session.get(Node, node_id) is None:
         return None
+    query = select(TelemetryPoint).where(TelemetryPoint.node_id == node_id)
+    if after:
+        cursor = session.get(TelemetryPoint, after)
+        if cursor is None or cursor.node_id != node_id:
+            raise ValueError("telemetry cursor not found for node")
+        query = query.where(or_(
+            TelemetryPoint.recorded_at > cursor.recorded_at,
+            and_(TelemetryPoint.recorded_at == cursor.recorded_at, TelemetryPoint.id > cursor.id),
+        ))
     points = session.scalars(
-        select(TelemetryPoint)
-        .where(TelemetryPoint.node_id == node_id)
-        .order_by(TelemetryPoint.recorded_at.desc())
-        .limit(limit)
+        query.order_by(TelemetryPoint.recorded_at.desc(), TelemetryPoint.id.desc()).limit(limit)
     ).all()
     return [_telemetry_response(point) for point in reversed(points)]
 
@@ -533,6 +539,7 @@ def _default_group_for(node: Node) -> str:
 
 def _telemetry_response(point: TelemetryPoint) -> FleetTelemetryPoint:
     return FleetTelemetryPoint(
+        point_id=point.id,
         sample_id=point.sample_id,
         recorded_at=point.recorded_at,
         metrics=point.payload,

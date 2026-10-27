@@ -18,6 +18,10 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   und Chat-Nachrichten.
 - Der Agent ermittelt die statische Host-Kennung nur noch beim Start. Wiederholte
   Heartbeats warten damit nicht auf einen erneuten Windows-CIM-Aufruf.
+- Das Dashboard lädt Live-Nodes und Warnungen im kurzen Takt, Konto-, Release-
+  und Einstellungsdaten nur noch jede Minute. In versteckten Tabs pausiert das
+  Polling. Die gewählte Node lädt nach dem ersten Verlauf nur neue Messpunkte;
+  Verbindungsfehler erscheinen als Verbindungszustand statt als Login-Maske.
 - Das Dashboard übernimmt die dunkelgrüne „Alles im Blick“-Demo als neue
   Oberfläche: Navigation, Command Overview, Fleet Explorer, Node-Detail,
   Statistiken, Warnungen und Fleet Chat verwenden deren Layout und Design-Tokens.

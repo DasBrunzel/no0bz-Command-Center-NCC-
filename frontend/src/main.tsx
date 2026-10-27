@@ -52,6 +52,7 @@ import { Icon as ConceptIcon, Meter as ConceptMeter, SectionHead as ConceptSecti
 
 type Metrics = Record<string, any>;
 type Telemetry = {
+  point_id: string;
   sample_id: string | null;
   recorded_at: string;
   metrics: Metrics;
@@ -1628,14 +1629,15 @@ function StatisticsPage({
   useEffect(() => {
     let current = true;
     let monthlyBusy = false;
+    let historyBusy = false;
     if (trafficResetRevision > 0) setTraffic({});
     const loadMonthly = async () => {
-      if (monthlyBusy) return;
+      if (monthlyBusy || document.visibilityState !== "visible") return;
       monthlyBusy = true;
       try {
         // Keep database work bounded: each month may contain many samples.
         for (const node of trafficNodes) {
-          if (!current) break;
+          if (!current || document.visibilityState !== "visible") break;
           try {
             const value = await getJson<NetworkUsageSummary>(`/api/v1/fleet/nodes/${node.node_id}/network/month`, token);
             if (current) setTraffic((previous) => ({ ...previous, [node.node_id]: value }));
@@ -1644,19 +1646,25 @@ function StatisticsPage({
       } finally { monthlyBusy = false; }
     };
     const loadHistory = async () => {
-      await Promise.all(trafficNodes.map(async (node) => {
-        try {
-          const value = await getJson<Telemetry[]>(`/api/v1/fleet/nodes/${node.node_id}/telemetry?limit=48`, token);
-          if (current) setTrafficHistory((previous) => ({ ...previous, [node.node_id]: value }));
-        } catch { /* A failed history request must not hide monthly totals. */ }
-      }));
+      if (historyBusy || document.visibilityState !== "visible") return;
+      historyBusy = true;
+      try {
+        await Promise.all(trafficNodes.map(async (node) => {
+          try {
+            const value = await getJson<Telemetry[]>(`/api/v1/fleet/nodes/${node.node_id}/telemetry?limit=48`, token);
+            if (current) setTrafficHistory((previous) => ({ ...previous, [node.node_id]: value }));
+          } catch { /* A failed history request must not hide monthly totals. */ }
+        }));
+      } finally { historyBusy = false; }
     };
     setTraffic((previous) => Object.fromEntries(Object.entries(previous).filter(([id]) => trafficNodes.some((node) => node.node_id === id))));
     void loadMonthly();
     void loadHistory();
     const monthlyRefresh = window.setInterval(() => void loadMonthly(), 300_000);
     const historyRefresh = window.setInterval(() => void loadHistory(), 30_000);
-    return () => { current = false; window.clearInterval(monthlyRefresh); window.clearInterval(historyRefresh); };
+    const resume = () => { if (document.visibilityState === "visible") { void loadMonthly(); void loadHistory(); } };
+    document.addEventListener("visibilitychange", resume);
+    return () => { current = false; window.clearInterval(monthlyRefresh); window.clearInterval(historyRefresh); document.removeEventListener("visibilitychange", resume); };
   }, [trafficNodes, token, trafficResetRevision]);
 
   const measured = nodes.filter((node) => node.online && node.latest);
@@ -2954,37 +2962,36 @@ function App() {
     [clock, setClock] = useState(new Date());
   const selected =
     nodes.find((node) => node.node_id === selectedId) || nodes[0] || null;
+  const activeLoadsRef = useRef(0);
+  const activeTokenRef = useRef(token);
+  activeTokenRef.current = token;
+  const telemetryCursorRef = useRef("");
+  const telemetryNodeRef = useRef("");
+  const telemetryTokenRef = useRef("");
   const load = useCallback(
-    async (silent = false) => {
+    async (silent = false, full = true) => {
+      if (silent && activeLoadsRef.current > 0) return;
+      activeLoadsRef.current += 1;
       if (!silent) setLoading(true);
       try {
-        const [
-          nextNodes,
-          nextGroups,
-          nextSummary,
-          nextInvitations,
-          nextAlerts,
-          nextPolicy,
-          nextTelegram,
-          nextReleases,
-          nextAccess,
-          nextIdentity,
-        ] = await Promise.all([
-          getJson<Node[]>("/api/v1/fleet/nodes", token),
-          getJson<FleetGroup[]>("/api/v1/fleet/groups", token),
-          getJson<Summary>("/api/v1/fleet/summary", token),
-          getJson<Invitation[]>("/api/v1/agent-invitations", token),
-          getJson<AlertRecord[]>("/api/v1/fleet/alerts", token),
-          getJson<AlertPolicy>("/api/v1/fleet/alert-policy", token),
-          getJson<TelegramSettings>("/api/v1/fleet/telegram", token),
-          getJson<AgentRelease[]>("/api/v1/releases", token),
-          getJson<DashboardAccess>("/api/v1/admin-codes/access", token),
-          getJson<DashboardUser>("/api/v1/users/me", token),
+        const [[nextNodes, nextAlerts], configuration] = await Promise.all([
+          Promise.all([
+            getJson<Node[]>("/api/v1/fleet/nodes", token),
+            getJson<AlertRecord[]>("/api/v1/fleet/alerts", token),
+          ]),
+          full ? Promise.all([
+            getJson<FleetGroup[]>("/api/v1/fleet/groups", token),
+            getJson<Summary>("/api/v1/fleet/summary", token),
+            getJson<Invitation[]>("/api/v1/agent-invitations", token),
+            getJson<AlertPolicy>("/api/v1/fleet/alert-policy", token),
+            getJson<TelegramSettings>("/api/v1/fleet/telegram", token),
+            getJson<AgentRelease[]>("/api/v1/releases", token),
+            getJson<DashboardAccess>("/api/v1/admin-codes/access", token),
+            getJson<DashboardUser>("/api/v1/users/me", token),
+          ]) : Promise.resolve(null),
         ]);
+        if (activeTokenRef.current !== token) return;
         setNodes(nextNodes);
-        setGroups(nextGroups);
-        setSummary(nextSummary);
-        setInvitations(nextInvitations);
         setAlerts(nextAlerts);
         const activeAlertIds = new Set(
           nextAlerts.filter((alert) => alert.active).map((alert) => alert.alert_id),
@@ -2995,11 +3002,17 @@ function App() {
           localStorage.setItem("ncc-dismissed-alerts", JSON.stringify([...next]));
           return next;
         });
-        setPolicy(nextPolicy);
-        setTelegram(nextTelegram);
-        setReleases(nextReleases);
-        setAccessRole(nextAccess.access_role);
-        setIdentity(nextIdentity);
+        if (configuration) {
+          const [nextGroups, nextSummary, nextInvitations, nextPolicy, nextTelegram, nextReleases, nextAccess, nextIdentity] = configuration;
+          setGroups(nextGroups);
+          setSummary(nextSummary);
+          setInvitations(nextInvitations);
+          setPolicy(nextPolicy);
+          setTelegram(nextTelegram);
+          setReleases(nextReleases);
+          setAccessRole(nextAccess.access_role);
+          setIdentity(nextIdentity);
+        }
         setAuthenticated(true);
         setAuthError(false);
         setSelectedId((current) =>
@@ -3008,12 +3021,14 @@ function App() {
             : nextNodes[0]?.node_id || "",
         );
       } catch (error) {
+        if (activeTokenRef.current !== token) return;
         if ((error as Error & { status?: number }).status === 401) {
           setAuthenticated(false);
           setAuthError(true);
         }
       } finally {
-        setLoading(false);
+        activeLoadsRef.current -= 1;
+        if (activeTokenRef.current === token) setLoading(false);
       }
     },
     [token],
@@ -3025,8 +3040,20 @@ function App() {
   useEffect(() => localStorage.setItem("ncc-sidebar-collapsed", String(sidebarCollapsed)), [sidebarCollapsed]);
   useEffect(() => {
     void load();
-    const poll = window.setInterval(() => void load(true), 5000);
-    return () => clearInterval(poll);
+    let ticks = 0;
+    const poll = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      ticks += 1;
+      void load(true, ticks % 12 === 0);
+    }, 5000);
+    const resume = () => {
+      if (document.visibilityState === "visible") {
+        ticks = 0;
+        void load(true, true);
+      }
+    };
+    document.addEventListener("visibilitychange", resume);
+    return () => { clearInterval(poll); document.removeEventListener("visibilitychange", resume); };
   }, [load]);
   useEffect(() => {
     const timer = window.setInterval(() => setClock(new Date()), 1000);
@@ -3034,12 +3061,39 @@ function App() {
   }, []);
   useEffect(() => {
     if (!selected) return;
-    getJson<Telemetry[]>(
-      `/api/v1/fleet/nodes/${selected.node_id}/telemetry?limit=120`,
-      token,
-    )
-      .then(setPoints)
-      .catch(() => setPoints([]));
+    const nodeId = selected.node_id;
+    if (telemetryNodeRef.current !== nodeId || telemetryTokenRef.current !== token) {
+      telemetryNodeRef.current = nodeId;
+      telemetryTokenRef.current = token;
+      telemetryCursorRef.current = "";
+      setPoints([]);
+    }
+    let current = true;
+    const refresh = async () => {
+      const cursor = telemetryCursorRef.current;
+      const base = `/api/v1/fleet/nodes/${nodeId}/telemetry?limit=120`;
+      let incoming: Telemetry[];
+      let replace = !cursor;
+      try {
+        incoming = await getJson<Telemetry[]>(cursor ? `${base}&after=${encodeURIComponent(cursor)}` : base, token);
+      } catch (error) {
+        if (!cursor || (error as Error & { status?: number }).status !== 404) return;
+        // A pruned cursor is recoverable by reading the current chart window.
+        try { incoming = await getJson<Telemetry[]>(base, token); }
+        catch { return; }
+        replace = true;
+      }
+      if (!current || telemetryNodeRef.current !== nodeId) return;
+      if (replace) telemetryCursorRef.current = incoming[incoming.length - 1]?.point_id || "";
+      else if (incoming.length) telemetryCursorRef.current = incoming[incoming.length - 1].point_id;
+      if (replace) setPoints(incoming);
+      else if (incoming.length) setPoints((previous) => {
+        const seen = new Set(previous.map((point) => point.point_id));
+        return [...previous, ...incoming.filter((point) => !seen.has(point.point_id))].slice(-120);
+      });
+    };
+    void refresh();
+    return () => { current = false; };
   }, [selected?.node_id, selected?.latest?.recorded_at, token]);
   useEffect(() => {
     if (!selected) return;
@@ -3064,6 +3118,7 @@ function App() {
   const saveToken = (value: string) => {
     localStorage.setItem("ncc-dashboard-token", value);
     setToken(value);
+    setLoading(true);
     setAuthenticated(null);
     setAuthError(false);
   };
@@ -3171,7 +3226,8 @@ function App() {
     }));
   };
   const canManageAccess = accessRole === "commander";
-  if (authenticated !== true)
+  if (authenticated === null) return <div className="login"><section><Brand /><span className="eyebrow">NCC-VERBINDUNG</span><h1>{loading ? "Verbindung wird hergestellt." : "NCC-Server nicht erreichbar."}</h1><p>{loading ? "Das Dashboard lädt die aktuellen Fleet-Daten." : "Die Anmeldung wurde nicht zurückgesetzt. Prüfe die Verbindung und versuche es erneut."}</p>{!loading && <button className="primary-button" type="button" onClick={() => void load()}>Erneut verbinden <RefreshCw size={16} /></button>}</section></div>;
+  if (authenticated === false)
     return (
       <Login onSave={saveToken} error={authenticated === false && authError} />
     );

@@ -80,6 +80,7 @@ class TelemetryBatchResponse(BaseModel):
 
 
 class FleetTelemetryPoint(BaseModel):
+    point_id: str
     sample_id: str | None
     recorded_at: datetime
     metrics: dict[str, object]

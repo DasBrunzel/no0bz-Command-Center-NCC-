@@ -295,9 +295,13 @@ async def set_update_channel_for_node(
 async def telemetry(
     node_id: str,
     limit: int = Query(default=120, ge=1, le=1000),
+    after: str | None = None,
     session: Session = Depends(database_session),
 ) -> list[FleetTelemetryPoint]:
-    result = node_telemetry(session, node_id, limit)
+    try:
+        result = node_telemetry(session, node_id, limit, after=after)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="telemetry cursor not found") from exc
     if result is None:
         raise HTTPException(status_code=404, detail="node not found")
     return result

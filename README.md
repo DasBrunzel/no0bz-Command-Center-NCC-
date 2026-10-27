@@ -73,6 +73,12 @@ Detailansicht der gewählten Node. Statistiken, Warnungszentrale und Fleet Chat
 verwenden dieselbe Oberfläche. Alle Werte stammen weiterhin aus den NCC-APIs;
 Gaming Mode, Umbenennen, Release-Zuweisung und Geräteverwaltung bleiben verfügbar.
 
+Der Fleet Chat zeigt Nachrichten nach Tagen getrennt, lädt ältere Beiträge bei
+Bedarf nach und markiert neue Nachrichten, solange der Verlauf nach oben gescrollt
+ist. Mehrzeilige Nachrichten lassen sich mit Umschalt+Enter schreiben. Das
+Dashboard fragt Live-Daten regelmäßig ab; Konto- und Einstellungsdaten werden
+seltener geladen und ausgeblendete Browser-Tabs pausieren die Abfragen.
+
 Die Seite **Statistiken** fasst die gesamte Fleet zusammen: Verfügbarkeit je Agent,
 gewichtete CPU- und RAM-Kapazität, GPUs, eine kombinierte Auslastungsrangliste,
 Monatsverkehr sowie einen Live-Gesamtverlauf für Up- und Download. Rohdaten bleiben
