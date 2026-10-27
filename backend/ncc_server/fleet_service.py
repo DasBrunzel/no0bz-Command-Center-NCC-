@@ -270,12 +270,17 @@ def node_monthly_network_usage(
     # Loading every full payload for a month can saturate the server's memory
     # and delay all dashboard requests. Transfer only the network fragment.
     network_value = TelemetryPoint.payload["network"]
-    previous = session.execute(
-        select(TelemetryPoint.recorded_at, network_value)
-        .where(TelemetryPoint.node_id == node_id, TelemetryPoint.recorded_at < effective_start)
-        .order_by(TelemetryPoint.recorded_at.desc())
-        .limit(1)
-    ).first()
+    # A month boundary may use the preceding sample to estimate the bytes
+    # transferred until the first sample of the new month. A manual reset is
+    # different: that preceding sample belongs to the discarded statistics.
+    previous = None
+    if manual_reset is None or manual_reset <= period_start_utc:
+        previous = session.execute(
+            select(TelemetryPoint.recorded_at, network_value)
+            .where(TelemetryPoint.node_id == node_id, TelemetryPoint.recorded_at < effective_start)
+            .order_by(TelemetryPoint.recorded_at.desc())
+            .limit(1)
+        ).first()
     points = session.execute(
         select(TelemetryPoint.recorded_at, network_value)
         .where(TelemetryPoint.node_id == node_id, TelemetryPoint.recorded_at >= effective_start)

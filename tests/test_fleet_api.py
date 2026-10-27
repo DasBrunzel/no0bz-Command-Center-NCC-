@@ -365,6 +365,12 @@ def test_commander_can_reset_visible_network_statistics_without_deleting_raw_dat
             [
                 TelemetryPoint(
                     node_id=online_id,
+                    sample_id="88888888-8888-4888-8888-888888888888",
+                    recorded_at=reset_time - timedelta(seconds=5),
+                    payload={"network": {"bytes_recv": 500, "bytes_sent": 1000}},
+                ),
+                TelemetryPoint(
+                    node_id=online_id,
                     sample_id="66666666-6666-4666-8666-666666666666",
                     recorded_at=reset_time + timedelta(seconds=5),
                     payload={"network": {"bytes_recv": 1000, "bytes_sent": 2000}},
@@ -384,7 +390,7 @@ def test_commander_can_reset_visible_network_statistics_without_deleting_raw_dat
     assert result.json()["received_bytes"] == 300
     assert result.json()["sent_bytes"] == 600
     with database.session() as session:
-        assert session.query(TelemetryPoint).count() == 4
+        assert session.query(TelemetryPoint).count() == 5
         assert session.query(AuditEvent).filter_by(action="traffic.statistics.reset").count() == 1
 
 

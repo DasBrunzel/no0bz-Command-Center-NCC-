@@ -4,6 +4,9 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## Laufende Entwicklung auf dem 0.6-Branch
 
+- Nach dem manuellen Zurücksetzen der Traffic-Statistik startet die
+  Monatsberechnung mit dem ersten neuen Messpunkt. Ein Zählerstand vor dem
+  Reset fließt nicht mehr erneut in die Anzeige ein.
 - Der Live-Netzwerkverlauf der Statistik nutzt eine kompakte API, die nur
   Zeitstempel und Netzwerkwerte lädt. Prozesslisten und Hardware-Sensoren
   werden dafür nicht mehr für jedes Gerät übertragen.
