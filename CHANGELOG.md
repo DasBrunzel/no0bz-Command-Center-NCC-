@@ -2,8 +2,11 @@
 
 Alle wesentlichen Änderungen werden hier dokumentiert.
 
-## 0.6.0-beta.4 - in Arbeit
+## Laufende Entwicklung auf dem 0.6-Branch
 
+- Der Agent zählt abgeschlossene Messungen nun unabhängig von der Systemuhr.
+  Nach einer Uhrzeitkorrektur laufen Uploads weiter; der noch leere
+  Collector-Startzustand wird nicht als Telemetrie versendet.
 - Wenn das Speichern einer Chat-Nachricht in der Datenbank fehlschlägt, entfernt
   NCC den bereits geschriebenen Anhang wieder. Dadurch sammeln sich bei
   Datenbankfehlern keine verwaisten Upload-Dateien an.
