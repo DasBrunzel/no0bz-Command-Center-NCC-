@@ -2043,7 +2043,12 @@ function FleetChat({ token, identity }: { token: string; identity: DashboardUser
         setHasOlder(incoming.length === 50);
         oldestIdRef.current = incoming[0]?.message_id || "";
         scrollRef.current = "bottom";
-        setMessages(incoming);
+        // A send can finish while the initial history request is in flight.
+        // Keep that acknowledged message until the next cursor poll sees it.
+        setMessages((previous) => {
+          const seen = new Set(incoming.map((message) => message.message_id));
+          return [...incoming, ...previous.filter((message) => !seen.has(message.message_id))];
+        });
       } else if (incoming.length) {
         if (atBottomRef.current) scrollRef.current = "bottom";
         else setUnread((count) => count + incoming.length);

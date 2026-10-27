@@ -4,6 +4,8 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## Laufende Entwicklung auf dem 0.6-Branch
 
+- Im Fleet Chat bleibt eine gerade gesendete Nachricht sichtbar, auch wenn
+  die erste Verlaufsabfrage erst danach antwortet.
 - Ein Fehler der Warnungsabfrage verwirft geladene Fleet-Geräte nicht mehr;
   ein Fehler der Geräteabfrage lässt Warnungen und die angemeldete Ansicht
   bestehen. Nur ein echter HTTP-401-Fehler beendet die Sitzung.
