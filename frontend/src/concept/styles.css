@@ -37,6 +37,8 @@
 .concept-chat-page .message-body.markdown pre code { padding: 0; }
 .concept-chat-page .message-body.markdown ul, .concept-chat-page .message-body.markdown ol { margin: 6px 0; padding-left: 20px; }
 .concept-chat-page .message-body.markdown blockquote { margin: 7px 0; padding-left: 10px; border-left: 2px solid var(--mint); color: var(--muted); }
+.live-pill.disconnected { color: var(--red); }
+.live-pill.disconnected i { background: var(--red); box-shadow: 0 0 10px var(--red); }
 .concept-chat-page .compose-row textarea { flex: 1; min-width: 0; min-height: 46px; max-height: 160px; resize: vertical; padding: 10px 4px; border: 0; outline: 0; color: var(--text); background: transparent; font: inherit; line-height: 1.4; }
 .concept-chat-page .compose-row textarea:focus-visible { outline: 2px solid var(--mint); outline-offset: 2px; border-radius: 4px; }
 .concept-chat-page .compose-row textarea::placeholder { color: var(--muted); }

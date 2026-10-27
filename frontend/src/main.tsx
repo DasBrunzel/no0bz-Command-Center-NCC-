@@ -263,16 +263,22 @@ const duration = (value: number) => {
 };
 const headers = (token: string): Record<string, string> =>
   token ? { "X-NCC-Dashboard-Token": token } : {};
-async function getJson<T>(url: string, token: string): Promise<T> {
-  const response = await fetch(url, { headers: headers(token) });
-  if (!response.ok) {
-    const error = new Error(
-      response.status === 401 ? "AUTH" : "REQUEST",
-    ) as Error & { status: number };
-    error.status = response.status;
-    throw error;
+async function getJson<T>(url: string, token: string, timeoutMs = 20_000): Promise<T> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { headers: headers(token), signal: controller.signal });
+    if (!response.ok) {
+      const error = new Error(
+        response.status === 401 ? "AUTH" : "REQUEST",
+      ) as Error & { status: number };
+      error.status = response.status;
+      throw error;
+    }
+    return await response.json() as T;
+  } finally {
+    window.clearTimeout(timeout);
   }
-  return response.json() as Promise<T>;
 }
 async function postJson<T>(
   url: string,
@@ -1644,7 +1650,7 @@ function StatisticsPage({
         for (const node of trafficNodes) {
           if (!current || document.visibilityState !== "visible") break;
           try {
-            const value = await getJson<NetworkUsageSummary>(`/api/v1/fleet/nodes/${node.node_id}/network/month`, token);
+            const value = await getJson<NetworkUsageSummary>(`/api/v1/fleet/nodes/${node.node_id}/network/month`, token, 90_000);
             if (current) setTraffic((previous) => ({ ...previous, [node.node_id]: value }));
           } catch { /* Retain the last successful value for this node. */ }
         }
@@ -2936,6 +2942,7 @@ function App() {
   );
   const [authenticated, setAuthenticated] = useState<boolean | null>(null),
     [authError, setAuthError] = useState(false);
+  const [connectionOnline, setConnectionOnline] = useState(false);
   const [nodes, setNodes] = useState<Node[]>([]),
     [groups, setGroups] = useState<FleetGroup[]>([]),
     [summary, setSummary] = useState<Summary | null>(null),
@@ -2950,7 +2957,7 @@ function App() {
   const [dismissedAlertIds, setDismissedAlertIds] = useState<Set<string>>(
     () => new Set(JSON.parse(localStorage.getItem("ncc-dismissed-alerts") || "[]")),
   );
-  const [accessRole, setAccessRole] = useState<AccessRole>("commander");
+  const [accessRole, setAccessRole] = useState<AccessRole>("beta_tester");
   const [identity, setIdentity] = useState<DashboardUser | null>(null);
   const [trafficResetRevision, setTrafficResetRevision] = useState(0);
   const [page, setPage] = useState<Page>("fleet"),
@@ -2978,7 +2985,7 @@ function App() {
             getJson<Node[]>("/api/v1/fleet/nodes", token),
             getJson<AlertRecord[]>("/api/v1/fleet/alerts", token),
           ]),
-          full ? Promise.all([
+          full ? Promise.allSettled([
             getJson<FleetGroup[]>("/api/v1/fleet/groups", token),
             getJson<Summary>("/api/v1/fleet/summary", token),
             getJson<Invitation[]>("/api/v1/agent-invitations", token),
@@ -3002,17 +3009,24 @@ function App() {
           return next;
         });
         if (configuration) {
+          if (configuration.some((result) => result.status === "rejected" && (result.reason as { status?: number }).status === 401)) {
+            setAuthenticated(false);
+            setAuthError(true);
+            setConnectionOnline(false);
+            return;
+          }
           const [nextGroups, nextSummary, nextInvitations, nextPolicy, nextTelegram, nextReleases, nextAccess, nextIdentity] = configuration;
-          setGroups(nextGroups);
-          setSummary(nextSummary);
-          setInvitations(nextInvitations);
-          setPolicy(nextPolicy);
-          setTelegram(nextTelegram);
-          setReleases(nextReleases);
-          setAccessRole(nextAccess.access_role);
-          setIdentity(nextIdentity);
+          if (nextGroups.status === "fulfilled") setGroups(nextGroups.value);
+          if (nextSummary.status === "fulfilled") setSummary(nextSummary.value);
+          if (nextInvitations.status === "fulfilled") setInvitations(nextInvitations.value);
+          if (nextPolicy.status === "fulfilled") setPolicy(nextPolicy.value);
+          if (nextTelegram.status === "fulfilled") setTelegram(nextTelegram.value);
+          if (nextReleases.status === "fulfilled") setReleases(nextReleases.value);
+          if (nextAccess.status === "fulfilled") setAccessRole(nextAccess.value.access_role);
+          if (nextIdentity.status === "fulfilled") setIdentity(nextIdentity.value);
         }
         setAuthenticated(true);
+        setConnectionOnline(true);
         setAuthError(false);
         setSelectedId((current) =>
           nextNodes.some((node) => node.node_id === current)
@@ -3021,6 +3035,7 @@ function App() {
         );
       } catch (error) {
         if (activeTokenRef.current !== token) return;
+        setConnectionOnline(false);
         if ((error as Error & { status?: number }).status === 401) {
           setAuthenticated(false);
           setAuthError(true);
@@ -3038,7 +3053,10 @@ function App() {
   }, [theme]);
   useEffect(() => localStorage.setItem("ncc-sidebar-collapsed", String(sidebarCollapsed)), [sidebarCollapsed]);
   useEffect(() => {
-    void load();
+    // Stop unauthenticated polling. Returning from cookie login changes
+    // authenticated from false to null even when the legacy token stays empty.
+    if (authenticated === false) return;
+    if (authenticated === null) void load();
     let ticks = 0;
     const poll = window.setInterval(() => {
       if (document.visibilityState !== "visible") return;
@@ -3053,7 +3071,7 @@ function App() {
     };
     document.addEventListener("visibilitychange", resume);
     return () => { clearInterval(poll); document.removeEventListener("visibilitychange", resume); };
-  }, [load]);
+  }, [load, authenticated]);
   useEffect(() => {
     const timer = window.setInterval(() => setClock(new Date()), 1000);
     return () => clearInterval(timer);
@@ -3098,7 +3116,7 @@ function App() {
     if (!selected) return;
     let current = true;
     const refresh = () => getJson<NetworkUsageSummary>(
-      `/api/v1/fleet/nodes/${selected.node_id}/network/month`, token,
+      `/api/v1/fleet/nodes/${selected.node_id}/network/month`, token, 90_000,
     ).then((value) => { if (current) setMonthlyNetwork(value); }).catch(() => undefined);
     void refresh();
     const poll = window.setInterval(() => void refresh(), 300_000);
@@ -3117,6 +3135,9 @@ function App() {
   const saveToken = (value: string) => {
     localStorage.setItem("ncc-dashboard-token", value);
     setToken(value);
+    setAccessRole("beta_tester");
+    setIdentity(null);
+    setConnectionOnline(false);
     setLoading(true);
     setAuthenticated(null);
     setAuthError(false);
@@ -3203,6 +3224,9 @@ function App() {
     } finally {
       localStorage.removeItem("ncc-dashboard-token");
       setToken("");
+      setAccessRole("beta_tester");
+      setIdentity(null);
+      setConnectionOnline(false);
       setAuthenticated(false);
       setAuthError(false);
     }
@@ -3289,7 +3313,7 @@ function App() {
             <span className="breadcrumb">NCC <span>/</span> {title}</span>
           </div>
           <div className="top-actions">
-            <span className="live-pill"><i/> LIVE</span>
+            <span className={`live-pill${connectionOnline ? "" : " disconnected"}`}><i/> {connectionOnline ? "LIVE" : "VERBINDUNG UNTERBROCHEN"}</span>
             <span className="top-clock">{clock.toLocaleDateString("de-DE", { day: "2-digit", month: "short", year: "numeric" })}</span>
             <button
               className="top-alert icon-button"

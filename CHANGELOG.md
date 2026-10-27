@@ -4,6 +4,13 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## 0.6.0-beta.4 - in Arbeit
 
+- Dashboard-Abfragen haben jetzt ein Zeitlimit; die aufwendigere Monatsstatistik
+  erhält ein längeres. Einzelne fehlerhafte Konfigurationsabfragen blockieren
+  nicht mehr alle erfolgreich geladenen Fleet-Daten. Bei Verbindungsfehlern
+  wechselt die Live-Anzeige sichtbar auf „Verbindung unterbrochen“.
+- Der Cookie-Login lädt das Dashboard auch dann neu, wenn der bisherige
+  Legacy-Token bereits leer war. Während der Login-Maske pausiert das
+  unauthentifizierte Fleet-Polling.
 - Monatsverkehr wird in den Statistiken und Node-Ansichten automatisch als
   B, KB, MB, GB oder TB angezeigt. Kleine Werte erscheinen dadurch nicht mehr
   fälschlich als `0,00 TB` oder `0,0 GB`.
