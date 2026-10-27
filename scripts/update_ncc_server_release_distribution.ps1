@@ -60,6 +60,19 @@ if ($LASTEXITCODE -ne 0) { throw "Could not switch to branch $Branch." }
 & git -C $projectRoot pull --ff-only origin $Branch
 if ($LASTEXITCODE -ne 0) { throw 'Git fast-forward update failed.' }
 
+# The scheduled watchdog uses this same mutex. Hold it throughout package
+# installation, migration and readiness checks so it cannot restart NccServer
+# during an intentional update. Wait for a probe already in progress to finish.
+$watchdogGuard = [Threading.Mutex]::new($false, 'Global\NccServerWatchdog')
+$watchdogGuardHeld = $false
+try {
+    try {
+        $watchdogGuardHeld = $watchdogGuard.WaitOne([TimeSpan]::FromSeconds(90))
+    } catch [Threading.AbandonedMutexException] {
+        $watchdogGuardHeld = $true
+    }
+    if (-not $watchdogGuardHeld) { throw 'NCC watchdog is still busy; update was not started.' }
+
 # Keep an already installed watchdog in sync before restarting NccServer. Its
 # endpoint must follow server.env because NCC can bind only to a Tailscale IP.
 $managedWatchdog = Join-Path $installRoot 'scripts\watch_ncc_server.ps1'
@@ -154,3 +167,7 @@ if ($ready.StatusCode -ne 200 -or $version.StatusCode -ne 200 -or $releaseStatus
     DashboardAssets = $servedAssets
     Commit = (& git -C $projectRoot rev-parse --short HEAD)
 } | ConvertTo-Json
+} finally {
+    if ($watchdogGuardHeld) { $watchdogGuard.ReleaseMutex() | Out-Null }
+    $watchdogGuard.Dispose()
+}

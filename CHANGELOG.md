@@ -13,6 +13,9 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   installierten Watchdog automatisch.
 - Der Server-Updater vergleicht alle installierten Dashboard-Dateien per SHA-256
   mit dem Git-Stand, einschließlich später geladener Chat-Module.
+- Während Installation, Datenbankmigration und Abnahmetest hält der Server-Updater
+  die Watchdog-Sperre. Der periodische Watchdog kann den Dienst dadurch nicht
+  mitten im Update neu starten.
 - Persönliche Dashboard-Konten mit Commander- und Beta-Tester-Rolle können nun in
   den Einstellungen verwaltet werden. Login und Passwortwechsel verwenden
   geschützte Browsersitzungen; das Sperren eines Kontos entzieht aktive Sitzungen.
