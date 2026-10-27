@@ -4,6 +4,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
+from ncc_agent import __version__ as legacy_agent_version
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -207,7 +208,9 @@ def _agent_health_alerts(
                 f"{node.display_name}: Agent ist online, liefert aber keine aktuelle Telemetrie.",
             )
         )
-    current_beta = _beta_number(__version__)
+    # The 0.5 compatibility agent has its own release stream. Comparing its
+    # beta number with the server's 0.6 version would hide stale 0.5 agents.
+    current_beta = _beta_number(legacy_agent_version)
     node_beta = _beta_number(node.agent_version or "")
     if current_beta is not None and node_beta is not None and current_beta - node_beta >= 3:
         alerts.append(

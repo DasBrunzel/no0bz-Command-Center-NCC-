@@ -1,13 +1,15 @@
 # no0bz Command Center (NCC)
 
-![Version](https://img.shields.io/badge/version-0.6.0--beta.7-ff334f)
+![Entwicklungsstand](https://img.shields.io/badge/Entwicklung-0.6.0--beta.8--dev.0-ff334f)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776ab)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 Real-Time System Monitor & Local Sync Hub (Python/FastAPI + React).
 
-> **NCC 0.6 befindet sich im kontrollierten Beta-Test.** Die aktuelle Payload-
-> version `0.6.0-beta.7` ergänzt NCC 0.5 um einen isolierten, kompilierten Core.
+> **NCC 0.6 befindet sich im kontrollierten Beta-Test.** Dieser Branch entwickelt
+> Dashboard und Server als `0.6.0-beta.8-dev.0`; der letzte veröffentlichte
+> Pre-Release ist `0.6.0-beta.7`. Die tatsächlich installierte Version eines
+> Agenten stammt aus seinem verifizierten Payload-Manifest und kann abweichen.
 > Der produktive Server akzeptiert 0.5- und 0.6-Agenten parallel. Ausgewählte
 > Windows- und Linux-Geräte laufen bereits mit NCC Core; weitere Geräte werden
 > einzeln migriert. NCC besteht aus einem dauerhaft laufenden Server,
@@ -160,9 +162,9 @@ von OpenSSL abgefragt und niemals an NCC übergeben. Anschließend wird **nur** 
 ausgegebene öffentliche Schlüssel auf die jeweiligen NccCore-Installationen
 verteilt. Der private Schlüssel bleibt auf der Release-Workstation.
 
-Der aktuelle echte signierte Windows-Payload ist `0.6.0-beta.3`; der
-[NCC 0.6.0-beta.4 Pre-Release](https://github.com/DasBrunzel/no0bz-Command-Center-NCC-/releases/tag/v0.6.0-beta.4)
-enthält zusätzlich den aktuellen Windows-Core-Bootstrap sowie den Linux-Payload.
+Der [NCC 0.6.0-beta.7 Pre-Release](https://github.com/DasBrunzel/no0bz-Command-Center-NCC-/releases/tag/v0.6.0-beta.7)
+ist die zuletzt veröffentlichte Beta-Version. Welche signierte Payload ein
+Gerät tatsächlich ausführt, zeigt seine Agent-Version im Fleet Explorer.
 Jedes Payload-Manifest verweist ausschließlich auf HTTPS, enthält die exakte
 SHA-256-Prüfsumme sowie die Ed25519-Signatur mit `ncc-release-2026`. Es muss
 vor einer Node-Freigabe einmalig im Dashboard registriert werden. Das private

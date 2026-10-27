@@ -49,8 +49,10 @@ import "./enrollment.css";
 import "./device-lifecycle.css";
 import "./concept/styles.css";
 import { Icon as ConceptIcon, Meter as ConceptMeter, SectionHead as ConceptSectionHead, Sparkline as ConceptSparkline, Status as ConceptStatus } from "./concept/components";
+import dashboardPackage from "../package.json";
 
 const Markdown = React.lazy(() => import("react-markdown"));
+const DASHBOARD_VERSION = dashboardPackage.version;
 
 type Metrics = Record<string, any>;
 type Telemetry = {
@@ -148,6 +150,7 @@ type Invitation = {
 type IssuedInvitation = Invitation & { token: string };
 type AccessRole = "commander" | "beta_tester";
 type DashboardAccess = { access_role: AccessRole };
+type ServerVersion = { version: string; api: string };
 type DashboardUser = { user_id: string | null; username: string; role: AccessRole; active: boolean; managed: boolean; created_at?: string | null };
 type IssuedAdminCode = { code: string; expires_at: string; access_role: AccessRole };
 type AdminCode = {
@@ -2293,6 +2296,8 @@ function DashboardUsers({ token, identity, canManage }: { token: string; identit
 
 function SettingsPage({
   theme,
+  serverVersion,
+  nodes,
   onTheme,
   onSwitchAccess,
   policy,
@@ -2310,6 +2315,8 @@ function SettingsPage({
   identity,
 }: {
   theme: Theme;
+  serverVersion: string | null;
+  nodes: Node[];
   onTheme: (v: Theme) => void;
   onSwitchAccess: () => void;
   policy: AlertPolicy | null;
@@ -2336,8 +2343,22 @@ function SettingsPage({
   const [releaseMessage, setReleaseMessage] = useState("");
   useEffect(() => setDraft(policy), [policy]);
   useEffect(() => setTelegramDraft(telegram), [telegram]);
+  const agentVersions = Array.from(nodes.reduce((counts, node) => {
+    const version = node.agent_version || "Unbekannt";
+    counts.set(version, (counts.get(version) || 0) + 1);
+    return counts;
+  }, new Map<string, number>()).entries()).sort(([left], [right]) => left.localeCompare(right));
   return (
     <><div className="page-intro"><div><div className="eyebrow">PREFERENCES / CONTROL</div><h1>Einstellungen.</h1><p>Schwellenwerte, Benachrichtigungen und Zugänge für deine Fleet.</p></div></div><div className="settings-grid concept-settings-grid">
+      <section className="surface settings-card component-version-card">
+        <header className="section-head"><div><span className="eyebrow">SYSTEM / VERSIONEN</span><h2>Installierte Komponenten</h2></div><Activity size={19} /></header>
+        <dl className="component-versions">
+          <div><dt>Dashboard</dt><dd>{DASHBOARD_VERSION}</dd></div>
+          <div><dt>Server</dt><dd>{serverVersion || "Nicht erreichbar"}</dd></div>
+          <div><dt>Agenten · OS-Profile</dt><dd>{agentVersions.length ? agentVersions.map(([version, count]) => <span key={version}>{version} <small>× {count}</small></span>) : "Keine Agenten"}</dd></div>
+        </dl>
+        <p>Agenten melden die tatsächlich installierte Payload-Version. Ein neuer Dashboard-Build ändert diese Angaben nicht.</p>
+      </section>
       <DashboardUsers token={token} identity={identity} canManage={canManageReleases} />
       <section className="surface settings-card">
         <header className="section-head">
@@ -3051,6 +3072,7 @@ function App() {
   );
   const [accessRole, setAccessRole] = useState<AccessRole>("beta_tester");
   const [identity, setIdentity] = useState<DashboardUser | null>(null);
+  const [serverVersion, setServerVersion] = useState<string | null>(null);
   const [trafficResetRevision, setTrafficResetRevision] = useState(0);
   const [page, setPage] = useState<Page>("fleet"),
     [query, setQuery] = useState(""),
@@ -3083,6 +3105,7 @@ function App() {
         getJson<AgentRelease[]>("/api/v1/releases", token),
         getJson<DashboardAccess>("/api/v1/admin-codes/access", token),
         getJson<DashboardUser>("/api/v1/users/me", token),
+        getJson<ServerVersion>("/api/v1/version", token),
       ]);
       if (activeTokenRef.current !== token || authEpochRef.current !== authEpoch) return;
       if (configuration.some((result) => result.status === "rejected" && (result.reason as { status?: number }).status === 401)) {
@@ -3091,7 +3114,7 @@ function App() {
         setConnectionOnline(false);
         return;
       }
-      const [nextGroups, nextSummary, nextInvitations, nextPolicy, nextTelegram, nextReleases, nextAccess, nextIdentity] = configuration;
+      const [nextGroups, nextSummary, nextInvitations, nextPolicy, nextTelegram, nextReleases, nextAccess, nextIdentity, nextVersion] = configuration;
       if (nextGroups.status === "fulfilled") setGroups(nextGroups.value);
       if (nextSummary.status === "fulfilled") setSummary(nextSummary.value);
       if (nextInvitations.status === "fulfilled") setInvitations(nextInvitations.value);
@@ -3100,6 +3123,7 @@ function App() {
       if (nextReleases.status === "fulfilled") setReleases(nextReleases.value);
       if (nextAccess.status === "fulfilled") setAccessRole(nextAccess.value.access_role);
       if (nextIdentity.status === "fulfilled") setIdentity(nextIdentity.value);
+      if (nextVersion.status === "fulfilled") setServerVersion(nextVersion.value.version);
     } finally {
       if (configLoadRef.current === request) configLoadRef.current = null;
     }
@@ -3521,6 +3545,8 @@ function App() {
           ) : (
             <SettingsPage
               theme={theme}
+              serverVersion={serverVersion}
+              nodes={nodes}
               onTheme={setTheme}
               onSwitchAccess={() => void switchDashboardAccess()}
               policy={policy}

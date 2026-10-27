@@ -2,8 +2,13 @@
 
 Alle wesentlichen Änderungen werden hier dokumentiert.
 
-## Laufende Entwicklung auf dem 0.6-Branch
+## [0.6.0-beta.8-dev.0] – Laufende Entwicklung
 
+- Dashboard, Server, Python-Paket, Service-Integration und Core-Quellen tragen
+  jetzt die gemeinsame Entwicklungsnummer. Die Übersicht „Installierte
+  Komponenten“ zeigt zusätzlich die vom Server gemeldete Version und die
+  tatsächlich installierten Agent-Versionen je OS-Profil. Ältere signierte
+  Payloads und der 0.5-Rückfallagent behalten ihre eigenen Versionsangaben.
 - Im Command Overview zeigen die Netzwerkzahlen und die Verlaufskurve jetzt
   dasselbe ausgewählte Gerät. Die Balken der Fleet-Verfügbarkeit bilden den
   echten Prozentwert ab statt künstlich schwankende Messwerte vorzutäuschen.
@@ -161,7 +166,20 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   ScheduledTasks-Repetition-Objekts und funktioniert damit auch auf älteren
   Windows-Server-Modulen.
 
-## [Unreleased]
+## [0.6.0-beta.7] - 2026-10-17
+
+- Windows-Payload mit Start-Selbsttest vor dem Signieren; die Release-Beschreibung
+  nennt außerdem die benötigten SQLite- und OpenSSL-Laufzeitbibliotheken.
+
+## [0.6.0-beta.6] - 2026-10-17
+
+- Reparatur des Windows-Payload-Pakets: SQLite-Erweiterung und benötigte
+  Laufzeitbibliothek werden wieder mitgeliefert.
+
+## [0.6.0-beta.5] - 2026-10-17
+
+- Rein lesender LibreHardwareMonitor-Helper im Windows-Payload für CPU-/GPU-
+  Sensoren; bisherige Telemetrie-Provider bleiben als Fallback erhalten.
 
 ## [0.6.0-beta.4] - 2026-10-11
 
