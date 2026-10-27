@@ -3,6 +3,7 @@ from __future__ import annotations
 import mimetypes
 import re
 import uuid
+from contextlib import suppress
 from pathlib import Path
 from typing import Literal, cast
 
@@ -95,8 +96,16 @@ def create_chat_message(
         if settings is None:  # pragma: no cover - API always supplies settings
             raise RuntimeError("chat upload settings are required")
         _store_attachment(message, attachment, settings.chat_upload_dir)
-    session.add(message)
-    session.commit()
+    try:
+        session.add(message)
+        session.commit()
+    except Exception:
+        with suppress(Exception):
+            session.rollback()
+        if message.attachment_path:
+            with suppress(OSError):
+                Path(message.attachment_path).unlink(missing_ok=True)
+        raise
     return _message_response(message)
 
 

@@ -4,6 +4,9 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## 0.6.0-beta.4 - in Arbeit
 
+- Wenn das Speichern einer Chat-Nachricht in der Datenbank fehlschlägt, entfernt
+  NCC den bereits geschriebenen Anhang wieder. Dadurch sammeln sich bei
+  Datenbankfehlern keine verwaisten Upload-Dateien an.
 - OS-Profile eines Dualboot-PCs lassen sich im Fleet Explorer einem vorhandenen
   physischen Gerät zuordnen oder wieder lösen. Der Navigator zeigt das Gerät
   dann einmal und bevorzugt das gerade aktive Profil; Commander können zwischen
