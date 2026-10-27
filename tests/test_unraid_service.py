@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ncc_server.unraid_service import _containers, _cpu_temperature, _disks, _vms
+from ncc_server.unraid_service import _containers, _cpu_temperature, _disks, _network_metrics, _vms
 
 
 def test_unraid_storage_preserves_spindown_and_temperatures() -> None:
@@ -34,3 +34,26 @@ def test_unraid_workloads_use_short_dashboard_records() -> None:
 
 def test_unraid_cpu_temperature_uses_the_hottest_package_sensor() -> None:
     assert _cpu_temperature({"packages": {"temp": [47, 61, 58]}}) == 61.0
+
+
+def test_unraid_network_uses_one_host_path_and_preserves_exact_counters() -> None:
+    metrics = _network_metrics([
+        {"name": "eth0", "rxSec": 1000, "txSec": 500, "bytesReceived": "9007199254741000", "bytesSent": "8000"},
+        {"name": "br0", "rxSec": 1000, "txSec": 500, "bytesReceived": "9007199254741001", "bytesSent": "8001"},
+        {"name": "tailscale1", "rxSec": 400, "txSec": 100, "bytesReceived": "400", "bytesSent": "100"},
+        {"name": "docker0", "rxSec": 200, "txSec": 80, "bytesReceived": "200", "bytesSent": "80"},
+    ])
+    assert metrics == {
+        "download_mbps": 0.008,
+        "upload_mbps": 0.004,
+        "interface": "br0",
+        "bytes_recv": 9007199254741001,
+        "bytes_sent": 8001,
+    }
+
+
+def test_unraid_network_without_counter_fields_retains_live_rates() -> None:
+    metrics = _network_metrics([{"name": "br0", "rxSec": 2500, "txSec": 1250}])
+    assert metrics["download_mbps"] == 0.02
+    assert metrics["upload_mbps"] == 0.01
+    assert "bytes_recv" not in metrics

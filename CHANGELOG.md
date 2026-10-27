@@ -4,6 +4,10 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## 0.6.0-beta.4 - in Arbeit
 
+- Die Unraid-Integration übernimmt die kumulativen Netzwerkzähler der
+  Host-Schnittstelle in die Monatsstatistik. Bridge, physische NIC und virtuelle
+  Docker-/Tailscale-Adapter werden nicht mehr mehrfach addiert; ältere APIs
+  liefern weiterhin Live-Raten ohne erfundene Monatswerte.
 - Fleet-Daten und Warnungen erscheinen nun sofort nach ihren Antworten. Langsame
   Einstellungsabfragen laufen unabhängig und halten den Fünf-Sekunden-Takt der
   Live-Anzeige nicht mehr an.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from typing import Any
 
@@ -71,11 +72,7 @@ async def collect_unraid(database: Database, settings: ServerSettings) -> None:
             "used_gb": _bytes_to_gb(memory.get("used")),
             "free_gb": _bytes_to_gb(memory.get("free")),
         },
-        "network": {
-            "download_mbps": _sum_number(network_rows, "rxSec") * 8 / 1_000_000,
-            "upload_mbps": _sum_number(network_rows, "txSec") * 8 / 1_000_000,
-            "interface": ", ".join(str(row.get("name")) for row in network_rows if row.get("name")),
-        },
+        "network": _network_metrics(network_rows),
         "disks": _disks(array),
         "vms": _vms(vms),
         "containers": _containers(docker),
@@ -115,6 +112,17 @@ async def collect_unraid(database: Database, settings: ServerSettings) -> None:
         session.commit()
     logger.info("Unraid collector succeeded for %s", settings.unraid_display_name)
 
+
+_QUERY_WITH_COUNTERS = """
+query NccUnraidMetricsWithCounters {
+  metrics {
+    cpu { percentTotal }
+    memory { total used free available percentTotal }
+    network { name rxSec txSec bytesReceived bytesSent }
+  }
+  info { cpu { brand vendor threads cores } }
+}
+"""
 
 _QUERY = """
 query NccUnraidMetrics {
@@ -171,10 +179,14 @@ query NccUnraidDocker {
 async def _query_with_fallback(
     client: httpx.AsyncClient, url: str, headers: dict[str, str]
 ) -> dict[str, Any]:
-    try:
-        return await _query_json(client, url, headers, _QUERY)
-    except ValueError:
-        return await _query_json(client, url, headers, _LEGACY_QUERY)
+    for query in (_QUERY_WITH_COUNTERS, _QUERY):
+        try:
+            return await _query_json(client, url, headers, query)
+        except ValueError:
+            # Older Unraid APIs may not expose cumulative network counters.
+            # Retain live rates before falling back to CPU/RAM-only telemetry.
+            continue
+    return await _query_json(client, url, headers, _LEGACY_QUERY)
 
 
 async def _query_json(
@@ -233,6 +245,32 @@ def _kb_to_gb(value: object) -> float:
 
 def _sum_number(rows: list[object], key: str) -> float:
     return sum(_number(row.get(key)) for row in rows if isinstance(row, dict))
+
+
+def _network_metrics(rows: list[object]) -> dict[str, object]:
+    interfaces = [row for row in rows if isinstance(row, dict) and row.get("name")]
+    # Unraid exposes the bridge, physical NIC, Tailscale and Docker veths for
+    # the same packets. Count one host-facing path instead of summing them all.
+    for preferred in ("br0", "bond0", "eth0"):
+        match = next((row for row in interfaces if str(row["name"]).casefold() == preferred), None)
+        if match is not None:
+            interfaces = [match]
+            break
+    else:
+        physical = [row for row in interfaces if re.match(r"^(?:eth|enp|ens|eno)\d", str(row["name"]), re.I)]
+        if physical:
+            interfaces = physical
+        else:
+            interfaces = [row for row in interfaces if not re.match(r"^(?:lo|docker|veth|tailscale|virbr)", str(row["name"]), re.I)]
+    result: dict[str, object] = {
+        "download_mbps": _sum_number(interfaces, "rxSec") * 8 / 1_000_000,
+        "upload_mbps": _sum_number(interfaces, "txSec") * 8 / 1_000_000,
+        "interface": ", ".join(str(row["name"]) for row in interfaces),
+    }
+    if interfaces and all(row.get("bytesReceived") is not None and row.get("bytesSent") is not None for row in interfaces):
+        result["bytes_recv"] = sum(int(str(row["bytesReceived"])) for row in interfaces)
+        result["bytes_sent"] = sum(int(str(row["bytesSent"])) for row in interfaces)
+    return result
 
 
 def _disks(array: dict[str, Any]) -> list[dict[str, object]]:
