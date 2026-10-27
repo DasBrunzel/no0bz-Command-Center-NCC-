@@ -30,6 +30,11 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   vollständiger Telemetrie-Datensätze. Das Dashboard berechnet die Monatswerte
   nacheinander und höchstens alle fünf Minuten; der Live-Verlauf lädt separat.
   Alte Messwerte offline gegangener Nodes erscheinen nicht mehr als Live-Traffic.
+- Der Agent wählt den Netzwerkadapter nach aktuellem Datenverkehr statt nach
+  dem höchsten Zähler seit dem Systemstart. Bei einem Adapterwechsel setzt die
+  Monatsstatistik eine neue Zählerbasis, damit kein künstlicher Traffic entsteht.
+  Live-Graphen richten Agent-Samples nach Zeit aus; offline gegangene Nodes
+  fließen nicht mehr in aktuelle CPU-, RAM- und GPU-Werte ein.
 - Der Windows-Server-Updater verwendet das mit dem Commit ausgelieferte
   Frontend-Bundle und verändert dadurch keine versionierten Builddateien mehr.
   Ein separater Update-Helfer sichert vorhandene lokale Dashboard-Dateien in

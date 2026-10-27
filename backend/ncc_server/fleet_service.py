@@ -239,6 +239,7 @@ def node_monthly_network_usage(
     )
     previous_pair = _network_counters({"network": previous[1]}) if previous is not None else None
     previous_recorded_at = previous[0] if previous is not None else None
+    previous_interface = previous[1].get("interface") if previous is not None and isinstance(previous[1], dict) else None
     received = sent = 0
     samples = 0
     for recorded_at, network in points:
@@ -247,6 +248,14 @@ def node_monthly_network_usage(
         if current_pair is None:
             continue
         samples += 1
+        current_interface = network.get("interface") if isinstance(network, dict) else None
+        if previous_pair is not None and previous_interface and current_interface and previous_interface != current_interface:
+            # Counters belong to their adapter. A switch from an idle NIC to
+            # the active NIC is a new baseline, not a multi-GB transfer.
+            previous_pair = current_pair
+            previous_recorded_at = recorded_at
+            previous_interface = current_interface
+            continue
         if previous_pair is not None:
             elapsed = _elapsed_seconds(previous_recorded_at, recorded_at)
             received_delta = _plausible_counter_delta(
@@ -275,6 +284,7 @@ def node_monthly_network_usage(
         else:
             previous_pair = current_pair
         previous_recorded_at = recorded_at
+        previous_interface = current_interface
     return NetworkUsageSummary(
         period_start=effective_start,
         received_bytes=received,

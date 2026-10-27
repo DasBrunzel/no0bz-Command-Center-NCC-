@@ -378,6 +378,34 @@ def test_monthly_network_usage_ignores_impossible_counter_jumps(tmp_path: Path) 
     assert result.json()["sent_bytes"] == 300
 
 
+def test_monthly_network_usage_rebaselines_when_adapter_changes(tmp_path: Path) -> None:
+    database = make_database(tmp_path / "network-adapter.db")
+    online_id, _ = seed(database)
+    now = utc_now()
+    with database.session() as session:
+        session.add_all([
+            TelemetryPoint(node_id=online_id, sample_id="bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                           recorded_at=now - timedelta(seconds=20),
+                           payload={"network": {"interface": "Ethernet", "bytes_recv": 1000, "bytes_sent": 1000}}),
+            TelemetryPoint(node_id=online_id, sample_id="cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+                           recorded_at=now - timedelta(seconds=10),
+                           payload={"network": {"interface": "Wi-Fi", "bytes_recv": 500_000, "bytes_sent": 200_000}}),
+            TelemetryPoint(node_id=online_id, sample_id="dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                           recorded_at=now - timedelta(seconds=5),
+                           payload={"network": {"interface": "Wi-Fi", "bytes_recv": 501_000, "bytes_sent": 200_500}}),
+        ])
+        session.commit()
+    app = create_app(ServerSettings(database_url="sqlite+pysqlite://", dashboard_token=SecretStr("dashboard-secret")), database)
+    with TestClient(app) as client:
+        result = client.get(
+            f"/api/v1/fleet/nodes/{online_id}/network/month",
+            headers={"X-NCC-Dashboard-Token": "dashboard-secret"},
+        )
+    assert result.status_code == 200
+    assert result.json()["received_bytes"] == 1000
+    assert result.json()["sent_bytes"] == 500
+
+
 def test_unraid_polling_uses_a_grace_period() -> None:
     node = Node(
         machine_id="unraid:horsttower",

@@ -65,6 +65,8 @@ class PsutilProvider(SensorProvider):
     def __init__(self) -> None:
         self._sample_time: float | None = None
         self._network: tuple[int, int] | None = None
+        self._network_interface: str | None = None
+        self._network_by_interface: dict[str, tuple[int, int]] = {}
         self._disk: dict[str, tuple[int, int]] = {}
         self._network_rate = (0.0, 0.0)
         self._disk_rates: dict[str, tuple[float, float]] = {}
@@ -83,10 +85,12 @@ class PsutilProvider(SensorProvider):
         net, interface = self._active_network_counters()
         disk_counters = psutil.disk_io_counters(perdisk=True) or {}
         elapsed = max(now - self._sample_time, 0.001) if self._sample_time is not None else 0.0
+        previous_network = self._network if interface == self._network_interface else None
         download, upload = self._rate_pair(
-            (net.bytes_recv, net.bytes_sent), self._network, elapsed, self._network_rate
+            (net.bytes_recv, net.bytes_sent), previous_network, elapsed, self._network_rate
         )
         self._network = (net.bytes_recv, net.bytes_sent)
+        self._network_interface = interface
         self._network_rate = (download, upload)
         disks = []
         for partition in psutil.disk_partitions(all=False):
@@ -147,8 +151,21 @@ class PsutilProvider(SensorProvider):
         stats = psutil.net_if_stats()
         active = [name for name, stat in stats.items() if stat.isup and not name.lower().startswith(("loopback", "lo")) and name in counters]
         if not active:
+            self._network_by_interface = {}
             return psutil.net_io_counters(), "Auto"
-        best = max(active, key=lambda name: counters[name].bytes_recv + counters[name].bytes_sent)
+        observed = {name: (counters[name].bytes_recv, counters[name].bytes_sent) for name in active}
+        activity = {
+            name: sum(max(0, current[i] - self._network_by_interface[name][i]) for i in (0, 1))
+            if name in self._network_by_interface else 0
+            for name, current in observed.items()
+        }
+        self._network_by_interface = observed
+        best = max(active, key=lambda name: activity[name])
+        selected = self._network_interface if self._network_interface in observed else None
+        if activity[best] == 0:
+            best = selected or max(active, key=lambda name: sum(observed[name]))
+        elif selected and activity[selected] >= activity[best] * 0.75:
+            best = selected
         return counters[best], best
 
     @staticmethod

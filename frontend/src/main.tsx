@@ -1659,7 +1659,7 @@ function StatisticsPage({
     return () => { current = false; window.clearInterval(monthlyRefresh); window.clearInterval(historyRefresh); };
   }, [trafficNodes, token, trafficResetRevision]);
 
-  const measured = nodes.filter((node) => node.latest);
+  const measured = nodes.filter((node) => node.online && node.latest);
   const cpuThreads = (metrics: Metrics) => Math.max(1, num(metrics.cpu?.logical_cores || metrics.cpu?.threads));
   const totalThreads = measured.reduce((total, node) => total + cpuThreads(node.latest!.metrics), 0);
   const usedCpuThreads = measured.reduce(
@@ -1724,20 +1724,20 @@ function StatisticsPage({
     const onlineIds = new Set(nodes.filter((node) => node.online).map((node) => node.node_id));
     const recent = Object.entries(trafficHistory)
       .filter(([nodeId]) => onlineIds.has(nodeId))
-      .map(([, history]) => history.filter((point) => Date.now() - new Date(point.recorded_at).getTime() < 5 * 60_000));
-    const pointCount = Math.max(2, ...recent.map((history) => history.length));
-    return Array.from({ length: pointCount }, (_, index) =>
-      recent.reduce(
-        (total, history) => {
-          const point = history[history.length - pointCount + index];
-          return {
-            download: total.download + num(point?.metrics.network?.download_mbps),
-            upload: total.upload + num(point?.metrics.network?.upload_mbps),
-          };
-        },
-        { download: 0, upload: 0 },
-      ),
-    );
+      .map(([, history]) => history.map((point) => ({ at: new Date(point.recorded_at).getTime(), network: point.metrics.network })));
+    // Agents sample at different times. Align by time rather than array index,
+    // otherwise a delayed node's old sample appears as current fleet traffic.
+    const lastSlot = Math.floor(Date.now() / 10_000) * 10_000;
+    return Array.from({ length: 30 }, (_, index) => {
+      const slotEnd = lastSlot - (29 - index) * 10_000 + 10_000;
+      return recent.reduce((total, history) => {
+        const point = [...history].reverse().find((sample) => sample.at <= slotEnd && sample.at > slotEnd - 25_000);
+        return {
+          download: total.download + num(point?.network?.download_mbps),
+          upload: total.upload + num(point?.network?.upload_mbps),
+        };
+      }, { download: 0, upload: 0 });
+    });
   }, [trafficHistory, nodes]);
 
   const [selectedTrafficDirection, setSelectedTrafficDirection] = useState<"download" | "upload">("download");

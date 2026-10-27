@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 
 from ncc.collectors.registry import ProviderRegistry, merge_metrics
@@ -49,6 +50,22 @@ def test_rate_pair_converts_and_smooths_network_counters() -> None:
     assert first == (3.6, 1.8)
     second = PsutilProvider._rate_pair((2_000_000, 1_000_000), (2_000_000, 1_000_000), 1.0, first)
     assert second == (1.98, 0.99)
+
+
+def test_network_interface_follows_current_traffic_not_old_cumulative_total(monkeypatch: Any) -> None:
+    provider = PsutilProvider()
+    counters = {
+        "old": SimpleNamespace(bytes_recv=1_000_000_000, bytes_sent=100_000_000),
+        "active": SimpleNamespace(bytes_recv=1000, bytes_sent=1000),
+    }
+    monkeypatch.setattr("ncc.collectors.system.psutil.net_if_stats", lambda: {
+        "old": SimpleNamespace(isup=True), "active": SimpleNamespace(isup=True),
+    })
+    monkeypatch.setattr("ncc.collectors.system.psutil.net_io_counters", lambda pernic=True: counters)
+    assert provider._active_network_counters()[1] == "old"
+    provider._network_interface = "old"
+    counters["active"] = SimpleNamespace(bytes_recv=101_000, bytes_sent=21_000)
+    assert provider._active_network_counters()[1] == "active"
 
 
 def test_rate_pair_converts_disk_bytes_to_mib() -> None:
