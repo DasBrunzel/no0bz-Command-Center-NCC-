@@ -100,6 +100,36 @@ def test_agent_enrolls_and_flushes_buffer_without_exposing_token(tmp_path: Path)
     buffer.close()
 
 
+def test_agent_reuses_host_metadata_for_heartbeats(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = 0
+
+    def metadata() -> dict[str, str]:
+        nonlocal calls
+        calls += 1
+        return {"architecture": "AMD64", "os_release": "2025Server"}
+
+    monkeypatch.setattr("ncc_agent.client._host_metadata", metadata)
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json={"heartbeat_interval_seconds": 10})
+
+    buffer = TelemetryBuffer(tmp_path / "queue.sqlite3", max_points=10)
+    client = AgentClient(
+        AgentSettings(server_url="https://ncc.example.test", token=SecretStr("agent-token"), data_dir=tmp_path),
+        "ncc-12345678-1234-4234-8234-123456789abc", buffer,
+        transport=httpx.MockTransport(handler),
+    )
+    client.enroll()
+    client.heartbeat()
+    client.heartbeat()
+    assert calls == 1
+    assert all(json.loads(request.content)["metadata"]["architecture"] == "AMD64" for request in requests)
+    client.close()
+    buffer.close()
+
+
 def test_failed_upload_stays_in_offline_buffer(tmp_path: Path) -> None:
     settings = AgentSettings(
         server_url="https://ncc.example.test",

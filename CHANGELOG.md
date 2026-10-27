@@ -12,6 +12,8 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   übermittelter Node-Name kann den Absender nicht mehr vortäuschen.
 - Die Migration `20261026_0018` verbindet Benutzerkonten mit Dashboard-Sitzungen
   und Chat-Nachrichten.
+- Der Agent ermittelt die statische Host-Kennung nur noch beim Start. Wiederholte
+  Heartbeats warten damit nicht auf einen erneuten Windows-CIM-Aufruf.
 - Das Dashboard übernimmt die dunkelgrüne „Alles im Blick“-Demo als neue
   Oberfläche: Navigation, Command Overview, Fleet Explorer, Node-Detail,
   Statistiken, Warnungen und Fleet Chat verwenden deren Layout und Design-Tokens.

@@ -32,6 +32,9 @@ class AgentClient:
         self.buffer = buffer
         self.agent_version = agent_version
         self.server_url = settings.validated_server_url()
+        # Reading the Windows hardware UUID starts PowerShell/CIM. The result
+        # is stable for this process and must not delay every heartbeat.
+        self._host_metadata = _host_metadata()
         self._headers: dict[str, str] = {}
         self.set_token(settings.token.get_secret_value())
         self._client = httpx.Client(
@@ -62,7 +65,7 @@ class AgentClient:
                 "display_name": (self.settings.display_name or socket.gethostname())[:128],
                 "platform": _platform_name(),
                 "agent_version": self.agent_version,
-                "metadata": _host_metadata(),
+                "metadata": self._host_metadata,
             },
         )
 
@@ -84,7 +87,7 @@ class AgentClient:
                 "display_name": (self.settings.display_name or socket.gethostname())[:128],
                 "platform": _platform_name(),
                 "agent_version": self.agent_version,
-                "metadata": _host_metadata(),
+                "metadata": self._host_metadata,
             },
         )
         return int(response.json()["heartbeat_interval_seconds"])
@@ -93,7 +96,7 @@ class AgentClient:
         self._request(
             "POST",
             "/api/v1/nodes/heartbeat",
-            json={"agent_version": self.agent_version, "metadata": _host_metadata()},
+            json={"agent_version": self.agent_version, "metadata": self._host_metadata},
         )
 
     def flush(self, max_batches: int = 10) -> int:
