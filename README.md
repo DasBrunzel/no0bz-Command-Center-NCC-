@@ -93,6 +93,17 @@ jeweilige Gerät. Warnungen informieren über fehlende frische Telemetrie, alte
 Agent-Versionen, wiederholte Doppelmeldungen und unplausible Netzwerkzähler. Sie
 erscheinen im Warnungszentrum und können über Telegram zugestellt werden.
 
+### Windows-Hardwaresensoren
+
+Der Windows-0.6-Payload enthält einen lesenden LibreHardwareMonitor-Helfer. CPU-
+Temperatur und Paketleistung benötigen zusätzlich funktionierenden Low-Level-
+Sensorzugriff über PawnIO. Fehlt dieser Zugriff, kann der Helfer GPU-Werte liefern,
+während CPU-Sensoren nur `0` melden; NCC zeigt dafür keinen erfundenen Messwert an.
+Mit `sc.exe query PawnIO` lässt sich der Treiberstatus prüfen. Installation oder
+Reparatur des Treibers erfolgt separat mit Administratorrechten; NCC deaktiviert
+dafür keine Windows-Schutzfunktionen. Hintergrund:
+[LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases).
+
 ### NCC 0.6 Agent Foundation
 
 NCC 0.6 teilt den Agenten in einen kleinen dauerhaften **NCC Core** und einen
