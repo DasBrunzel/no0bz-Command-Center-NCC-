@@ -2969,15 +2969,18 @@ function App() {
   const selected =
     nodes.find((node) => node.node_id === selectedId) || nodes[0] || null;
   const activeLoadsRef = useRef(0);
-  const configLoadRef = useRef<string | null>(null);
+  const configLoadRef = useRef<{ token: string; authEpoch: number } | null>(null);
+  const authEpochRef = useRef(0);
   const activeTokenRef = useRef(token);
   activeTokenRef.current = token;
   const telemetryCursorRef = useRef("");
   const telemetryNodeRef = useRef("");
   const telemetryTokenRef = useRef("");
   const loadConfiguration = useCallback(async () => {
-    if (configLoadRef.current === token) return;
-    configLoadRef.current = token;
+    const authEpoch = authEpochRef.current;
+    if (configLoadRef.current?.token === token && configLoadRef.current.authEpoch === authEpoch) return;
+    const request = { token, authEpoch };
+    configLoadRef.current = request;
     try {
       const configuration = await Promise.allSettled([
         getJson<FleetGroup[]>("/api/v1/fleet/groups", token),
@@ -2989,7 +2992,7 @@ function App() {
         getJson<DashboardAccess>("/api/v1/admin-codes/access", token),
         getJson<DashboardUser>("/api/v1/users/me", token),
       ]);
-      if (activeTokenRef.current !== token) return;
+      if (activeTokenRef.current !== token || authEpochRef.current !== authEpoch) return;
       if (configuration.some((result) => result.status === "rejected" && (result.reason as { status?: number }).status === 401)) {
         setAuthenticated(false);
         setAuthError(true);
@@ -3006,12 +3009,13 @@ function App() {
       if (nextAccess.status === "fulfilled") setAccessRole(nextAccess.value.access_role);
       if (nextIdentity.status === "fulfilled") setIdentity(nextIdentity.value);
     } finally {
-      if (configLoadRef.current === token) configLoadRef.current = null;
+      if (configLoadRef.current === request) configLoadRef.current = null;
     }
   }, [token]);
   const load = useCallback(
     async (silent = false, full = true) => {
       if (silent && activeLoadsRef.current > 0) return;
+      const authEpoch = authEpochRef.current;
       activeLoadsRef.current += 1;
       if (!silent) setLoading(true);
       if (full) void loadConfiguration();
@@ -3020,7 +3024,7 @@ function App() {
           getJson<Node[]>("/api/v1/fleet/nodes", token),
           getJson<AlertRecord[]>("/api/v1/fleet/alerts", token),
         ]);
-        if (activeTokenRef.current !== token) return;
+        if (activeTokenRef.current !== token || authEpochRef.current !== authEpoch) return;
         setNodes(nextNodes);
         setAlerts(nextAlerts);
         const activeAlertIds = new Set(
@@ -3041,7 +3045,7 @@ function App() {
             : nextNodes[0]?.node_id || "",
         );
       } catch (error) {
-        if (activeTokenRef.current !== token) return;
+        if (activeTokenRef.current !== token || authEpochRef.current !== authEpoch) return;
         setConnectionOnline(false);
         if ((error as Error & { status?: number }).status === 401) {
           setAuthenticated(false);
@@ -3049,7 +3053,7 @@ function App() {
         }
       } finally {
         activeLoadsRef.current -= 1;
-        if (activeTokenRef.current === token) setLoading(false);
+        if (activeTokenRef.current === token && authEpochRef.current === authEpoch) setLoading(false);
       }
     },
     [token, loadConfiguration],
@@ -3140,6 +3144,7 @@ function App() {
       .catch(() => undefined);
   }, [authenticated, token]);
   const saveToken = (value: string) => {
+    authEpochRef.current += 1;
     localStorage.setItem("ncc-dashboard-token", value);
     setToken(value);
     setAccessRole("beta_tester");
@@ -3229,6 +3234,7 @@ function App() {
     try {
       await fetch("/api/v1/admin-codes/logout", { method: "POST" });
     } finally {
+      authEpochRef.current += 1;
       localStorage.removeItem("ncc-dashboard-token");
       setToken("");
       setAccessRole("beta_tester");

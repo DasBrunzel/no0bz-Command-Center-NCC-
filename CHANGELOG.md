@@ -4,6 +4,9 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## 0.6.0-beta.4 - in Arbeit
 
+- Antworten aus einem früheren Browser-Login werden nach erneutem Anmelden
+  oder Abmelden verworfen. Das gilt auch dann, wenn sich der leere Token bei
+  Cookie-Sitzungen nicht ändert.
 - Die Unraid-Integration übernimmt die kumulativen Netzwerkzähler der
   Host-Schnittstelle in die Monatsstatistik. Bridge, physische NIC und virtuelle
   Docker-/Tailscale-Adapter werden nicht mehr mehrfach addiert; ältere APIs
