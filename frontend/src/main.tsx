@@ -1949,6 +1949,8 @@ function ChatAttachmentView({ attachment, token, onOpen }: { attachment: ChatAtt
 function FleetChat({ token, identity }: { token: string; identity: DashboardUser | null }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [participants, setParticipants] = useState<ChatParticipant[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [participantsLoading, setParticipantsLoading] = useState(true);
   const [body, setBody] = useState("");
   const [format, setFormat] = useState<"plain" | "markdown">("plain");
   const [attachment, setAttachment] = useState<File | null>(null);
@@ -1963,19 +1965,23 @@ function FleetChat({ token, identity }: { token: string; identity: DashboardUser
   const newestIdRef = useRef("");
   const oldestIdRef = useRef("");
   const loadedRef = useRef(false);
-  const pollingRef = useRef(false);
+  const activeTokenRef = useRef(token);
+  activeTokenRef.current = token;
+  const pollingTokenRef = useRef<string | null>(null);
   const atBottomRef = useRef(true);
   const scrollRef = useRef<"bottom" | { top: number; height: number } | null>(null);
   const loadLatest = useCallback(async () => {
-    if (pollingRef.current) return;
-    pollingRef.current = true;
+    if (pollingTokenRef.current === token) return;
+    pollingTokenRef.current = token;
     try {
       const initial = !loadedRef.current || !newestIdRef.current;
       const cursor = newestIdRef.current;
       const url = initial ? "/api/v1/fleet/chat/messages?limit=50" : `/api/v1/fleet/chat/messages?limit=100&after=${encodeURIComponent(cursor)}`;
       const incoming = await getJson<ChatMessage[]>(url, token);
+      if (activeTokenRef.current !== token) return;
       if (initial) {
         loadedRef.current = true;
+        setHistoryLoading(false);
         setHasOlder(incoming.length === 50);
         oldestIdRef.current = incoming[0]?.message_id || "";
         scrollRef.current = "bottom";
@@ -1990,30 +1996,44 @@ function FleetChat({ token, identity }: { token: string; identity: DashboardUser
       }
       if (incoming.length) newestIdRef.current = incoming[incoming.length - 1].message_id;
       setChatError("");
-    } finally { pollingRef.current = false; }
+    } finally {
+      if (pollingTokenRef.current === token) pollingTokenRef.current = null;
+    }
   }, [token]);
   const loadParticipants = useCallback(async () => {
-    setParticipants(await getJson<ChatParticipant[]>("/api/v1/fleet/chat/participants", token));
+    const incoming = await getJson<ChatParticipant[]>("/api/v1/fleet/chat/participants", token);
+    if (activeTokenRef.current !== token) return;
+    setParticipants(incoming);
+    setParticipantsLoading(false);
   }, [token]);
   useEffect(() => {
     loadedRef.current = false;
     newestIdRef.current = "";
     oldestIdRef.current = "";
     setMessages([]);
+    setParticipants([]);
+    setHistoryLoading(true);
+    setParticipantsLoading(true);
     setUnread(0);
   }, [token]);
   useEffect(() => {
+    let current = true;
     const refresh = () => {
-      if (document.visibilityState === "visible") void loadLatest().catch(() => setChatError("Fleet Chat ist gerade nicht erreichbar."));
+      if (document.visibilityState === "visible") void loadLatest().catch(() => {
+        if (!current) return;
+        setHistoryLoading(false);
+        setChatError("Fleet Chat ist gerade nicht erreichbar.");
+      });
     };
     refresh();
-    void loadParticipants().catch(() => undefined);
+    void loadParticipants().catch(() => { if (current) setParticipantsLoading(false); });
     const messagesTimer = window.setInterval(refresh, 5000);
     const participantsTimer = window.setInterval(() => {
-      if (document.visibilityState === "visible") void loadParticipants().catch(() => undefined);
+      if (document.visibilityState === "visible") void loadParticipants().catch(() => { if (current) setParticipantsLoading(false); });
     }, 60000);
     document.addEventListener("visibilitychange", refresh);
     return () => {
+      current = false;
       clearInterval(messagesTimer);
       clearInterval(participantsTimer);
       document.removeEventListener("visibilitychange", refresh);
@@ -2083,7 +2103,7 @@ function FleetChat({ token, identity }: { token: string; identity: DashboardUser
   return <section className="concept-chat-page">
     <div className="page-intro"><div><div className="eyebrow">COLLABORATION / FLEET</div><h1>Fleet Chat.</h1><p>Absprachen und Medien an einem eigenen Ort, getrennt von Telemetrie und Warnungen.</p></div></div>
     <div className="chat-shell">
-      <div className="chat-heading"><div className="chat-channel-icon">#</div><div><b>fleet-operations</b><small>Private Fleet · Nachrichten bleiben auf dem NCC-Server</small></div><span className="chat-members">● {participants.length} Mitglieder</span></div>
+      <div className="chat-heading"><div className="chat-channel-icon">#</div><div><b>fleet-operations</b><small>Private Fleet · Nachrichten bleiben auf dem NCC-Server</small></div><span className="chat-members">● {participantsLoading ? "Mitglieder werden geladen" : `${participants.length} Mitglieder`}</span></div>
       <div className="chat-messages" ref={listRef} onScroll={(event) => {
         const list = event.currentTarget;
         atBottomRef.current = list.scrollHeight - list.scrollTop - list.clientHeight < 90;
@@ -2103,7 +2123,7 @@ function FleetChat({ token, identity }: { token: string; identity: DashboardUser
             </div>
           </React.Fragment>;
         })}
-        {!messages.length && <div className="chat-empty"><MessageSquare size={34} /><strong>Der Fleet Chat ist bereit.</strong><span>Schreib die erste Nachricht an dein Team.</span></div>}
+        {!messages.length && <div className="chat-empty"><MessageSquare size={34} /><strong>{historyLoading ? "Chat-Verlauf wird geladen." : chatError ? "Chat-Verlauf nicht erreichbar." : "Der Fleet Chat ist bereit."}</strong><span>{historyLoading ? "Nachrichten werden vom NCC-Server abgerufen." : chatError ? "Die Verbindung wird automatisch erneut geprüft." : "Schreib die erste Nachricht an dein Team."}</span></div>}
       </div>
       {unread > 0 && <button type="button" className="chat-new-messages" onClick={() => { if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight; setUnread(0); }}>{unread} neue {unread === 1 ? "Nachricht" : "Nachrichten"} ↓</button>}
       <form className="chat-compose" ref={formRef} onSubmit={(event) => void send(event)}>

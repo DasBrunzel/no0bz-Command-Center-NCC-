@@ -4,6 +4,9 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## 0.6.0-beta.4 - in Arbeit
 
+- Der Fleet Chat zeigt während der ersten Abfrage einen Ladezustand statt
+  fälschlich einen leeren Verlauf und null Mitglieder. Antworten aus einer
+  vorherigen Anmeldung überschreiben den Chat nach einem Kontowechsel nicht mehr.
 - Die Backend-Typprüfung ist wieder fehlerfrei. Der Agent reicht seine
   Versionsangabe nun explizit weiter; Chat-, Benutzer- und Fleet-Abfragen
   verwenden passende Ergebnistypen.
