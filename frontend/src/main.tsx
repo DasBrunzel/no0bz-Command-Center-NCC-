@@ -1988,13 +1988,32 @@ function ChatAttachmentView({ attachment, token, onOpen }: { attachment: ChatAtt
   const [previewRequested, setPreviewRequested] = useState(false);
   const [previewError, setPreviewError] = useState(false);
   const [openPdfWhenReady, setOpenPdfWhenReady] = useState(false);
+  const imageRef = useRef<HTMLButtonElement>(null);
   const kind = attachment.content_type.startsWith("image/") ? "image" : attachment.content_type.startsWith("video/") ? "video" : attachment.content_type.startsWith("audio/") ? "audio" : attachment.content_type === "application/pdf" ? "pdf" : "file";
   useEffect(() => {
-    // Videos, audio and PDFs can be large. The chat history must not download
-    // every old attachment just because its message was rendered.
-    if (kind === "file" || (kind !== "image" && !previewRequested)) return;
+    if (kind !== "image" || previewRequested || previewError) return;
+    const element = imageRef.current;
+    if (!element) return;
+    if (typeof IntersectionObserver === "undefined") {
+      setPreviewRequested(true);
+      return;
+    }
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        setPreviewRequested(true);
+        observer.disconnect();
+      }
+    }, { rootMargin: "160px" });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [kind, previewError, previewRequested]);
+  useEffect(() => {
+    // The chat history must not download attachments outside the viewport or
+    // large media that nobody has asked to preview.
+    if (kind === "file" || !previewRequested) return;
     let active = true;
     let objectUrl = "";
+    setUrl("");
     fetch(attachment.url, { headers: headers(token) }).then(async (response) => {
       if (!response.ok) throw new Error("MEDIA_REQUEST");
       const blob = await response.blob();
@@ -2024,7 +2043,7 @@ function ChatAttachmentView({ attachment, token, onOpen }: { attachment: ChatAtt
     // Keep the blob alive until the browser has started saving the download.
     window.setTimeout(() => URL.revokeObjectURL(temporary), 60_000);
   };
-  if (kind === "image") return <button type="button" className="chat-media image" onClick={() => url && onOpen(attachment, url, "image")}><img src={url} alt={attachment.name} /><span><ImageIcon size={14} />{attachment.name}<Maximize2 size={13} /></span></button>;
+  if (kind === "image") return <button ref={imageRef} type="button" className="chat-media image" onClick={() => { if (url) onOpen(attachment, url, "image"); else { setPreviewError(false); setPreviewRequested(true); } }}>{url ? <img src={url} alt={attachment.name} /> : <div className="chat-image-placeholder"><ImageIcon size={22} /><small>{previewRequested ? "Bild wird geladen …" : previewError ? "Bild erneut laden" : "Bildvorschau laden"}</small></div>}<span><ImageIcon size={14} />{attachment.name}<Maximize2 size={13} /></span></button>;
   if (kind === "video") return <div className="chat-media video"><header><Film size={14} />{attachment.name}</header>{url ? <video src={url} controls preload="metadata" /> : <button type="button" onClick={() => { setPreviewError(false); setPreviewRequested(true); }} disabled={previewRequested}>{previewRequested ? "Vorschau wird geladen …" : previewError ? "Video-Vorschau erneut laden" : "Video-Vorschau laden"}</button>}</div>;
   if (kind === "audio") return <div className="chat-media audio"><header><Music2 size={14} />{attachment.name}</header>{url ? <audio src={url} controls /> : <button type="button" onClick={() => { setPreviewError(false); setPreviewRequested(true); }} disabled={previewRequested}>{previewRequested ? "Vorschau wird geladen …" : previewError ? "Audio-Vorschau erneut laden" : "Audio-Vorschau laden"}</button>}</div>;
   if (kind === "pdf") return <button type="button" className="chat-media document" onClick={() => { if (url) onOpen(attachment, url, "pdf"); else { setPreviewError(false); setOpenPdfWhenReady(true); setPreviewRequested(true); } }}><FileText size={21} /><span><b>{attachment.name}</b><small>{previewRequested && !url ? "PDF wird geladen …" : previewError ? "PDF-Vorschau erneut öffnen" : "PDF-Vorschau öffnen"}</small></span><Maximize2 size={14} /></button>;

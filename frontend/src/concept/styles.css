@@ -116,6 +116,16 @@
 .component-versions dd small{color:var(--muted);font-size:11px}
 @media(max-width:760px){.component-versions{grid-template-columns:1fr}}
 
+.concept-chat-page .chat-image-placeholder {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 8px;
+  min-height: 120px;
+  color: var(--muted);
+}
+.concept-chat-page .chat-image-placeholder small { font-size: 11px; }
+
 /* Keep the latest messages and composer visible together on narrow screens. */
 @media (max-width: 620px) {
   .concept-chat-page .chat-shell {

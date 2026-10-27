@@ -4,6 +4,8 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [0.6.0-beta.8-dev.0] – Laufende Entwicklung
 
+- Bilder im Fleet Chat werden erst in der Nähe des sichtbaren Verlaufs
+  abgerufen; ältere Bilder bleiben als anklickbare Vorschauhalter sichtbar.
 - Der Fleet Chat lädt Video-, Audio- und PDF-Anhänge erst beim Öffnen der
   Vorschau. Ein langer Verlauf löst dadurch keine unnötigen Mediendownloads aus.
 - Fleet-Chat-Anhänge zeigen kleine Dateien in KB oder Byte statt irreführend
