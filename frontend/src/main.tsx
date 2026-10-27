@@ -1686,14 +1686,20 @@ function StatisticsPage({
       if (monthlyBusy || document.visibilityState !== "visible") return;
       monthlyBusy = true;
       try {
-        // Keep database work bounded: each month may contain many samples.
-        for (const node of trafficNodes) {
-          if (!current || document.visibilityState !== "visible") break;
-          try {
-            const value = await getJson<NetworkUsageSummary>(`/api/v1/fleet/nodes/${node.node_id}/network/month`, token, 90_000);
-            if (current) setTraffic((previous) => ({ ...previous, [node.node_id]: value }));
-          } catch { /* Retain the last successful value for this node. */ }
-        }
+        // A slow node must not hold back all traffic values. Bound concurrent
+        // month scans so a growing database is not queried for every node at once.
+        const pending = [...trafficNodes];
+        const worker = async () => {
+          while (current && document.visibilityState === "visible") {
+            const node = pending.shift();
+            if (!node) break;
+            try {
+              const value = await getJson<NetworkUsageSummary>(`/api/v1/fleet/nodes/${node.node_id}/network/month`, token, 90_000);
+              if (current) setTraffic((previous) => ({ ...previous, [node.node_id]: value }));
+            } catch { /* Retain the last successful value for this node. */ }
+          }
+        };
+        await Promise.all(Array.from({ length: Math.min(2, pending.length) }, () => worker()));
       } finally { monthlyBusy = false; }
     };
     const loadHistory = async () => {

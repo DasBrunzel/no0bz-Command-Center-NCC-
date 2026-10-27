@@ -4,6 +4,8 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## Laufende Entwicklung auf dem 0.6-Branch
 
+- Die Statistik lädt Monatsverkehr für höchstens zwei Geräte gleichzeitig.
+  Eine langsame Geräteabfrage hält die Werte aller anderen Geräte nicht mehr auf.
 - Der Agent zählt abgeschlossene Messungen nun unabhängig von der Systemuhr.
   Nach einer Uhrzeitkorrektur laufen Uploads weiter; der noch leere
   Collector-Startzustand wird nicht als Telemetrie versendet.
