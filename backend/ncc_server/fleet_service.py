@@ -410,6 +410,11 @@ def _plausible_counter_delta(
 
 
 def _reported_rate_limit(payload: dict[str, object], field: str, elapsed_seconds: float) -> float | None:
+    # The reported rate covers only the agent's latest collection interval.
+    # After an upload gap it cannot bound all bytes accumulated since the last
+    # stored counter; the cumulative counters remain the reliable source.
+    if elapsed_seconds > 30:
+        return None
     network = payload.get("network")
     if not isinstance(network, dict):
         return None

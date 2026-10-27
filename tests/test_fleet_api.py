@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from ncc_server.app import create_app
 from ncc_server.config import ServerSettings
 from ncc_server.database import Database
+from ncc_server.fleet_service import node_monthly_network_usage
 from ncc_server.models import (
     AgentToken,
     AlertState,
@@ -443,6 +444,36 @@ def test_monthly_network_usage_ignores_impossible_counter_jumps(tmp_path: Path) 
     assert result.status_code == 200
     assert result.json()["received_bytes"] == 600
     assert result.json()["sent_bytes"] == 300
+
+
+def test_monthly_network_usage_keeps_counter_growth_after_upload_gap(tmp_path: Path) -> None:
+    database = make_database(tmp_path / "network-gap.db")
+    online_id, _ = seed(database)
+    now = utc_now().replace(day=15, hour=12, minute=0, second=0, microsecond=0)
+    with database.session() as session:
+        session.add_all([
+            TelemetryPoint(
+                node_id=online_id,
+                sample_id="eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+                recorded_at=now - timedelta(minutes=20),
+                payload={"network": {"interface": "Ethernet", "bytes_recv": 1000, "bytes_sent": 1000}},
+            ),
+            TelemetryPoint(
+                node_id=online_id,
+                sample_id="ffffffff-ffff-4fff-8fff-ffffffffffff",
+                recorded_at=now - timedelta(minutes=10),
+                payload={"network": {
+                    "interface": "Ethernet", "bytes_recv": 1000 + 1024**3,
+                    "bytes_sent": 1000 + 100 * 1024**2,
+                    "download_mbps": 0.01, "upload_mbps": 0.01,
+                }},
+            ),
+        ])
+        session.commit()
+        usage = node_monthly_network_usage(session, online_id, now=now)
+    assert usage is not None
+    assert usage.received_bytes == 1024**3
+    assert usage.sent_bytes == 100 * 1024**2
 
 
 def test_monthly_network_usage_rebaselines_when_adapter_changes(tmp_path: Path) -> None:

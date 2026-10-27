@@ -4,6 +4,9 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [0.6.0-beta.8-dev.0] – Laufende Entwicklung
 
+- Die Netzwerk-Monatsstatistik zählt echte Zählerdifferenzen nach längeren
+  Upload-Lücken wieder mit. Die momentane Datenrate des letzten Messpunkts
+  begrenzt jetzt nur kurze Intervalle, für die sie aussagekräftig ist.
 - Beim Empfang von Telemetrie lädt der Server für die Doppeltelemetrie-Prüfung
   nur noch den Zeitstempel des letzten Messpunkts statt dessen gesamten
   Sensor- und Prozessdaten. Das reduziert Datenbankarbeit bei jedem Upload.
