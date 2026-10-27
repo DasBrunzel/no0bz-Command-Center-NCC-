@@ -468,6 +468,16 @@ def test_monthly_network_usage_keeps_counter_growth_after_upload_gap(tmp_path: P
                     "download_mbps": 0.01, "upload_mbps": 0.01,
                 }},
             ),
+            TelemetryPoint(
+                node_id=online_id,
+                sample_id="12121212-1212-4212-8212-121212121212",
+                recorded_at=now,
+                payload={"network": {
+                    "interface": "Ethernet", "bytes_recv": 100 * 1024**4,
+                    "bytes_sent": 100 * 1024**4,
+                    "download_mbps": 0.01, "upload_mbps": 0.01,
+                }},
+            ),
         ])
         session.commit()
         usage = node_monthly_network_usage(session, online_id, now=now)
