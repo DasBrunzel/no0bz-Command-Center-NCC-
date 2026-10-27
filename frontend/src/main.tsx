@@ -2032,6 +2032,7 @@ function FleetChat({ token, identity }: { token: string; identity: DashboardUser
   const formRef = useRef<HTMLFormElement>(null);
   const newestIdRef = useRef("");
   const oldestIdRef = useRef("");
+  const knownMessageIdsRef = useRef<Set<string>>(new Set());
   const loadedRef = useRef(false);
   const activeTokenRef = useRef(token);
   activeTokenRef.current = token;
@@ -2048,6 +2049,7 @@ function FleetChat({ token, identity }: { token: string; identity: DashboardUser
       const incoming = await getJson<ChatMessage[]>(url, token);
       if (activeTokenRef.current !== token) return;
       if (initial) {
+        incoming.forEach((message) => knownMessageIdsRef.current.add(message.message_id));
         loadedRef.current = true;
         setHistoryLoading(false);
         setHasOlder(incoming.length === 50);
@@ -2060,11 +2062,13 @@ function FleetChat({ token, identity }: { token: string; identity: DashboardUser
           return [...incoming, ...previous.filter((message) => !seen.has(message.message_id))];
         });
       } else if (incoming.length) {
-        if (atBottomRef.current) scrollRef.current = "bottom";
-        else setUnread((count) => count + incoming.length);
-        setMessages((previous) => {
+        const novel = incoming.filter((message) => !knownMessageIdsRef.current.has(message.message_id));
+        incoming.forEach((message) => knownMessageIdsRef.current.add(message.message_id));
+        if (novel.length && atBottomRef.current) scrollRef.current = "bottom";
+        else if (novel.length) setUnread((count) => count + novel.length);
+        if (novel.length) setMessages((previous) => {
           const seen = new Set(previous.map((message) => message.message_id));
-          return [...previous, ...incoming.filter((message) => !seen.has(message.message_id))];
+          return [...previous, ...novel.filter((message) => !seen.has(message.message_id))];
         });
       }
       if (incoming.length) newestIdRef.current = incoming[incoming.length - 1].message_id;
@@ -2083,6 +2087,7 @@ function FleetChat({ token, identity }: { token: string; identity: DashboardUser
     loadedRef.current = false;
     newestIdRef.current = "";
     oldestIdRef.current = "";
+    knownMessageIdsRef.current.clear();
     setMessages([]);
     setParticipants([]);
     setHistoryLoading(true);
@@ -2128,6 +2133,7 @@ function FleetChat({ token, identity }: { token: string; identity: DashboardUser
       if (activeTokenRef.current !== token) return;
       setHasOlder(older.length === 50);
       if (older.length) {
+        older.forEach((message) => knownMessageIdsRef.current.add(message.message_id));
         oldestIdRef.current = older[0].message_id;
         if (list) scrollRef.current = { top: list.scrollTop, height: list.scrollHeight };
         setMessages((previous) => {
@@ -2161,6 +2167,7 @@ function FleetChat({ token, identity }: { token: string; identity: DashboardUser
         sent = await postJson<ChatMessage>("/api/v1/fleet/chat/messages", token, { body, body_format: format });
       }
       if (activeTokenRef.current !== token) return;
+      knownMessageIdsRef.current.add(sent.message_id);
       if (!oldestIdRef.current) oldestIdRef.current = sent.message_id;
       setBody("");
       setAttachment(null);

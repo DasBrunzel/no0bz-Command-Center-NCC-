@@ -4,6 +4,9 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [0.6.0-beta.8-dev.0] – Laufende Entwicklung
 
+- Der Fleet Chat zählt beim Nachladen nur tatsächlich neue Nachrichten als
+  ungelesen. Bereits gesendete oder zuvor geladene Nachrichten erhöhen den
+  Zähler nicht noch einmal.
 - Dashboard, Server, Python-Paket, Service-Integration und Core-Quellen tragen
   jetzt die gemeinsame Entwicklungsnummer. Die Übersicht „Installierte
   Komponenten“ zeigt zusätzlich die vom Server gemeldete Version und die
