@@ -4,6 +4,9 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## 0.6.0-beta.4 - in Arbeit
 
+- Die Backend-Typprüfung ist wieder fehlerfrei. Der Agent reicht seine
+  Versionsangabe nun explizit weiter; Chat-, Benutzer- und Fleet-Abfragen
+  verwenden passende Ergebnistypen.
 - Antworten aus einem früheren Browser-Login werden nach erneutem Anmelden
   oder Abmelden verworfen. Das gilt auch dann, wenn sich der leere Token bei
   Cookie-Sitzungen nicht ändert.

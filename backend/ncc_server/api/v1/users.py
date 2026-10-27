@@ -6,6 +6,7 @@ import hashlib
 import json
 import secrets
 from datetime import timedelta
+from typing import Literal, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from ncc.security import limited
@@ -33,7 +34,7 @@ router = APIRouter(prefix="/users", tags=["dashboard users"])
 
 def _response(user: User) -> DashboardUserResponse:
     return DashboardUserResponse(
-        user_id=user.id, username=user.username, role=user.role,
+        user_id=user.id, username=user.username, role=cast(Literal["commander", "beta_tester"], user.role),
         active=user.active, managed=True, created_at=user.created_at,
     )
 

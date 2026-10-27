@@ -4,6 +4,7 @@ import mimetypes
 import re
 import uuid
 from pathlib import Path
+from typing import Literal, cast
 
 from fastapi import HTTPException, UploadFile, status
 from sqlalchemy import and_, or_, select
@@ -48,9 +49,9 @@ def list_chat_messages(
                 )
             )
     if after:
-        rows = session.scalars(query.order_by(FleetChatMessage.created_at, FleetChatMessage.id).limit(limit)).all()
+        rows = list(session.scalars(query.order_by(FleetChatMessage.created_at, FleetChatMessage.id).limit(limit)).all())
     else:
-        rows = session.scalars(query.order_by(FleetChatMessage.created_at.desc(), FleetChatMessage.id.desc()).limit(limit)).all()
+        rows = list(session.scalars(query.order_by(FleetChatMessage.created_at.desc(), FleetChatMessage.id.desc()).limit(limit)).all())
         rows.reverse()
     return [_message_response(row) for row in rows]
 
@@ -63,7 +64,7 @@ def list_chat_participants(
         FleetChatParticipantResponse(
             user_id=user.id,
             display_name=user.username,
-            role=user.role,
+            role=cast(Literal["commander", "beta_tester"], user.role),
         )
         for user in users if user.role in {"commander", "beta_tester"}
     ]

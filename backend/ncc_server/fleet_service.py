@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import and_, delete, func, or_, select, update
@@ -393,7 +394,7 @@ def fleet_summary(session: Session, settings: ServerSettings) -> FleetSummaryRes
     )
 
 
-def _logical_nodes(nodes: list[Node], settings: ServerSettings) -> list[Node]:
+def _logical_nodes(nodes: Sequence[Node], settings: ServerSettings) -> list[Node]:
     """Count a dualboot device once, selecting its live OS when possible."""
     selected: dict[str, Node] = {}
     for node in nodes:

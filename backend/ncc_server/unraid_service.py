@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import re
 import uuid
+from collections.abc import Sequence
 from typing import Any
 
 import httpx
@@ -243,7 +244,7 @@ def _kb_to_gb(value: object) -> float:
     return _number(value) / 1024 / 1024
 
 
-def _sum_number(rows: list[object], key: str) -> float:
+def _sum_number(rows: Sequence[object], key: str) -> float:
     return sum(_number(row.get(key)) for row in rows if isinstance(row, dict))
 
 

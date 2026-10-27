@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
@@ -243,7 +244,7 @@ def _bound_node(session: Session, token: AgentToken) -> Node:
     return node
 
 
-def _sync_physical_device(session: Session, node: Node, metadata: dict[str, object]) -> None:
+def _sync_physical_device(session: Session, node: Node, metadata: Mapping[str, object]) -> None:
     """Link dual-boot agents by a privacy-preserving hardware fingerprint."""
     fingerprint = metadata.get("hardware_fingerprint")
     if not isinstance(fingerprint, str) or len(fingerprint) != 64:

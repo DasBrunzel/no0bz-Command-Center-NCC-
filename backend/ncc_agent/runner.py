@@ -10,6 +10,7 @@ import httpx
 from ncc.collectors.registry import ProviderRegistry, SnapshotCollector
 from ncc.config import Settings as CollectorSettings
 
+from ncc_agent import __version__
 from ncc_agent.buffer import TelemetryBuffer
 from ncc_agent.client import AgentClient, AgentRejectedError
 from ncc_agent.config import AgentSettings
@@ -42,7 +43,7 @@ class AgentRunner:
         )
         self.client = AgentClient(
             settings, self.machine_id, self.buffer,
-            **({"agent_version": agent_version} if agent_version else {}),
+            agent_version=agent_version or __version__,
         )
         saved_token = load_token(settings.data_dir)
         if saved_token:
