@@ -8,8 +8,10 @@ Real-Time System Monitor & Local Sync Hub (Python/FastAPI + React).
 
 > **NCC 0.6 befindet sich im kontrollierten Beta-Test.** Die aktuelle Payload-
 > version `0.6.0-beta.7` ergänzt NCC 0.5 um einen isolierten, kompilierten Core.
-> Der produktive Server und die bestehenden Agenten bleiben vorerst auf dem
-> bewährten 0.5-Pfad. NCC besteht aus einem dauerhaft laufenden Server, GUI-losen Windows-/Linux-Agenten,
+> Der produktive Server akzeptiert 0.5- und 0.6-Agenten parallel. Ausgewählte
+> Windows- und Linux-Geräte laufen bereits mit NCC Core; weitere Geräte werden
+> einzeln migriert. NCC besteht aus einem dauerhaft laufenden Server,
+> GUI-losen Windows-/Linux-Agenten,
 > einer Unraid-API-Integration und einer gemeinsamen Fleet-Weboberfläche. Die
 > NCC-0.4-Starter bleiben ausschließlich als Kompatibilitätsschicht erhalten.
 
@@ -68,8 +70,10 @@ andere aktive Sitzungen dieses Kontos abgemeldet.
 
 Das Dashboard nutzt das dunkle **Command Mint**-Design der „Alles im Blick“-Demo.
 Die Startseite priorisiert Warnungen, Fleet-Status und Live-Netzwerkverkehr. Der
-Fleet Explorer bündelt Dualboot-Profile, bietet Suche und Filter und führt zur
-Detailansicht der gewählten Node. Statistiken, Warnungszentrale und Fleet Chat
+Fleet Explorer bündelt zugeordnete Dualboot-Profile, bietet Suche und Filter und
+führt zur Detailansicht der gewählten Node. Commander können OS-Profile einem
+vorhandenen physischen Gerät zuordnen, lösen und zwischen ihnen wechseln.
+Statistiken, Warnungszentrale und Fleet Chat
 verwenden dieselbe Oberfläche. Alle Werte stammen weiterhin aus den NCC-APIs;
 Gaming Mode, Umbenennen, Release-Zuweisung und Geräteverwaltung bleiben verfügbar.
 
@@ -79,25 +83,25 @@ ist. Mehrzeilige Nachrichten lassen sich mit Umschalt+Enter schreiben. Das
 Dashboard fragt Live-Daten regelmäßig ab; Konto- und Einstellungsdaten werden
 seltener geladen und ausgeblendete Browser-Tabs pausieren die Abfragen.
 
-Die Seite **Statistiken** fasst die gesamte Fleet zusammen: Verfügbarkeit je Agent,
-gewichtete CPU- und RAM-Kapazität, GPUs, eine kombinierte Auslastungsrangliste,
-Monatsverkehr sowie einen Live-Gesamtverlauf für Up- und Download. Rohdaten bleiben
-erhalten; die Monatsanzeige beginnt am Monatsersten neu.
+Die Seite **Statistiken** zeigt die Verfügbarkeit seit Aufnahme samt Uptime-Rekord,
+Monatsverkehr und einen Live-Gesamtverlauf für Up- und Download. Zugeordnete
+Dualboot-Profile erscheinen in „Netzwerk nach Gerät“ zusammengefasst. Rohdaten
+bleiben erhalten; die Monatsanzeige beginnt am Monatsersten neu.
 
 Der Server überwacht zudem die **Agent-Gesundheit** unabhängig vom Zugriff auf das
 jeweilige Gerät. Warnungen informieren über fehlende frische Telemetrie, alte
 Agent-Versionen, wiederholte Doppelmeldungen und unplausible Netzwerkzähler. Sie
 erscheinen im Warnungszentrum und können über Telegram zugestellt werden.
 
-### Ausblick: NCC 0.6 Agent Foundation
+### NCC 0.6 Agent Foundation
 
-NCC 0.6 wird den Agenten in einen kleinen dauerhaften **NCC Core** und einen
-austauschbaren Telemetrie-Payload aufteilen. Updates werden signiert, atomar
+NCC 0.6 teilt den Agenten in einen kleinen dauerhaften **NCC Core** und einen
+austauschbaren Telemetrie-Payload. Updates werden signiert, atomar
 aktiviert und bei einem fehlerhaften Payload automatisch zurückgerollt. Bestehende
 NCC-0.5-Agenten bleiben kompatibel und werden nur bewusst, einzeln pro Gerät
-migriert. Die Planung berücksichtigt außerdem ein physisches Gerät mit mehreren
-Profilen — etwa Windows und CachyOS im Dualboot — damit es im Dashboard nicht doppelt
-erscheint. Details: [NCC 0.6 Agent Foundation](docs/ncc-0.6-agent-foundation.md).
+migriert. Ein physisches Gerät kann mehrere OS-Profile enthalten, etwa Windows
+und CachyOS im Dualboot, und erscheint im Fleet Explorer nur einmal. Details:
+[NCC 0.6 Agent Foundation](docs/ncc-0.6-agent-foundation.md).
 
 ### NCC 0.6: kontrollierte Payload-Updates
 
