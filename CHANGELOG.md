@@ -8,6 +8,8 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   `server.env` statt immer `127.0.0.1`. Zwei fehlgeschlagene Prüfungen sind
   nötig, bevor er NccServer neu startet. Server-Updates erneuern einen bereits
   installierten Watchdog automatisch.
+- Der Server-Updater vergleicht alle installierten Dashboard-Dateien per SHA-256
+  mit dem Git-Stand, einschließlich später geladener Chat-Module.
 - Persönliche Dashboard-Konten mit Commander- und Beta-Tester-Rolle können nun in
   den Einstellungen verwaltet werden. Login und Passwortwechsel verwenden
   geschützte Browsersitzungen; das Sperren eines Kontos entzieht aktive Sitzungen.

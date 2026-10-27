@@ -97,6 +97,20 @@ $installedAssets = @([regex]::Matches((Get-Content -LiteralPath $installedIndex 
 if (($installedAssets -join '|') -ne ($expectedAssets -join '|')) {
     throw "Installed dashboard assets do not match Git HEAD. Expected: $($expectedAssets -join ', '); installed: $($installedAssets -join ', ')"
 }
+# Vite can load additional chunks later (for example Fleet Chat Markdown).
+# Checking only index.html would miss a missing chunk until a user opens it.
+foreach ($sourceAsset in Get-ChildItem -LiteralPath $staticRoot -File -Recurse) {
+    $relativeAsset = $sourceAsset.FullName.Substring($staticRoot.Length).TrimStart('\', '/')
+    $installedAsset = Join-Path $installedStaticRoot $relativeAsset
+    if (-not (Test-Path -LiteralPath $installedAsset -PathType Leaf)) {
+        throw "Installed dashboard asset is missing: $installedAsset"
+    }
+    $sourceHash = (Get-FileHash -LiteralPath $sourceAsset.FullName -Algorithm SHA256).Hash
+    $installedHash = (Get-FileHash -LiteralPath $installedAsset -Algorithm SHA256).Hash
+    if ($sourceHash -ne $installedHash) {
+        throw "Installed dashboard asset differs from Git HEAD: $installedAsset"
+    }
+}
 if (Test-Path -LiteralPath $migrationRoot) { Remove-Item -LiteralPath $migrationRoot -Recurse -Force }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'migrations') -Destination $migrationRoot -Recurse
 Copy-Item -LiteralPath (Join-Path $projectRoot 'alembic.ini') -Destination (Join-Path $installRoot 'alembic.ini') -Force
