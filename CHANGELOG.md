@@ -4,6 +4,9 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## 0.6.0-beta.4 - in Arbeit
 
+- Fleet-Daten und Warnungen erscheinen nun sofort nach ihren Antworten. Langsame
+  Einstellungsabfragen laufen unabhängig und halten den Fünf-Sekunden-Takt der
+  Live-Anzeige nicht mehr an.
 - Dashboard-Abfragen haben jetzt ein Zeitlimit; die aufwendigere Monatsstatistik
   erhält ein längeres. Einzelne fehlerhafte Konfigurationsabfragen blockieren
   nicht mehr alle erfolgreich geladenen Fleet-Daten. Bei Verbindungsfehlern

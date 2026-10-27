@@ -2969,32 +2969,56 @@ function App() {
   const selected =
     nodes.find((node) => node.node_id === selectedId) || nodes[0] || null;
   const activeLoadsRef = useRef(0);
+  const configLoadRef = useRef<string | null>(null);
   const activeTokenRef = useRef(token);
   activeTokenRef.current = token;
   const telemetryCursorRef = useRef("");
   const telemetryNodeRef = useRef("");
   const telemetryTokenRef = useRef("");
+  const loadConfiguration = useCallback(async () => {
+    if (configLoadRef.current === token) return;
+    configLoadRef.current = token;
+    try {
+      const configuration = await Promise.allSettled([
+        getJson<FleetGroup[]>("/api/v1/fleet/groups", token),
+        getJson<Summary>("/api/v1/fleet/summary", token),
+        getJson<Invitation[]>("/api/v1/agent-invitations", token),
+        getJson<AlertPolicy>("/api/v1/fleet/alert-policy", token),
+        getJson<TelegramSettings>("/api/v1/fleet/telegram", token),
+        getJson<AgentRelease[]>("/api/v1/releases", token),
+        getJson<DashboardAccess>("/api/v1/admin-codes/access", token),
+        getJson<DashboardUser>("/api/v1/users/me", token),
+      ]);
+      if (activeTokenRef.current !== token) return;
+      if (configuration.some((result) => result.status === "rejected" && (result.reason as { status?: number }).status === 401)) {
+        setAuthenticated(false);
+        setAuthError(true);
+        setConnectionOnline(false);
+        return;
+      }
+      const [nextGroups, nextSummary, nextInvitations, nextPolicy, nextTelegram, nextReleases, nextAccess, nextIdentity] = configuration;
+      if (nextGroups.status === "fulfilled") setGroups(nextGroups.value);
+      if (nextSummary.status === "fulfilled") setSummary(nextSummary.value);
+      if (nextInvitations.status === "fulfilled") setInvitations(nextInvitations.value);
+      if (nextPolicy.status === "fulfilled") setPolicy(nextPolicy.value);
+      if (nextTelegram.status === "fulfilled") setTelegram(nextTelegram.value);
+      if (nextReleases.status === "fulfilled") setReleases(nextReleases.value);
+      if (nextAccess.status === "fulfilled") setAccessRole(nextAccess.value.access_role);
+      if (nextIdentity.status === "fulfilled") setIdentity(nextIdentity.value);
+    } finally {
+      if (configLoadRef.current === token) configLoadRef.current = null;
+    }
+  }, [token]);
   const load = useCallback(
     async (silent = false, full = true) => {
       if (silent && activeLoadsRef.current > 0) return;
       activeLoadsRef.current += 1;
       if (!silent) setLoading(true);
+      if (full) void loadConfiguration();
       try {
-        const [[nextNodes, nextAlerts], configuration] = await Promise.all([
-          Promise.all([
-            getJson<Node[]>("/api/v1/fleet/nodes", token),
-            getJson<AlertRecord[]>("/api/v1/fleet/alerts", token),
-          ]),
-          full ? Promise.allSettled([
-            getJson<FleetGroup[]>("/api/v1/fleet/groups", token),
-            getJson<Summary>("/api/v1/fleet/summary", token),
-            getJson<Invitation[]>("/api/v1/agent-invitations", token),
-            getJson<AlertPolicy>("/api/v1/fleet/alert-policy", token),
-            getJson<TelegramSettings>("/api/v1/fleet/telegram", token),
-            getJson<AgentRelease[]>("/api/v1/releases", token),
-            getJson<DashboardAccess>("/api/v1/admin-codes/access", token),
-            getJson<DashboardUser>("/api/v1/users/me", token),
-          ]) : Promise.resolve(null),
+        const [nextNodes, nextAlerts] = await Promise.all([
+          getJson<Node[]>("/api/v1/fleet/nodes", token),
+          getJson<AlertRecord[]>("/api/v1/fleet/alerts", token),
         ]);
         if (activeTokenRef.current !== token) return;
         setNodes(nextNodes);
@@ -3008,23 +3032,6 @@ function App() {
           localStorage.setItem("ncc-dismissed-alerts", JSON.stringify([...next]));
           return next;
         });
-        if (configuration) {
-          if (configuration.some((result) => result.status === "rejected" && (result.reason as { status?: number }).status === 401)) {
-            setAuthenticated(false);
-            setAuthError(true);
-            setConnectionOnline(false);
-            return;
-          }
-          const [nextGroups, nextSummary, nextInvitations, nextPolicy, nextTelegram, nextReleases, nextAccess, nextIdentity] = configuration;
-          if (nextGroups.status === "fulfilled") setGroups(nextGroups.value);
-          if (nextSummary.status === "fulfilled") setSummary(nextSummary.value);
-          if (nextInvitations.status === "fulfilled") setInvitations(nextInvitations.value);
-          if (nextPolicy.status === "fulfilled") setPolicy(nextPolicy.value);
-          if (nextTelegram.status === "fulfilled") setTelegram(nextTelegram.value);
-          if (nextReleases.status === "fulfilled") setReleases(nextReleases.value);
-          if (nextAccess.status === "fulfilled") setAccessRole(nextAccess.value.access_role);
-          if (nextIdentity.status === "fulfilled") setIdentity(nextIdentity.value);
-        }
         setAuthenticated(true);
         setConnectionOnline(true);
         setAuthError(false);
@@ -3045,7 +3052,7 @@ function App() {
         if (activeTokenRef.current === token) setLoading(false);
       }
     },
-    [token],
+    [token, loadConfiguration],
   );
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
