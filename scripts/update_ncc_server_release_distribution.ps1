@@ -60,6 +60,13 @@ if ($LASTEXITCODE -ne 0) { throw "Could not switch to branch $Branch." }
 & git -C $projectRoot pull --ff-only origin $Branch
 if ($LASTEXITCODE -ne 0) { throw 'Git fast-forward update failed.' }
 
+# Keep an already installed watchdog in sync before restarting NccServer. Its
+# endpoint must follow server.env because NCC can bind only to a Tailscale IP.
+$managedWatchdog = Join-Path $installRoot 'scripts\watch_ncc_server.ps1'
+if (Test-Path -LiteralPath $managedWatchdog) {
+    Copy-Item -LiteralPath (Join-Path $projectRoot 'scripts\watch_ncc_server.ps1') -Destination $managedWatchdog -Force
+}
+
 # The production assets are built and committed with the source revision.
 # Rebuilding on the server dirties tracked hashed assets and prevents the next
 # fast-forward update; verify the committed bundle instead.

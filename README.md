@@ -202,11 +202,12 @@ einem Wartungsbenutzer und lässt Port 22 weiterhin nur aus Tailscale zu.
 
 `install_ncc_server_watchdog.ps1` installiert für `NccServer` eine lokale
 SYSTEM-Aufgabe sowie eine Startaufgabe. Sie prüft alle fünf Minuten `/api/v1/status/ready` auf
-`127.0.0.1`. Falls der Dienst zwar als *Running* gemeldet wird, aber der
+der in `server.env` konfigurierten Serveradresse. Ein zweiter fehlgeschlagener
+Prüfversuch bestätigt den Ausfall. Falls der Dienst zwar als *Running* gemeldet wird, aber der
 HTTP-Worker nicht antwortet, startet sie nur `NccServer` neu und protokolliert
 den Vorgang in `C:\ProgramData\no0bz\NCC\logs\server-watchdog.log`.
 Der Watchdog wird bei einer erneuten Windows-Server-Installation automatisch
-eingerichtet.
+eingerichtet und bei Server-Updates aktualisiert.
 
 Für vorhandene Linux-Geräte gibt es denselben kontrollierten Pfad als
 `build_ncc_core_linux_bootstrap.sh`. Der Builder läuft auf einem Linux-x86_64-

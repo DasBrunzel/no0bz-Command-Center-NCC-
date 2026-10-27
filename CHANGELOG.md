@@ -4,6 +4,10 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## 0.6.0-beta.4 - in Arbeit
 
+- Der Windows-Server-Watchdog prüft nun die tatsächliche Bind-Adresse aus
+  `server.env` statt immer `127.0.0.1`. Zwei fehlgeschlagene Prüfungen sind
+  nötig, bevor er NccServer neu startet. Server-Updates erneuern einen bereits
+  installierten Watchdog automatisch.
 - Persönliche Dashboard-Konten mit Commander- und Beta-Tester-Rolle können nun in
   den Einstellungen verwaltet werden. Login und Passwortwechsel verwenden
   geschützte Browsersitzungen; das Sperren eines Kontos entzieht aktive Sitzungen.
