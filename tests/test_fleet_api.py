@@ -159,6 +159,17 @@ def test_fleet_api_is_protected_and_returns_latest_metrics(tmp_path: Path) -> No
         messages = client.get("/api/v1/fleet/chat/messages", headers=headers).json()
         assert len(messages) == 2
         assert messages[-1]["attachment"]["name"] == "diagnose.txt"
+        latest = client.get("/api/v1/fleet/chat/messages?limit=1", headers=headers).json()
+        assert [item["message_id"] for item in latest] == [messages[-1]["message_id"]]
+        older = client.get(f"/api/v1/fleet/chat/messages?before={latest[0]['message_id']}", headers=headers).json()
+        assert [item["message_id"] for item in older] == [messages[0]["message_id"]]
+        newer = client.get(f"/api/v1/fleet/chat/messages?after={older[0]['message_id']}", headers=headers).json()
+        assert [item["message_id"] for item in newer] == [latest[0]["message_id"]]
+        assert client.get("/api/v1/fleet/chat/messages?before=missing", headers=headers).status_code == 404
+        assert client.get(
+            f"/api/v1/fleet/chat/messages?before={latest[0]['message_id']}&after={older[0]['message_id']}",
+            headers=headers,
+        ).status_code == 422
         attachment = client.get(messages[-1]["attachment"]["url"], headers=headers)
         assert attachment.content == b"NCC"
 

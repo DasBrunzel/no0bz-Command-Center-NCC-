@@ -6,7 +6,7 @@ import uuid
 from pathlib import Path
 
 from fastapi import HTTPException, UploadFile, status
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from ncc_server.auth import DashboardIdentity
@@ -22,11 +22,37 @@ MAX_CHAT_ATTACHMENT_BYTES = 100 * 1024 * 1024
 _FILENAME = re.compile(r"[^A-Za-z0-9._ -]+")
 
 
-def list_chat_messages(session: Session, limit: int) -> list[FleetChatMessageResponse]:
-    rows = session.scalars(
-        select(FleetChatMessage).order_by(FleetChatMessage.created_at.desc()).limit(limit)
-    ).all()
-    return [_message_response(row) for row in reversed(rows)]
+def list_chat_messages(
+    session: Session, limit: int, *, before: str | None = None, after: str | None = None
+) -> list[FleetChatMessageResponse]:
+    if before and after:
+        raise HTTPException(status_code=422, detail="before and after cannot be combined")
+    cursor_id = before or after
+    query = select(FleetChatMessage)
+    if cursor_id:
+        cursor = session.get(FleetChatMessage, cursor_id)
+        if cursor is None:
+            raise HTTPException(status_code=404, detail="chat cursor not found")
+        if before:
+            query = query.where(
+                or_(
+                    FleetChatMessage.created_at < cursor.created_at,
+                    and_(FleetChatMessage.created_at == cursor.created_at, FleetChatMessage.id < cursor.id),
+                )
+            )
+        else:
+            query = query.where(
+                or_(
+                    FleetChatMessage.created_at > cursor.created_at,
+                    and_(FleetChatMessage.created_at == cursor.created_at, FleetChatMessage.id > cursor.id),
+                )
+            )
+    if after:
+        rows = session.scalars(query.order_by(FleetChatMessage.created_at, FleetChatMessage.id).limit(limit)).all()
+    else:
+        rows = session.scalars(query.order_by(FleetChatMessage.created_at.desc(), FleetChatMessage.id.desc()).limit(limit)).all()
+        rows.reverse()
+    return [_message_response(row) for row in rows]
 
 
 def list_chat_participants(

@@ -31,8 +31,13 @@ router = APIRouter(
 
 
 @router.get("/messages", response_model=list[FleetChatMessageResponse])
-async def messages(limit: int = 100, session: Session = Depends(database_session)) -> list[FleetChatMessageResponse]:
-    return list_chat_messages(session, max(1, min(limit, 500)))
+async def messages(
+    limit: int = 100,
+    before: str | None = None,
+    after: str | None = None,
+    session: Session = Depends(database_session),
+) -> list[FleetChatMessageResponse]:
+    return list_chat_messages(session, max(1, min(limit, 500)), before=before, after=after)
 
 
 @router.get("/participants", response_model=list[FleetChatParticipantResponse])
@@ -58,7 +63,7 @@ async def send_message(
 async def send_attachment(
     request: Request,
     file: UploadFile = File(...),
-    body: str = Form(default=""),
+    body: str = Form(default="", max_length=20_000),
     body_format: str = Form(default="plain"),
     identity: DashboardIdentity = Depends(require_dashboard_identity),
     session: Session = Depends(database_session),

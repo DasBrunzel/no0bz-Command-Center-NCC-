@@ -19,6 +19,19 @@
 .concept-chat-page .chat-controls select { background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; color: var(--text); padding: 6px; }
 .concept-chat-page .compose-row .attach-button input { display: none; }
 .concept-chat-page .compose-row .primary-button:disabled { cursor: not-allowed; opacity: .5; }
+.concept-chat-page .chat-messages { min-height: 250px; }
+.concept-chat-page .chat-load-older, .concept-chat-page .chat-new-messages { align-self: center; display: block; margin: 0 auto 20px; padding: 8px 14px; color: var(--mint); border: 1px solid var(--line); border-radius: 20px; background: var(--panel2); font-size: 11px; font-weight: 700; }
+.concept-chat-page .chat-new-messages { margin: 8px auto; box-shadow: 0 8px 22px var(--shadow); }
+.concept-chat-page .chat-load-older:disabled { opacity: .55; }
+.concept-chat-page .chat-message { align-items: flex-start; margin-bottom: 17px; }
+.concept-chat-page .chat-message-content { min-width: 0; max-width: min(78%, 620px); padding: 11px 14px; border: 1px solid var(--line); border-radius: 4px 13px 13px 13px; background: var(--panel2); }
+.concept-chat-page .chat-message.mine { flex-direction: row-reverse; }
+.concept-chat-page .chat-message.mine .chat-message-content { border-color: color-mix(in srgb, var(--mint) 28%, var(--line)); border-radius: 13px 4px 13px 13px; background: color-mix(in srgb, var(--mint) 8%, var(--panel2)); }
+.concept-chat-page .chat-message.mine .message-meta { justify-content: flex-end; }
+.concept-chat-page .chat-message .message-body { margin: 8px 0 0; line-height: 1.5; }
+.concept-chat-page .compose-row textarea { flex: 1; min-width: 0; min-height: 46px; max-height: 160px; resize: vertical; padding: 10px 4px; border: 0; outline: 0; color: var(--text); background: transparent; font: inherit; line-height: 1.4; }
+.concept-chat-page .compose-row textarea:focus-visible { outline: 2px solid var(--mint); outline-offset: 2px; border-radius: 4px; }
+.concept-chat-page .compose-row textarea::placeholder { color: var(--muted); }
 .ranking .ranking-entry { width: 100%; min-height: 49px; padding: 7px 3px; display: grid; grid-template-columns: 30px minmax(100px, 1fr) minmax(60px, 100px) 70px 84px; align-items: center; gap: 9px; border-bottom: 1px solid var(--line); }
 .concept-fleet-actions { display: flex; gap: 10px; justify-content: flex-end; margin: 18px 0; }
 .concept-group-editor { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px; }

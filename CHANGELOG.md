@@ -10,6 +10,10 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   Einmalige Admin-Codes bleiben als Einstieg und Rückfall erhalten.
 - Fleet-Chat-Nachrichten tragen den angemeldeten Benutzernamen. Ein vom Browser
   übermittelter Node-Name kann den Absender nicht mehr vortäuschen.
+- Der Fleet Chat lädt ältere Nachrichten seitenweise und fragt neue Beiträge
+  über einen Cursor ab. Mitglieder werden seltener geladen; ausgeblendete Tabs
+  pausieren die Abfrage. Tagestrenner, neue-Nachrichten-Hinweis und eine
+  mehrzeilige Eingabe erleichtern längere Unterhaltungen.
 - Die Migration `20261026_0018` verbindet Benutzerkonten mit Dashboard-Sitzungen
   und Chat-Nachrichten.
 - Der Agent ermittelt die statische Host-Kennung nur noch beim Start. Wiederholte

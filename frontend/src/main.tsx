@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Activity,
@@ -1909,11 +1909,14 @@ function ChatAttachmentView({ attachment, token, onOpen }: { attachment: ChatAtt
   const kind = attachment.content_type.startsWith("image/") ? "image" : attachment.content_type.startsWith("video/") ? "video" : attachment.content_type.startsWith("audio/") ? "audio" : attachment.content_type === "application/pdf" ? "pdf" : "file";
   useEffect(() => {
     if (kind === "file") return;
-    let active = true, objectUrl = "";
+    let active = true;
+    let objectUrl = "";
     fetch(attachment.url, { headers: headers(token) }).then(async (response) => {
       if (!response.ok) return;
-      objectUrl = URL.createObjectURL(await response.blob());
-      if (active) setUrl(objectUrl);
+      const blob = await response.blob();
+      if (!active) return;
+      objectUrl = URL.createObjectURL(blob);
+      setUrl(objectUrl);
     }).catch(() => undefined);
     return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
   }, [attachment.url, kind, token]);
@@ -1930,35 +1933,115 @@ function ChatAttachmentView({ attachment, token, onOpen }: { attachment: ChatAtt
   return <button type="button" className="chat-attachment" onClick={() => void download()}><Paperclip size={14} /><span>{attachment.name}</span><small>{(attachment.size / 1024 / 1024).toFixed(1)} MB</small><Download size={13} /></button>;
 }
 
-function FleetChat({ token }: { token: string }) {
+function FleetChat({ token, identity }: { token: string; identity: DashboardUser | null }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [participants, setParticipants] = useState<ChatParticipant[]>([]);
   const [body, setBody] = useState("");
   const [format, setFormat] = useState<"plain" | "markdown">("plain");
   const [attachment, setAttachment] = useState<File | null>(null);
   const [sending, setSending] = useState(false);
+  const [olderLoading, setOlderLoading] = useState(false);
+  const [hasOlder, setHasOlder] = useState(false);
+  const [unread, setUnread] = useState(0);
   const [chatError, setChatError] = useState("");
   const [preview, setPreview] = useState<{ attachment: ChatAttachment; url: string; kind: "image" | "video" | "audio" | "pdf" } | null>(null);
-  const load = useCallback(async () => {
-    const [nextMessages, nextParticipants] = await Promise.all([
-      getJson<ChatMessage[]>("/api/v1/fleet/chat/messages", token),
-      getJson<ChatParticipant[]>("/api/v1/fleet/chat/participants", token),
-    ]);
-    setMessages(nextMessages);
-    setParticipants(nextParticipants);
-    setChatError("");
+  const listRef = useRef<HTMLDivElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const newestIdRef = useRef("");
+  const oldestIdRef = useRef("");
+  const loadedRef = useRef(false);
+  const pollingRef = useRef(false);
+  const atBottomRef = useRef(true);
+  const scrollRef = useRef<"bottom" | { top: number; height: number } | null>(null);
+  const loadLatest = useCallback(async () => {
+    if (pollingRef.current) return;
+    pollingRef.current = true;
+    try {
+      const initial = !loadedRef.current || !newestIdRef.current;
+      const cursor = newestIdRef.current;
+      const url = initial ? "/api/v1/fleet/chat/messages?limit=50" : `/api/v1/fleet/chat/messages?limit=100&after=${encodeURIComponent(cursor)}`;
+      const incoming = await getJson<ChatMessage[]>(url, token);
+      if (initial) {
+        loadedRef.current = true;
+        setHasOlder(incoming.length === 50);
+        oldestIdRef.current = incoming[0]?.message_id || "";
+        scrollRef.current = "bottom";
+        setMessages(incoming);
+      } else if (incoming.length) {
+        if (atBottomRef.current) scrollRef.current = "bottom";
+        else setUnread((count) => count + incoming.length);
+        setMessages((previous) => {
+          const seen = new Set(previous.map((message) => message.message_id));
+          return [...previous, ...incoming.filter((message) => !seen.has(message.message_id))];
+        });
+      }
+      if (incoming.length) newestIdRef.current = incoming[incoming.length - 1].message_id;
+      setChatError("");
+    } finally { pollingRef.current = false; }
+  }, [token]);
+  const loadParticipants = useCallback(async () => {
+    setParticipants(await getJson<ChatParticipant[]>("/api/v1/fleet/chat/participants", token));
   }, [token]);
   useEffect(() => {
-    void load().catch(() => setChatError("Fleet Chat ist gerade nicht erreichbar."));
-    const timer = window.setInterval(() => void load().catch(() => setChatError("Fleet Chat ist gerade nicht erreichbar.")), 5000);
-    return () => clearInterval(timer);
-  }, [load]);
+    loadedRef.current = false;
+    newestIdRef.current = "";
+    oldestIdRef.current = "";
+    setMessages([]);
+    setUnread(0);
+  }, [token]);
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState === "visible") void loadLatest().catch(() => setChatError("Fleet Chat ist gerade nicht erreichbar."));
+    };
+    refresh();
+    void loadParticipants().catch(() => undefined);
+    const messagesTimer = window.setInterval(refresh, 5000);
+    const participantsTimer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void loadParticipants().catch(() => undefined);
+    }, 60000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      clearInterval(messagesTimer);
+      clearInterval(participantsTimer);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [loadLatest, loadParticipants]);
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    if (!list || !scrollRef.current) return;
+    if (scrollRef.current === "bottom") list.scrollTop = list.scrollHeight;
+    else list.scrollTop = scrollRef.current.top + list.scrollHeight - scrollRef.current.height;
+    scrollRef.current = null;
+  }, [messages]);
+  const loadOlder = async () => {
+    if (!oldestIdRef.current || olderLoading) return;
+    setOlderLoading(true);
+    try {
+      const list = listRef.current;
+      const older = await getJson<ChatMessage[]>(`/api/v1/fleet/chat/messages?limit=50&before=${encodeURIComponent(oldestIdRef.current)}`, token);
+      setHasOlder(older.length === 50);
+      if (older.length) {
+        oldestIdRef.current = older[0].message_id;
+        if (list) scrollRef.current = { top: list.scrollTop, height: list.scrollHeight };
+        setMessages((previous) => {
+          const seen = new Set(previous.map((message) => message.message_id));
+          return [...older.filter((message) => !seen.has(message.message_id)), ...previous];
+        });
+      }
+    } catch { setChatError("Ältere Nachrichten konnten nicht geladen werden."); }
+    finally { setOlderLoading(false); }
+  };
   const send = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!body.trim() && !attachment) return;
+    if (attachment && attachment.size > 100 * 1024 * 1024) {
+      setChatError("Der Anhang darf höchstens 100 MB groß sein.");
+      return;
+    }
     setSending(true);
     setChatError("");
     try {
+      let sent: ChatMessage;
       if (attachment) {
         const data = new FormData();
         data.set("file", attachment);
@@ -1966,14 +2049,20 @@ function FleetChat({ token }: { token: string }) {
         data.set("body_format", format);
         const response = await fetch("/api/v1/fleet/chat/uploads", { method: "POST", headers: headers(token), body: data });
         if (!response.ok) throw new Error("REQUEST");
+        sent = await response.json() as ChatMessage;
       } else {
-        await postJson("/api/v1/fleet/chat/messages", token, { body, body_format: format });
+        sent = await postJson<ChatMessage>("/api/v1/fleet/chat/messages", token, { body, body_format: format });
       }
+      if (!oldestIdRef.current) oldestIdRef.current = sent.message_id;
       setBody("");
       setAttachment(null);
       const input = document.getElementById("fleet-chat-file") as HTMLInputElement | null;
       if (input) input.value = "";
-      await load();
+      atBottomRef.current = true;
+      scrollRef.current = "bottom";
+      setUnread(0);
+      setMessages((previous) => previous.some((item) => item.message_id === sent.message_id) ? previous : [...previous, sent]);
+      void loadLatest().catch(() => setChatError("Nachricht gesendet; der neueste Verlauf konnte nicht geladen werden."));
     } catch {
       setChatError("Nachricht konnte nicht gesendet werden. Bitte erneut versuchen.");
     } finally { setSending(false); }
@@ -1982,17 +2071,34 @@ function FleetChat({ token }: { token: string }) {
     <div className="page-intro"><div><div className="eyebrow">COLLABORATION / FLEET</div><h1>Fleet Chat.</h1><p>Absprachen und Medien an einem eigenen Ort, getrennt von Telemetrie und Warnungen.</p></div></div>
     <div className="chat-shell">
       <div className="chat-heading"><div className="chat-channel-icon">#</div><div><b>fleet-operations</b><small>Private Fleet · Nachrichten bleiben auf dem NCC-Server</small></div><span className="chat-members">● {participants.length} Mitglieder</span></div>
-      <div className="chat-messages">
-        <div className="chat-day">FLEET-VERLAUF · {new Date().toLocaleDateString("de-DE", { day: "numeric", month: "long", year: "numeric" }).toUpperCase()}</div>
-        {messages.map((message) => <div className="chat-message" key={message.message_id}><div className="chat-avatar">{message.sender_name.slice(0, 1).toUpperCase()}</div><div><div className="message-meta"><b>{message.sender_name}</b><span>{new Date(message.created_at).toLocaleString("de-DE")}</span>{message.body_format === "markdown" && <span>MARKDOWN</span>}</div>{message.body && <p className="message-body">{message.body}</p>}{message.attachment && <ChatAttachmentView attachment={message.attachment} token={token} onOpen={(nextAttachment, url, kind) => setPreview({ attachment: nextAttachment, url, kind })} />}</div></div>)}
+      <div className="chat-messages" ref={listRef} onScroll={(event) => {
+        const list = event.currentTarget;
+        atBottomRef.current = list.scrollHeight - list.scrollTop - list.clientHeight < 90;
+        if (atBottomRef.current) setUnread(0);
+      }}>
+        {hasOlder && <button type="button" className="chat-load-older" disabled={olderLoading} onClick={() => void loadOlder()}>{olderLoading ? "Lade Verlauf …" : "Ältere Nachrichten laden"}</button>}
+        {messages.map((message, index) => {
+          const date = new Date(message.created_at);
+          const day = date.toLocaleDateString("de-DE", { day: "numeric", month: "long", year: "numeric" });
+          const previousDay = index ? new Date(messages[index - 1].created_at).toDateString() : "";
+          const mine = identity?.user_id ? message.sender_user_id === identity.user_id : message.sender_name === identity?.username;
+          return <React.Fragment key={message.message_id}>
+            {date.toDateString() !== previousDay && <div className="chat-day">{day.toUpperCase()}</div>}
+            <div className={`chat-message${mine ? " mine" : ""}`}>
+              <div className="chat-avatar">{message.sender_name.slice(0, 1).toUpperCase()}</div>
+              <div className="chat-message-content"><div className="message-meta"><b>{message.sender_name}</b><span>{date.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}</span>{message.body_format === "markdown" && <span>MARKDOWN</span>}</div>{message.body && <p className="message-body">{message.body}</p>}{message.attachment && <ChatAttachmentView attachment={message.attachment} token={token} onOpen={(nextAttachment, url, kind) => setPreview({ attachment: nextAttachment, url, kind })} />}</div>
+            </div>
+          </React.Fragment>;
+        })}
         {!messages.length && <div className="chat-empty"><MessageSquare size={34} /><strong>Der Fleet Chat ist bereit.</strong><span>Schreib die erste Nachricht an dein Team.</span></div>}
       </div>
-      <form className="chat-compose" onSubmit={(event) => void send(event)}>
+      {unread > 0 && <button type="button" className="chat-new-messages" onClick={() => { if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight; setUnread(0); }}>{unread} neue {unread === 1 ? "Nachricht" : "Nachrichten"} ↓</button>}
+      <form className="chat-compose" ref={formRef} onSubmit={(event) => void send(event)}>
         <div className="chat-controls"><label>Format<select value={format} onChange={(event) => setFormat(event.target.value as "plain" | "markdown")}><option value="plain">Text</option><option value="markdown">Markdown</option></select></label></div>
         {attachment && <div className="attached">▧ {attachment.name} <button type="button" onClick={() => setAttachment(null)} aria-label="Anhang entfernen">×</button></div>}
-        <div className="compose-row"><label className="attach-button" title="Datei anhängen">＋<input id="fleet-chat-file" type="file" onChange={(event) => setAttachment(event.target.files?.[0] || null)} hidden /></label><input value={body} onChange={(event) => setBody(event.target.value)} placeholder="Nachricht an #fleet-operations…" maxLength={20000} /><button className="primary-button" disabled={sending || (!body.trim() && !attachment)} type="submit">{sending ? "Sende …" : "Senden"} <ConceptIcon name="arrow" size={16}/></button></div>
+        <div className="compose-row"><label className="attach-button" title="Datei anhängen" aria-label="Datei anhängen">＋<input id="fleet-chat-file" type="file" onChange={(event) => setAttachment(event.target.files?.[0] || null)} hidden /></label><textarea value={body} onChange={(event) => setBody(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); formRef.current?.requestSubmit(); } }} placeholder="Nachricht an #fleet-operations…" maxLength={20000} rows={2} disabled={sending} aria-label="Nachricht" /><button className="primary-button" disabled={sending || (!body.trim() && !attachment)} type="submit">{sending ? "Sende …" : "Senden"} <ConceptIcon name="arrow" size={16}/></button></div>
         {chatError && <small className="form-error" role="alert">{chatError}</small>}
-        <small>Gespeichert auf dem NCC-Server · Anhänge bis 100 MB</small>
+        <small>Enter senden · Umschalt+Enter neue Zeile · Anhänge bis 100 MB</small>
       </form>
     </div>
     {preview && <div className="chat-preview-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setPreview(null)}><section className="chat-preview"><header><div><span className="eyebrow">DATEIVORSCHAU</span><h2>{preview.attachment.name}</h2></div><button onClick={() => setPreview(null)} aria-label="Vorschau schließen"><X size={18} /></button></header><div className="chat-preview-content">{preview.kind === "image" ? <img src={preview.url} alt={preview.attachment.name} /> : <iframe src={preview.url} title={preview.attachment.name} />}</div><footer><span>{(preview.attachment.size / 1024 / 1024).toFixed(1)} MB</span><a href={preview.url} download={preview.attachment.name}><Download size={15} />Download</a></footer></section></div>}
@@ -3185,7 +3291,7 @@ function App() {
           ) : page === "alerts" ? (
             <AlertsPage alerts={alerts} canClear={canManageAccess} onClear={clearAllAlerts} />
           ) : page === "chat" ? (
-            <FleetChat token={token} />
+            <FleetChat token={token} identity={identity} />
           ) : page === "onboarding" ? (
             <EnrollmentPage
               invitations={invitations}
