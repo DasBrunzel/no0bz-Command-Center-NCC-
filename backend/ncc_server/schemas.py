@@ -96,6 +96,11 @@ class NetworkUsageSummary(BaseModel):
     available: bool
 
 
+class NetworkHistorySample(BaseModel):
+    recorded_at: datetime
+    network: dict[str, object] | None
+
+
 class FleetNodeResponse(BaseModel):
     node_id: str
     machine_id: str

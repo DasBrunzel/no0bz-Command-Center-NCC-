@@ -28,6 +28,7 @@ from ncc_server.schemas import (
     FleetNodeResponse,
     FleetSummaryResponse,
     FleetTelemetryPoint,
+    NetworkHistorySample,
     NetworkUsageSummary,
 )
 
@@ -224,6 +225,22 @@ def node_telemetry(
         query.order_by(TelemetryPoint.recorded_at.desc(), TelemetryPoint.id.desc()).limit(limit)
     ).all()
     return [_telemetry_response(point) for point in reversed(points)]
+
+
+def node_network_history(session: Session, node_id: str, limit: int) -> list[NetworkHistorySample] | None:
+    """Return only the network part needed for live fleet charts."""
+    if session.get(Node, node_id) is None:
+        return None
+    rows = session.execute(
+        select(TelemetryPoint.recorded_at, TelemetryPoint.payload["network"])
+        .where(TelemetryPoint.node_id == node_id)
+        .order_by(TelemetryPoint.recorded_at.desc(), TelemetryPoint.id.desc())
+        .limit(limit)
+    ).all()
+    return [
+        NetworkHistorySample(recorded_at=recorded_at, network=network if isinstance(network, dict) else None)
+        for recorded_at, network in reversed(rows)
+    ]
 
 
 def node_monthly_network_usage(

@@ -92,6 +92,33 @@ def test_physical_device_linking_combines_dualboot_profiles(tmp_path: Path) -> N
         assert client.get("/api/v1/fleet/summary", headers=headers).json()["total_nodes"] == 2
 
 
+def test_network_history_returns_only_chronological_network_samples(tmp_path: Path) -> None:
+    database = make_database(tmp_path / "network-history.db")
+    node_id, _ = seed(database)
+    with database.session() as session:
+        points = session.query(TelemetryPoint).filter_by(node_id=node_id).order_by(TelemetryPoint.recorded_at).all()
+        for index, point in enumerate(points):
+            point.payload = {
+                **point.payload,
+                "network": {"download_mbps": float(index + 1), "upload_mbps": 0.5},
+                "processes": [{"name": "large-unrelated-payload"}],
+            }
+        session.commit()
+
+    settings = ServerSettings(database_url="sqlite+pysqlite://", dashboard_token=SecretStr("dashboard-secret"), dashboard_allow_loopback_without_token=False)
+    url = f"/api/v1/fleet/nodes/{node_id}/network/history"
+    headers = {"X-NCC-Dashboard-Token": "dashboard-secret"}
+    with TestClient(create_app(settings, database)) as client:
+        assert client.get(url).status_code == 401
+        response = client.get(f"{url}?limit=2", headers=headers)
+        assert response.status_code == 200
+        samples = response.json()
+        assert [sample["network"]["download_mbps"] for sample in samples] == [1.0, 2.0]
+        assert all(set(sample) == {"recorded_at", "network"} for sample in samples)
+        assert client.get(f"{url}?limit=1", headers=headers).json()[0]["network"]["download_mbps"] == 2.0
+        assert client.get("/api/v1/fleet/nodes/missing/network/history", headers=headers).status_code == 404
+
+
 def test_fleet_api_is_protected_and_returns_latest_metrics(tmp_path: Path) -> None:
     database = make_database(tmp_path / "fleet.db")
     online_id, _ = seed(database)

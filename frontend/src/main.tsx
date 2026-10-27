@@ -115,6 +115,7 @@ type NetworkUsageSummary = {
   samples: number;
   available: boolean;
 };
+type NetworkHistorySample = { recorded_at: string; network: Metrics | null };
 type Theme =
   | "mint"
   | "nightmare"
@@ -1668,7 +1669,7 @@ function StatisticsPage({
   trafficResetRevision: number;
 }) {
   const [traffic, setTraffic] = useState<Record<string, NetworkUsageSummary>>({});
-  const [trafficHistory, setTrafficHistory] = useState<Record<string, Telemetry[]>>({});
+  const [trafficHistory, setTrafficHistory] = useState<Record<string, NetworkHistorySample[]>>({});
   // The fleet itself is refreshed every five seconds.  Statistics requests may
   // take longer on a growing database, therefore use a stable node key and a
   // slower independent polling loop instead of cancelling every response.
@@ -1708,7 +1709,7 @@ function StatisticsPage({
       try {
         await Promise.all(trafficNodes.map(async (node) => {
           try {
-            const value = await getJson<Telemetry[]>(`/api/v1/fleet/nodes/${node.node_id}/telemetry?limit=48`, token);
+            const value = await getJson<NetworkHistorySample[]>(`/api/v1/fleet/nodes/${node.node_id}/network/history?limit=48`, token);
             if (current) setTrafficHistory((previous) => ({ ...previous, [node.node_id]: value }));
           } catch { /* A failed history request must not hide monthly totals. */ }
         }));
@@ -1796,7 +1797,7 @@ function StatisticsPage({
     const onlineIds = new Set(nodes.filter((node) => node.online).map((node) => node.node_id));
     const recent = Object.entries(trafficHistory)
       .filter(([nodeId]) => onlineIds.has(nodeId))
-      .map(([, history]) => history.map((point) => ({ at: new Date(point.recorded_at).getTime(), network: point.metrics.network })));
+      .map(([, history]) => history.filter((point) => point.network).map((point) => ({ at: new Date(point.recorded_at).getTime(), network: point.network })));
     // Agents sample at different times. Align by time rather than array index,
     // otherwise a delayed node's old sample appears as current fleet traffic.
     const lastSlot = Math.floor(Date.now() / 10_000) * 10_000;

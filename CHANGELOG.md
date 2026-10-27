@@ -4,6 +4,9 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## Laufende Entwicklung auf dem 0.6-Branch
 
+- Der Live-Netzwerkverlauf der Statistik nutzt eine kompakte API, die nur
+  Zeitstempel und Netzwerkwerte lädt. Prozesslisten und Hardware-Sensoren
+  werden dafür nicht mehr für jedes Gerät übertragen.
 - Im Fleet Chat bleibt eine gerade gesendete Nachricht sichtbar, auch wenn
   die erste Verlaufsabfrage erst danach antwortet.
 - Dateidownloads im Fleet Chat behalten ihre temporäre Browser-Adresse bis

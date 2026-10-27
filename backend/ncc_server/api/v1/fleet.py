@@ -20,6 +20,7 @@ from ncc_server.fleet_service import (
     list_fleet_nodes,
     list_physical_devices,
     node_monthly_network_usage,
+    node_network_history,
     node_telemetry,
     rename_fleet_node,
     reset_network_statistics,
@@ -43,6 +44,7 @@ from ncc_server.schemas import (
     FleetNodeUpdateChannelRequest,
     FleetSummaryResponse,
     FleetTelemetryPoint,
+    NetworkHistorySample,
     NetworkUsageSummary,
     PhysicalDeviceCreateRequest,
     PhysicalDeviceResponse,
@@ -316,6 +318,18 @@ async def telemetry(
         result = node_telemetry(session, node_id, limit, after=after)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail="telemetry cursor not found") from exc
+    if result is None:
+        raise HTTPException(status_code=404, detail="node not found")
+    return result
+
+
+@router.get("/nodes/{node_id}/network/history", response_model=list[NetworkHistorySample])
+async def network_history(
+    node_id: str,
+    limit: int = Query(default=48, ge=1, le=1000),
+    session: Session = Depends(database_session),
+) -> list[NetworkHistorySample]:
+    result = node_network_history(session, node_id, limit)
     if result is None:
         raise HTTPException(status_code=404, detail="node not found")
     return result
