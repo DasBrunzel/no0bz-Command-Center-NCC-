@@ -7,7 +7,10 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-if ($ServerUrlFile) { $ServerUrl = (Get-Content -LiteralPath $ServerUrlFile -Raw -Encoding UTF8).Trim() }
+if ($ServerUrlFile) {
+    $urlText = Get-Content -LiteralPath $ServerUrlFile -Raw -Encoding UTF8
+    $ServerUrl = if ($null -eq $urlText) { '' } else { $urlText.Trim() }
+}
 $admin = [Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent())
 if (-not $admin.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     throw 'NCC Agent Setup requires administrator rights.'
