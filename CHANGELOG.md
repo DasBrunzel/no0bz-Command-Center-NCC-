@@ -39,6 +39,9 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   startet weiterhin der vorhandene Tray-Helfer den Prozess in derselben Sitzung.
   Die Windows-CI wartet dabei nur auf das Ende von Setup und nicht auf dessen
   dauerhaft laufenden Tray-Kindprozess.
+- Die Backend-Typprüfung verwendet für gespeicherte Warnungsstufen eine
+  explizite Typangabe statt einer zwischen Python-Versionen instabilen
+  `type: ignore`-Ausnahme.
 - Dashboard, Server, Core und neue Agent-Payload-Builds tragen konsistent die
   nächste Entwicklungsnummer. Die Komponentenübersicht zeigt weiterhin die
   tatsächlich installierten Versionen vorhandener Agenten an.

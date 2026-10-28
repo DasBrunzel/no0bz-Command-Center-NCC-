@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import Sequence
 from datetime import datetime, timedelta, timezone
+from typing import Literal, cast
 
 from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.orm import Session
@@ -142,7 +143,7 @@ def list_fleet_alerts(session: Session, limit: int) -> list[FleetAlertResponse]:
             node_id=alert.node_id,
             display_name=display_name,
             kind=alert.kind,
-            severity=alert.severity,  # type: ignore[arg-type]
+            severity=cast(Literal["warning", "critical"], alert.severity),
             active=alert.active,
             message=alert.message,
             opened_at=alert.opened_at,
