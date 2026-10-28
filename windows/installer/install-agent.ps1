@@ -27,6 +27,12 @@ $handoffFile = Join-Path $env:ProgramData 'no0bz\NCC Agent Setup\handoff.json'
 $migrationCommitted = $false
 trap {
     $cause = $_
+    try {
+        $errorLog = Join-Path $env:ProgramData 'no0bz\NCC Agent Setup\install-error.log'
+        [IO.File]::WriteAllText($errorLog,
+            ($cause.Exception.Message + [Environment]::NewLine + $cause.ScriptStackTrace),
+            [Text.UTF8Encoding]::new($false))
+    } catch { }
     if ($migrationCommitted) { throw $cause }
     Stop-Service -Name NccAgentCore -Force -ErrorAction SilentlyContinue
     if (Test-Path -LiteralPath $handoffFile) {

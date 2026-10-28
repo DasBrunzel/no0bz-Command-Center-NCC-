@@ -134,6 +134,8 @@ jobs:
             if (Test-Path $log) { Get-Content $log -Tail 100 }
             $hostLog = Join-Path $env:ProgramData 'no0bz\NCC Agent\logs\service-host.log'
             if (Test-Path $hostLog) { Get-Content $hostLog -Tail 50 }
+            $installError = Join-Path $env:ProgramData 'no0bz\NCC Agent Setup\install-error.log'
+            if (Test-Path $installError) { Get-Content $installError -Tail 30 }
             Get-Service NccAgentCore -ErrorAction SilentlyContinue | Format-List *
             throw 'Agent service did not start'
           }
