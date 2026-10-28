@@ -95,12 +95,21 @@ server.serve_forever()
     if ($hostLog -notmatch 'Signed NCC Agent installer 0\.6\.0-beta\.8-dev\.2 launched') {
         throw 'Version B was not launched by the service updater.'
     }
+    # Health is reported before Inno completes its final cleanup. Avoid
+    # launching the uninstaller while the automatic setup still owns files.
+    Start-Sleep -Seconds 15
     $uninstaller = Join-Path $appDir 'unins000.exe'
     $uninstall = Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -Wait -PassThru
     if ($uninstall.ExitCode -ne 0) { throw "Post-update uninstall failed: $($uninstall.ExitCode)" }
     Start-Sleep -Seconds 3
     if (Get-Service NccAgentCore -ErrorAction SilentlyContinue) { throw 'Agent service remains after uninstall.' }
-    if (Test-Path $root) { throw 'Agent data remains after uninstall.' }
+    if (Test-Path $root) {
+        Get-ChildItem -LiteralPath $root -Force -Recurse -ErrorAction SilentlyContinue |
+            Select-Object -First 40 -ExpandProperty FullName | ForEach-Object { Write-Output "REMAINING=$_" }
+        $uninstallLog = Join-Path $env:ProgramData 'no0bz\NCC Agent Setup\install-error.log'
+        if (Test-Path $uninstallLog) { Get-Content $uninstallLog -Tail 30 }
+        throw 'Agent data remains after uninstall.'
+    }
 } finally {
     if ($server -and -not $server.HasExited) { Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue }
     if ($certificate) { Remove-Item -LiteralPath "Cert:\LocalMachine\Root\$($certificate.Thumbprint)" -Force -ErrorAction SilentlyContinue }
