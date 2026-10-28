@@ -9,8 +9,9 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   der automatische Installer-Updatepfad prüft zusätzlich eine Ed25519-Signatur.
   Ein isolierter Windows-CI-Test hat Neuinstallation, erneute Installation mit
   erhaltener Pairing-ID und Agent-Daten sowie Deinstallation mit einem kurzlebig
-  signierten Test-Payload bestanden. Migration vom Legacy-Agenten, automatisches
-  Update, Rollback und Tray-Bedienung stehen noch zur Abnahme aus.
+  signierten Test-Payload bestanden. Auch die Übernahme von Legacy-Identität und
+  Pairing bei Erhalt der danebenliegenden NCC-Server-Konfiguration wurde geprüft.
+  Automatisches Update, Rollback und Tray-Bedienung stehen noch zur Abnahme aus.
 - Dashboard, Server, Core und neue Agent-Payload-Builds tragen konsistent die
   nächste Entwicklungsnummer. Die Komponentenübersicht zeigt weiterhin die
   tatsächlich installierten Versionen vorhandener Agenten an.

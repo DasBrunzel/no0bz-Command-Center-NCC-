@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.ServiceProcess;
+using System.Security.Principal;
 using System.Text.Json;
 using System.Windows.Forms;
 
@@ -41,16 +42,23 @@ internal static class Program
     [STAThread]
     private static void Main()
     {
-        // Local names are scoped to the interactive session: one tray per user
-        // even when several users are signed in to the same Windows machine.
-        using var singleton = new Mutex(true, @"Local\no0bz-NccTray", out var created);
-        if (!created) return;
+        // The SID scopes the global mutex to one user, including multiple
+        // interactive sessions of that same Windows account.
+        var sid = WindowsIdentity.GetCurrent().User?.Value ?? Environment.UserName;
+        Mutex singleton;
+        bool created;
+        try { singleton = new Mutex(true, @"Global\no0bz-NccTray-" + sid, out created); }
+        catch (UnauthorizedAccessException) { return; }
+        using (singleton)
+        {
+            if (!created) return;
 
-        ApplicationConfiguration.Initialize();
-        // Inno Setup's Restart Manager can relaunch the tray in the same user
-        // session after a silent in-place upgrade.
-        RegisterApplicationRestart("", 0);
-        Application.Run(new TrayContext(ReadSettings()));
+            ApplicationConfiguration.Initialize();
+            // Inno Setup's Restart Manager can relaunch the tray in the same user
+            // session after a silent in-place upgrade.
+            RegisterApplicationRestart("", 0);
+            Application.Run(new TrayContext(ReadSettings()));
+        }
     }
 
     private static TraySettings ReadSettings()

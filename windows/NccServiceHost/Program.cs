@@ -27,7 +27,9 @@ internal sealed class CoreService : ServiceBase
     private volatile Process? _core;
     private System.Threading.Timer? _updateTimer;
     private System.Threading.Timer? _statusTimer;
+    private CancellationTokenSource? _updateCancellation;
     private volatile bool _stopping;
+    private bool _initialUpdateCheckPending;
     private DateTimeOffset _lastCheckUtc;
     private string _updateStatus = "startet";
     internal bool IsRunning { get; private set; }
@@ -46,6 +48,8 @@ internal sealed class CoreService : ServiceBase
         lock (_gate)
         {
             _stopping = false;
+            _initialUpdateCheckPending = true;
+            _updateCancellation = new CancellationTokenSource();
             StartCore();
             IsRunning = true;
             _statusTimer = new System.Threading.Timer(_ => PublishStatus(), null,
@@ -53,7 +57,7 @@ internal sealed class CoreService : ServiceBase
             // Core verifies the approved signed release on every service start.
             // A controlled restart supplies the required periodic update check.
             _updateTimer = new System.Threading.Timer(_ => RestartForUpdate(), null,
-                TimeSpan.FromHours(6), TimeSpan.FromHours(6));
+                TimeSpan.FromSeconds(30), TimeSpan.FromHours(6));
         }
     }
 
@@ -162,12 +166,22 @@ internal sealed class CoreService : ServiceBase
             try
             {
                 var config = ReadConfig();
+                var initialCheck = _initialUpdateCheckPending;
+                _initialUpdateCheckPending = false;
                 _lastCheckUtc = DateTimeOffset.UtcNow;
                 _updateStatus = "Prüfung läuft";
                 PublishStatus();
-                if (InstallerUpdater.CheckAndLaunch(Root, AppContext.BaseDirectory, config, Log))
+                if (InstallerUpdater.CheckAndLaunch(Root, AppContext.BaseDirectory, config, Log,
+                    _updateCancellation?.Token ?? CancellationToken.None))
                 {
                     _updateStatus = "Installer gestartet";
+                    PublishStatus();
+                    return;
+                }
+                if (_stopping) return;
+                if (initialCheck)
+                {
+                    _updateStatus = "Aktuell";
                     PublishStatus();
                     return;
                 }
@@ -195,7 +209,7 @@ internal sealed class CoreService : ServiceBase
                 ? active.GetString() : null;
             var health = state.RootElement.TryGetProperty("health", out var currentHealth)
                 ? currentHealth.GetString() : "unbekannt";
-            if (health == "healthy") _updateStatus = "Aktuell";
+            if (health == "healthy" && _updateStatus != "Installer gestartet") _updateStatus = "Aktuell";
             var status = new
             {
                 version,
@@ -230,13 +244,16 @@ internal sealed class CoreService : ServiceBase
 
     protected override void OnStop()
     {
+        _stopping = true;
+        _updateCancellation?.Cancel();
         lock (_gate)
         {
-            _stopping = true;
             _updateTimer?.Dispose();
             _updateTimer = null;
             _statusTimer?.Dispose();
             _statusTimer = null;
+            _updateCancellation?.Dispose();
+            _updateCancellation = null;
             StopCore();
             IsRunning = false;
             Log("Core stopped by SCM");

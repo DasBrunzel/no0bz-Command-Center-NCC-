@@ -25,7 +25,8 @@ internal static class InstallerUpdater
         string root,
         string appDir,
         IReadOnlyDictionary<string, string> config,
-        Action<string> log)
+        Action<string> log,
+        CancellationToken cancellationToken)
     {
         if (!config.TryGetValue("NCC_AGENT_INSTALLER_FEED_URL", out var feedUrl)
             || string.IsNullOrWhiteSpace(feedUrl)) return false;
@@ -38,7 +39,7 @@ internal static class InstallerUpdater
         {
             using var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true })
             { Timeout = TimeSpan.FromMinutes(10) };
-            using var feedResponse = client.GetAsync(feedUri, HttpCompletionOption.ResponseHeadersRead)
+            using var feedResponse = client.GetAsync(feedUri, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
                 .GetAwaiter().GetResult();
             feedResponse.EnsureSuccessStatusCode();
             if (feedResponse.RequestMessage?.RequestUri?.Scheme != Uri.UriSchemeHttps)
@@ -47,7 +48,7 @@ internal static class InstallerUpdater
                 throw new InvalidDataException("Installer feed is too large");
             using var feedStream = feedResponse.Content.ReadAsStream();
             using var feedBuffer = new MemoryStream();
-            CopyBounded(feedStream, feedBuffer, 65536);
+            CopyBounded(feedStream, feedBuffer, 65536, cancellationToken);
             var release = JsonSerializer.Deserialize<InstallerRelease>(feedBuffer.ToArray(),
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
             if (release is null) return false;
@@ -66,7 +67,7 @@ internal static class InstallerUpdater
             Directory.CreateDirectory(downloads);
             var setup = Path.Combine(downloads, "ncc-agent-setup-" + release.Version + ".exe");
             var temporary = setup + ".tmp";
-            using (var response = client.GetAsync(artifactUri, HttpCompletionOption.ResponseHeadersRead)
+            using (var response = client.GetAsync(artifactUri, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
                        .GetAwaiter().GetResult())
             {
                 response.EnsureSuccessStatusCode();
@@ -76,7 +77,7 @@ internal static class InstallerUpdater
                     throw new InvalidDataException("Installer download is too large");
                 using var input = response.Content.ReadAsStream();
                 using var output = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None);
-                CopyBounded(input, output, MaximumInstallerBytes);
+                CopyBounded(input, output, MaximumInstallerBytes, cancellationToken);
             }
             File.Move(temporary, setup, true);
             var core = Path.Combine(appDir, "ncc-core.exe");
@@ -97,6 +98,7 @@ internal static class InstallerUpdater
             var verificationError = check.StandardError.ReadToEnd();
             if (!check.WaitForExit(120_000) || check.ExitCode != 0)
                 throw new InvalidDataException("Installer signature verification failed: " + verificationError.Trim());
+            cancellationToken.ThrowIfCancellationRequested();
             var launch = new ProcessStartInfo(setup)
             {
                 UseShellExecute = false,
@@ -108,7 +110,7 @@ internal static class InstallerUpdater
             log($"Signed NCC Agent installer {release.Version} launched as process {installer.Id}");
             return true;
         }
-        catch (Exception error) when (error is IOException or HttpRequestException or TaskCanceledException
+        catch (Exception error) when (error is IOException or HttpRequestException or OperationCanceledException
             or JsonException or InvalidDataException or System.ComponentModel.Win32Exception or UnauthorizedAccessException)
         {
             log($"Installer update skipped: {error.GetType().Name}: {error.Message}");
@@ -116,12 +118,12 @@ internal static class InstallerUpdater
         }
     }
 
-    private static void CopyBounded(Stream input, Stream output, long limit)
+    private static void CopyBounded(Stream input, Stream output, long limit, CancellationToken cancellationToken)
     {
         var buffer = new byte[128 * 1024];
         long total = 0;
         int count;
-        while ((count = input.Read(buffer)) > 0)
+        while ((count = input.ReadAsync(buffer, cancellationToken).GetAwaiter().GetResult()) > 0)
         {
             total += count;
             if (total > limit) throw new InvalidDataException("Response exceeds the allowed size");
