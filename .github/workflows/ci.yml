@@ -252,6 +252,28 @@ jobs:
           $process = Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw "Post-migration uninstall failed: $($process.ExitCode)" }
           if (-not (Test-Path (Join-Path $legacyConfig 'server.env'))) { throw 'Sibling NCC Server config was removed by uninstall' }
+          $brokenState = Join-Path $legacy 'core-state\state\core-state.json'
+          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $brokenState) | Out-Null
+          Set-Content -LiteralPath $brokenState -Value '{broken legacy core state' -NoNewline
+          Set-Content -LiteralPath (Join-Path $legacyConfig 'agent.env') -Value 'damaged-agent-config' -NoNewline
+          $process = Start-Process -FilePath $setup -ArgumentList $args -Wait -PassThru
+          if ($process.ExitCode -ne 0) {
+            if (Test-Path $log) { Get-Content $log -Tail 100 }
+            throw "Damaged legacy migration failed: $($process.ExitCode)"
+          }
+          $state = Get-Content (Join-Path $root 'core-state\state\core-state.json') -Raw | ConvertFrom-Json
+          if ((Get-Service NccAgentCore).Status -ne 'Running' -or $state.health -ne 'healthy') {
+            throw 'Damaged legacy state blocked the new agent service'
+          }
+          $handoff = Get-Content (Join-Path $env:ProgramData 'no0bz\NCC Agent Setup\handoff.json') -Raw | ConvertFrom-Json
+          if (-not (Test-Path (Join-Path $handoff.legacy_agent_backup 'core-state\state\core-state.json'))) {
+            throw 'Damaged legacy state was not preserved in the setup backup'
+          }
+          if (-not (Test-Path (Join-Path $legacyConfig 'server.env'))) {
+            throw 'Sibling NCC Server config was removed during damaged migration'
+          }
+          $process = Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Post-damaged-migration uninstall failed: $($process.ExitCode)" }
   windows-agent-auto-update:
     needs: windows-agent-installer-build
     runs-on: windows-latest

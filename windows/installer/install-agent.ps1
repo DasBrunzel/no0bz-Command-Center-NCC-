@@ -174,7 +174,26 @@ if ((Get-FileHash -LiteralPath $bundle -Algorithm SHA256).Hash.ToLowerInvariant(
 $stateFile = Join-Path $stateDir 'state\core-state.json'
 $activeVersion = ''
 if (Test-Path -LiteralPath $stateFile) {
-    try { $activeVersion = [string]((Get-Content -LiteralPath $stateFile -Raw | ConvertFrom-Json).active_payload) } catch { $activeVersion = '' }
+    $validState = $false
+    try {
+        $savedState = Get-Content -LiteralPath $stateFile -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+        $names = @($savedState.PSObject.Properties.Name)
+        $validState = @('active_payload', 'previous_payload', 'last_update_unix', 'health') |
+            Where-Object { $_ -notin $names } | Measure-Object | Select-Object -ExpandProperty Count
+        $validState = $validState -eq 0 -and
+            $savedState.health -in @('inactive', 'awaiting_health', 'healthy', 'rolled_back') -and
+            ($null -eq $savedState.active_payload -or $savedState.active_payload -is [string]) -and
+            ($null -eq $savedState.previous_payload -or $savedState.previous_payload -is [string]) -and
+            ($null -eq $savedState.last_update_unix -or
+                ($savedState.last_update_unix -is [ValueType] -and [long]$savedState.last_update_unix -ge 0))
+        if ($validState) { $activeVersion = [string]$savedState.active_payload }
+    } catch { $validState = $false }
+    if (-not $validState) {
+        # Preinstall already preserved both the current data tree and the
+        # legacy Core tree. A malformed state must not block a fresh install.
+        Remove-Item -LiteralPath $stateFile -Force -ErrorAction Stop
+        Write-Warning 'Damaged legacy Core state was preserved in the setup backup and reset.'
+    }
 }
 if ($activeVersion -ne [string]$artifact.payload_version) {
     & $core --state-dir $stateDir stage --source $bundle --version $artifact.payload_version --sha256 $artifact.sha256 --size $artifact.size_bytes --key-id $manifest.signature.key_id --signature $manifest.signature.value
