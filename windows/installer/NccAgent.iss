@@ -51,6 +51,13 @@ Filename: "{app}\NccTray.exe"; Description: "NCC Agent im Infobereich starten"; 
 [UninstallRun]
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\uninstall-agent.ps1"""; Flags: runhidden waituntilterminated; RunOnceId: NccAgentCleanup
 
+[UninstallDelete]
+Type: files; Name: "{app}\tray-settings.json"
+Type: files; Name: "{app}\pairing-url.txt"
+Type: files; Name: "{app}\agent-status.json"
+Type: files; Name: "{app}\agent-status.json.tmp"
+Type: files; Name: "{app}\tray-upgrade.marker"
+
 [Code]
 var
   ServerPage: TInputQueryWizardPage;
