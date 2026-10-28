@@ -210,6 +210,8 @@ für alle Benutzer und prüft dann auch einen nach Schnellstart gestoppt
 gebliebenen Dienst. Installations- und Upgrade-Tests laufen in isolierter
 Windows-CI; die Bedienung des Tray-Menüs und ein echter Windows-Schnellstart
 stehen noch zur Abnahme auf Zielhardware aus.
+Die dafür vorgesehenen Schritte stehen in
+[`docs/windows-agent-installer-acceptance.md`](docs/windows-agent-installer-acceptance.md).
 
 ### Wartungszugang für einen Windows-NCC-Server
 
