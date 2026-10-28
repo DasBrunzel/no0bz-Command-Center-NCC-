@@ -158,10 +158,12 @@ jobs:
           if ((Get-Content $data -Raw) -ne 'keep-me') { throw 'Agent data changed during reinstall' }
           $uninstall = Get-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*' |
             Where-Object DisplayName -eq 'no0bz Command Center Agent' | Select-Object -First 1
-          if (-not $uninstall -or $uninstall.UninstallString -notmatch '^"([^"]+)"') {
+          if (-not $uninstall) {
             throw 'Apps and Features uninstaller not registered'
           }
-          $process = Start-Process -FilePath $Matches[1] -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -Wait -PassThru
+          $uninstaller = Join-Path $env:ProgramFiles 'no0bz\NCC Agent\unins000.exe'
+          if (-not (Test-Path $uninstaller)) { throw 'Uninstaller executable is missing' }
+          $process = Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw "Uninstall failed: $($process.ExitCode)" }
           Start-Sleep -Seconds 3
           if (Get-Service NccAgentCore -ErrorAction SilentlyContinue) { throw 'Agent service remains after uninstall' }
