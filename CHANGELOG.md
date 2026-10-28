@@ -21,8 +21,12 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   starten; der manuelle Stop löste keine Absturz-Wiederherstellung aus. Ein
   separater Windows-CI-Test bestätigte den Tray-Start beim Anmelden, den
   Einzelinstanzschutz und den Neustart des Trays nach einem stillen Upgrade
-  über Sitzungsgrenzen hinweg. Die Bedienung des Tray-Menüs und das Verhalten
-  nach einem echten Windows-Schnellstart stehen noch zur Abnahme aus.
+  über Sitzungsgrenzen hinweg. Die Windows-CI-Abnahme prüft außerdem, dass
+  Apps-&-Features-Eintrag, Autostart, Dienst, Programmdateien und Agent-Daten
+  bei der Deinstallation verschwinden. Eine beschädigte alte Core-Zustandsdatei
+  wird vor dem frischen Start gesichert und blockiert die Migration nicht.
+  Die Bedienung des Tray-Menüs und das Verhalten nach einem echten
+  Windows-Schnellstart stehen noch zur Abnahme aus.
 - Dashboard, Server, Core und neue Agent-Payload-Builds tragen konsistent die
   nächste Entwicklungsnummer. Die Komponentenübersicht zeigt weiterhin die
   tatsächlich installierten Versionen vorhandener Agenten an.
