@@ -49,7 +49,11 @@ try {
     }
     if ((Find-TrayProcesses).Count -ne 1) { throw 'Tray did not return after silent upgrade.' }
 } finally {
-    Find-TrayProcesses | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    Find-TrayProcesses | ForEach-Object {
+        if ($null -ne $_ -and $null -ne $_.Id) {
+            Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
+        }
+    }
     $uninstaller = Join-Path $appDir 'unins000.exe'
     if (Test-Path $uninstaller) {
         Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -Wait | Out-Null
