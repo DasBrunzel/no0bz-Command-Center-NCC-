@@ -10,10 +10,7 @@ $appDir = Join-Path $env:ProgramFiles 'no0bz\NCC Agent'
 $trayExe = Join-Path $appDir 'NccTray.exe'
 $tray = $null
 function Find-TrayProcesses {
-    @(Get-CimInstance Win32_Process -Filter "Name='NccTray.exe'" -ErrorAction SilentlyContinue |
-        Where-Object { $_.ExecutablePath -and
-            [IO.Path]::GetFullPath($_.ExecutablePath).Equals([IO.Path]::GetFullPath($trayExe),
-                [StringComparison]::OrdinalIgnoreCase) })
+    @(Get-Process -Name NccTray -ErrorAction SilentlyContinue)
 }
 try {
     $args = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SERVERURL=http://127.0.0.1:8350',
@@ -38,8 +35,9 @@ try {
 
     $second = Start-Process -FilePath $trayExe -PassThru
     Start-Sleep -Seconds 4
-    if (-not $second.HasExited -or (Find-TrayProcesses).Count -ne 1) {
-        throw 'Tray single-instance guard failed.'
+    $trayCount = (Find-TrayProcesses).Count
+    if (-not $second.HasExited -or $tray.HasExited -or $trayCount -ne 1) {
+        throw "Tray single-instance guard failed: firstExited=$($tray.HasExited), secondExited=$($second.HasExited), count=$trayCount."
     }
 
     $upgrade = Start-Process -FilePath $NextSetup -ArgumentList $args -Wait -PassThru
