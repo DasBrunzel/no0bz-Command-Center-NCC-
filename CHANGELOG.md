@@ -18,9 +18,11 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   eines signierten B-Installers, dessen gesunde Aktivierung, den Erhalt von
   Pairing und Daten und die anschließende restlose Deinstallation bestanden.
   Ein Standardbenutzer konnte den Dienst ohne Adminrechte stoppen und wieder
-  starten; der manuelle Stop löste keine Absturz-Wiederherstellung aus. Die
-  interaktive Tray-Bedienung und das Verhalten nach Schnellstart stehen noch
-  zur Abnahme aus.
+  starten; der manuelle Stop löste keine Absturz-Wiederherstellung aus. Ein
+  separater Windows-CI-Test bestätigte den Tray-Start beim Anmelden, den
+  Einzelinstanzschutz und den Neustart des Trays nach einem stillen Upgrade
+  über Sitzungsgrenzen hinweg. Die Bedienung des Tray-Menüs und das Verhalten
+  nach einem echten Windows-Schnellstart stehen noch zur Abnahme aus.
 - Dashboard, Server, Core und neue Agent-Payload-Builds tragen konsistent die
   nächste Entwicklungsnummer. Die Komponentenübersicht zeigt weiterhin die
   tatsächlich installierten Versionen vorhandener Agenten an.
