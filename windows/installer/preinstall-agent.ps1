@@ -8,6 +8,7 @@ if (-not $admin.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 $root = Join-Path $env:ProgramData 'no0bz\NCC Agent'
 $legacyRoot = Join-Path $env:ProgramData 'no0bz\NCC'
 $handoffRoot = Join-Path $env:ProgramData 'no0bz\NCC Agent Setup'
+$trayMarker = Join-Path $AppDir 'tray-upgrade.marker'
 $backup = Join-Path $handoffRoot ('backup-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
 New-Item -ItemType Directory -Force -Path $handoffRoot, $backup | Out-Null
 & icacls.exe $handoffRoot /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' | Out-Null
@@ -16,9 +17,23 @@ if ($LASTEXITCODE -ne 0) { throw 'Could not protect NCC installer backup.' }
 $runningServices = @()
 $legacyTaskRunning = $false
 trap {
+    Remove-Item -LiteralPath $trayMarker -Force -ErrorAction SilentlyContinue
     foreach ($name in $runningServices) { Start-Service -Name $name -ErrorAction SilentlyContinue }
     if ($legacyTaskRunning) { Start-ScheduledTask -TaskName NccAgent -ErrorAction SilentlyContinue }
     throw
+}
+$trayProcesses = @(Get-CimInstance Win32_Process -Filter "Name='NccTray.exe'" -ErrorAction SilentlyContinue | Where-Object {
+    $_.ExecutablePath -and [IO.Path]::GetFullPath($_.ExecutablePath).Equals(
+        [IO.Path]::GetFullPath((Join-Path $AppDir 'NccTray.exe')), [StringComparison]::OrdinalIgnoreCase)
+})
+if ($trayProcesses.Count -gt 0) {
+    [IO.File]::WriteAllText($trayMarker, 'upgrade', [Text.UTF8Encoding]::new($false))
+    $trayDeadline = (Get-Date).AddSeconds(25)
+    do {
+        Start-Sleep -Seconds 1
+        $remaining = @($trayProcesses | Where-Object { Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue })
+    } while ($remaining.Count -gt 0 -and (Get-Date) -lt $trayDeadline)
+    foreach ($process in $remaining) { Stop-Process -Id $process.ProcessId -Force -ErrorAction Stop }
 }
 foreach ($name in @('NccAgentCore', 'NccCore', 'NccAgent')) {
     $service = Get-Service -Name $name -ErrorAction SilentlyContinue
@@ -58,5 +73,5 @@ foreach ($relative in @('config\agent.env', 'config\core.env', 'agent-data', 'co
     created_at = (Get-Date).ToString('o')
 } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $handoffRoot 'handoff.json') -Encoding UTF8
 
-# Inno's Restart Manager closes and relaunches registered tray sessions. Do
-# not force-kill them here, or silent upgrades could not restart the icon.
+# The tray starts a same-session relaunch helper before it exits. The forced
+# stop only handles older tray builds that do not yet understand the marker.

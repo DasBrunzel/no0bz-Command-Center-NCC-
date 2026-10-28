@@ -99,6 +99,7 @@ internal static class Program
         private readonly System.Windows.Forms.Timer _timer;
         private readonly TraySettings _settings;
         private bool _stopping;
+        private readonly string _upgradeMarker = Path.Combine(AppContext.BaseDirectory, "tray-upgrade.marker");
 
         internal TrayContext(TraySettings settings)
         {
@@ -124,8 +125,34 @@ internal static class Program
             TryStartService();
             RefreshStatus();
             _timer = new System.Windows.Forms.Timer { Interval = 5000 };
-            _timer.Tick += (_, _) => RefreshStatus();
+            _timer.Tick += (_, _) =>
+            {
+                if (File.Exists(_upgradeMarker)) { ExitForUpgrade(); return; }
+                RefreshStatus();
+            };
             _timer.Start();
+        }
+
+        private void ExitForUpgrade()
+        {
+            if (_stopping) return;
+            var trayPath = Path.Combine(AppContext.BaseDirectory, "NccTray.exe");
+            static string PsQuote(string value) => "'" + value.Replace("'", "''") + "'";
+            var script = "$marker=" + PsQuote(_upgradeMarker) + ";$tray=" + PsQuote(trayPath) +
+                ";$until=(Get-Date).AddMinutes(10);while((Test-Path -LiteralPath $marker) -and (Get-Date) -lt $until){Start-Sleep -Seconds 1};" +
+                "if(-not (Test-Path -LiteralPath $marker) -and (Test-Path -LiteralPath $tray)){Start-Process -FilePath $tray}";
+            var command = Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(script));
+            var helper = new ProcessStartInfo("powershell.exe") { UseShellExecute = false, CreateNoWindow = true };
+            helper.ArgumentList.Add("-NoProfile");
+            helper.ArgumentList.Add("-NonInteractive");
+            helper.ArgumentList.Add("-WindowStyle");
+            helper.ArgumentList.Add("Hidden");
+            helper.ArgumentList.Add("-EncodedCommand");
+            helper.ArgumentList.Add(command);
+            try { Process.Start(helper); }
+            catch (Win32Exception) { return; }
+            _stopping = true;
+            ExitThread();
         }
 
         private static ServiceController? OpenService()

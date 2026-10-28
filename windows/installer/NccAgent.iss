@@ -129,3 +129,8 @@ begin
       '-AppDir "' + ExpandConstant('{app}') + '" -ServerUrlFile "' + ServerUrlFile + '"');
   end;
 end;
+
+procedure DeinitializeSetup();
+begin
+  DeleteFile(ExpandConstant('{app}\tray-upgrade.marker'));
+end;
