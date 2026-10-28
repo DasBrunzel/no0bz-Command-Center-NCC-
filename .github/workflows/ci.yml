@@ -102,26 +102,32 @@ jobs:
       - name: Install Inno Setup compiler
         shell: pwsh
         run: choco install innosetup -y --no-progress
-      - name: Build self-contained NCC Agent setup
+      - name: Build self-contained setup with ephemeral signed CI payload
         shell: powershell
-        run: .\scripts\build_ncc_agent_setup.ps1
+        run: .\scripts\test_ncc_agent_setup_ci.ps1
       - name: Fresh install, reinstall, and uninstall
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
-          $setup = Resolve-Path 'dist\installer\ncc-agent-setup-0.6.0-beta.8-dev.1-windows-x86_64.exe'
+          $setup = Resolve-Path 'dist\installer-ci\ncc-agent-setup-0.6.0-beta.8-dev.1-windows-x86_64.exe'
           $args = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SERVERURL=http://127.0.0.1:8350')
           & $setup @args
           if ($LASTEXITCODE -ne 0) { throw "Fresh install failed: $LASTEXITCODE" }
           if ((Get-Service NccAgentCore).Status -ne 'Running') { throw 'Agent service did not start' }
           $root = Join-Path $env:ProgramData 'no0bz\NCC Agent'
-          $data = Join-Path $root 'data\machine-id'
-          if (-not (Test-Path $data)) { throw 'Agent identity was not created' }
-          $identity = Get-Content $data -Raw
+          $config = Join-Path $root 'config\core.env'
+          if (-not (Test-Path $config)) { throw 'Agent config was not created' }
+          $identity = (Get-Content $config | Where-Object { $_ -like 'NCC_AGENT_PAIRING_ID=*' })
+          if (-not $identity) { throw 'Agent pairing identity was not created' }
+          $data = Join-Path $root 'data\ci-persist.txt'
+          Set-Content -LiteralPath $data -Value 'keep-me' -NoNewline
           & $setup @args
           if ($LASTEXITCODE -ne 0) { throw "Reinstall failed: $LASTEXITCODE" }
           if ((Get-Service NccAgentCore).Status -ne 'Running') { throw 'Agent service did not survive reinstall' }
-          if ((Get-Content $data -Raw) -ne $identity) { throw 'Agent identity changed during reinstall' }
+          if ((Get-Content $config | Where-Object { $_ -like 'NCC_AGENT_PAIRING_ID=*' }) -ne $identity) {
+            throw 'Agent pairing identity changed during reinstall'
+          }
+          if ((Get-Content $data -Raw) -ne 'keep-me') { throw 'Agent data changed during reinstall' }
           $uninstall = Get-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*' |
             Where-Object DisplayName -eq 'no0bz Command Center Agent' | Select-Object -First 1
           if (-not $uninstall -or $uninstall.UninstallString -notmatch '^"([^"]+)"') {
