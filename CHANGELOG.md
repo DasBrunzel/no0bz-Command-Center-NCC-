@@ -11,7 +11,11 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   erhaltener Pairing-ID und Agent-Daten sowie Deinstallation mit einem kurzlebig
   signierten Test-Payload bestanden. Auch die Übernahme von Legacy-Identität und
   Pairing bei Erhalt der danebenliegenden NCC-Server-Konfiguration wurde geprüft.
-  Automatisches Update, Rollback und Tray-Bedienung stehen noch zur Abnahme aus.
+  Ein weiterer isolierter Windows-CI-Test hat den Wechsel von Version A auf B
+  mit erhaltenen Agent-Daten sowie den automatischen Rückfall von einem
+  absichtlich nicht gesund werdenden Payload auf B bestanden. Der durch den
+  Dienst selbst ausgelöste Download und die Tray-Bedienung stehen noch zur
+  Abnahme aus.
 - Dashboard, Server, Core und neue Agent-Payload-Builds tragen konsistent die
   nächste Entwicklungsnummer. Die Komponentenübersicht zeigt weiterhin die
   tatsächlich installierten Versionen vorhandener Agenten an.
