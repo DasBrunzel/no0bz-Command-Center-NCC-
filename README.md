@@ -181,6 +181,36 @@ NccCore gesund läuft. Für das unter `LocalSystem` laufende `pythonservice.exe`
 setzt der Bootstrap die erforderliche isolierte `PYTHONPATH`-Dienstumgebung.
 Die alte `agent.env` bleibt als datierte Sicherung erhalten.
 
+### Eigenständiger Windows-Agent-Installer (0.6-Entwicklung)
+
+`scripts/build_ncc_agent_setup.ps1` erzeugt aus dem signierten Start-Payload
+eine eigenständige `setup.exe`. Ein Build-Befehl auf der Release-Workstation:
+
+```powershell
+.\scripts\build_ncc_agent_setup.ps1 -Version 0.6.0-beta.8-dev.1 -PrivateKey "C:\Pfad\zum\release-private.pem" -ArtifactUrl "https://example.org/ncc-agent-setup-0.6.0-beta.8-dev.1-windows-x86_64.exe"
+```
+
+Auf der Build-Maschine werden .NET SDK, Rust, Inno Setup und OpenSSL benötigt;
+auf dem Ziel-PC sind sie im Installer beziehungsweise Payload enthalten. Der
+Builder prüft den signierten Start-Payload und schreibt neben die `setup.exe`
+eine SHA-256-Datei und ein signiertes Update-Manifest. Der private Schlüssel
+bleibt auf der Build-Maschine. Das Update-Manifest muss über die konfigurierte
+HTTPS-Updatequelle veröffentlicht werden. Für eine stille Erstinstallation:
+
+```powershell
+.\ncc-agent-setup-0.6.0-beta.8-dev.1-windows-x86_64.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SERVERURL=https://ncc.example.org
+```
+
+Der Installer erlaubt normalen Benutzern am Dienst ausschließlich
+Statusabfrage, Starten und Stoppen (`LCRPWP` im Windows-Dienst-Descriptor).
+Ändern, Löschen und Austausch des Dienstes bleiben Administratoren vorbehalten.
+Damit funktioniert „Beenden“ im Tray ohne UAC-Abfrage; ein manueller Stopp
+löst keine Absturz-Wiederherstellung aus. Der Tray startet bei der Anmeldung
+für alle Benutzer und prüft dann auch einen nach Schnellstart gestoppt
+gebliebenen Dienst. Installations- und Upgrade-Tests laufen in isolierter
+Windows-CI; die Bedienung des Tray-Menüs und ein echter Windows-Schnellstart
+stehen noch zur Abnahme auf Zielhardware aus.
+
 ### Wartungszugang für einen Windows-NCC-Server
 
 `setup_ncc_windows_maintenance_ssh.ps1` richtet einmalig den Windows-Dienst
