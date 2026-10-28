@@ -5,7 +5,7 @@ mod update;
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use signature::verify_trusted_release_signature;
+use signature::{verify_trusted_installer_signature, verify_trusted_release_signature};
 use std::env;
 use std::fs;
 use std::io::Read;
@@ -73,8 +73,9 @@ fn run(args: Vec<String>) -> Result<()> {
         "health" => report_health(&state_dir, &remaining[1..])?,
         "run-payload" => run_payload(&state_dir, &remaining[1..])?,
         "check-update" => check_update(&state_dir)?,
+        "verify-installer" => verify_installer(&state_dir, &remaining[1..])?,
         "service" => run_service(&state_dir)?,
-        _ => return Err("expected status, stage, activate, health, check-update or run-payload".to_owned()),
+        _ => return Err("expected status, stage, activate, health, check-update, verify-installer or run-payload".to_owned()),
     }
     Ok(())
 }
@@ -130,20 +131,25 @@ fn check_update(root: &Path) -> Result<()> {
     stage(
         root,
         &[
-            "--source".to_owned(), source.display().to_string(),
-            "--version".to_owned(), release.payload_version.clone(),
-            "--sha256".to_owned(), release.sha256,
-            "--size".to_owned(), release.size_bytes.to_string(),
-            "--key-id".to_owned(), release.signature_key_id,
-            "--signature".to_owned(), release.signature_value,
+            "--source".to_owned(),
+            source.display().to_string(),
+            "--version".to_owned(),
+            release.payload_version.clone(),
+            "--sha256".to_owned(),
+            release.sha256,
+            "--size".to_owned(),
+            release.size_bytes.to_string(),
+            "--key-id".to_owned(),
+            release.signature_key_id,
+            "--signature".to_owned(),
+            release.signature_value,
         ],
     )?;
     activate(root, &["--version".to_owned(), release.payload_version])
 }
 
 fn should_skip_rolled_back_release(state: &CoreState, release_version: &str) -> bool {
-    state.health == Health::RolledBack
-        && state.previous_payload.as_deref() == Some(release_version)
+    state.health == Health::RolledBack && state.previous_payload.as_deref() == Some(release_version)
 }
 
 #[derive(Deserialize)]
@@ -284,14 +290,55 @@ fn stage(root: &Path, args: &[String]) -> Result<()> {
     verify_trusted_release_signature(root, &key_id, &version, &hash, expected_size, &signature)?;
     let destination = root.join("payloads").join(&version).join("payload.archive");
     let parent = destination.parent().ok_or("payload path has no parent")?;
-    fs::create_dir_all(parent).map_err(|error| format!("could not create payload directory: {error}"))?;
+    fs::create_dir_all(parent)
+        .map_err(|error| format!("could not create payload directory: {error}"))?;
     let temporary = destination.with_extension("tmp");
-    fs::copy(source, &temporary).map_err(|error| format!("could not copy payload archive: {error}"))?;
+    fs::copy(source, &temporary)
+        .map_err(|error| format!("could not copy payload archive: {error}"))?;
     if sha256(&temporary)? != hash {
         return Err("staged artifact SHA-256 mismatch".to_owned());
     }
-    rename_with_retry(&temporary, &destination, "could not activate staged archive")?;
+    rename_with_retry(
+        &temporary,
+        &destination,
+        "could not activate staged archive",
+    )?;
     extract_payload(root, &version)?;
+    Ok(())
+}
+
+fn verify_installer(root: &Path, args: &[String]) -> Result<()> {
+    let source = PathBuf::from(value(args, "--source")?);
+    let version = valid_version(&value(args, "--version")?)?;
+    let expected_hash = value(args, "--sha256")?.to_ascii_lowercase();
+    let expected_size: u64 = value(args, "--size")?.parse().map_err(display)?;
+    let url = value(args, "--url")?;
+    let key_id = value(args, "--key-id")?;
+    let signature = value(args, "--signature")?;
+    if !url.starts_with("https://") || url.contains('\n') || url.contains('\r') {
+        return Err("installer URL must use HTTPS".to_owned());
+    }
+    if expected_size == 0 || expected_size > 1024 * 1024 * 1024 {
+        return Err("installer size is outside the allowed range".to_owned());
+    }
+    if expected_hash.len() != 64 || !expected_hash.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err("invalid installer SHA-256".to_owned());
+    }
+    if fs::metadata(&source).map_err(display)?.len() != expected_size
+        || sha256(&source)? != expected_hash
+    {
+        return Err("installer size or SHA-256 does not match manifest".to_owned());
+    }
+    verify_trusted_installer_signature(
+        root,
+        &key_id,
+        &version,
+        &expected_hash,
+        expected_size,
+        &url,
+        &signature,
+    )?;
+    println!("{{\"verified\":true}}");
     Ok(())
 }
 
@@ -300,9 +347,12 @@ fn extract_payload(root: &Path, version: &str) -> Result<()> {
     let files = root.join("payloads").join(version).join("files");
     let temporary = files.with_extension("tmp");
     let _ = fs::remove_dir_all(&temporary);
-    fs::create_dir_all(&temporary).map_err(|error| format!("could not create extraction directory: {error}"))?;
-    let archive = fs::File::open(archive_path).map_err(|error| format!("could not open staged archive: {error}"))?;
-    let mut archive = zip::ZipArchive::new(archive).map_err(|error| format!("could not read staged archive: {error}"))?;
+    fs::create_dir_all(&temporary)
+        .map_err(|error| format!("could not create extraction directory: {error}"))?;
+    let archive = fs::File::open(archive_path)
+        .map_err(|error| format!("could not open staged archive: {error}"))?;
+    let mut archive = zip::ZipArchive::new(archive)
+        .map_err(|error| format!("could not read staged archive: {error}"))?;
     for index in 0..archive.len() {
         let mut entry = archive.by_index(index).map_err(display)?;
         let enclosed = entry
@@ -311,23 +361,24 @@ fn extract_payload(root: &Path, version: &str) -> Result<()> {
             .to_owned();
         let destination = temporary.join(&enclosed);
         if entry.is_dir() {
-            fs::create_dir_all(&destination).map_err(|error| format!("could not create payload subdirectory: {error}"))?;
+            fs::create_dir_all(&destination)
+                .map_err(|error| format!("could not create payload subdirectory: {error}"))?;
         } else {
             let parent = destination.parent().ok_or("payload entry has no parent")?;
-            fs::create_dir_all(parent).map_err(|error| format!("could not create payload parent: {error}"))?;
-            let mut target = fs::File::create(&destination).map_err(|error| format!("could not create payload file: {error}"))?;
-            std::io::copy(&mut entry, &mut target).map_err(|error| format!("could not extract payload file: {error}"))?;
+            fs::create_dir_all(parent)
+                .map_err(|error| format!("could not create payload parent: {error}"))?;
+            let mut target = fs::File::create(&destination)
+                .map_err(|error| format!("could not create payload file: {error}"))?;
+            std::io::copy(&mut entry, &mut target)
+                .map_err(|error| format!("could not extract payload file: {error}"))?;
             // ZIP does not automatically restore executable bits.  Preserve a
             // payload's Unix mode so the same signed archive format can run
             // under systemd on Linux as well as under Windows.
             #[cfg(unix)]
             if let Some(mode) = entry.unix_mode() {
                 use std::os::unix::fs::PermissionsExt;
-                fs::set_permissions(
-                    &destination,
-                    fs::Permissions::from_mode(mode),
-                )
-                .map_err(display)?;
+                fs::set_permissions(&destination, fs::Permissions::from_mode(mode))
+                    .map_err(display)?;
             }
         }
     }
@@ -356,7 +407,9 @@ fn rename_with_retry(source: &Path, destination: &Path, context: &str) -> Result
     }
     Err(format!(
         "{context}: {}",
-        last_error.map(|error| error.to_string()).unwrap_or_else(|| "unknown error".to_owned())
+        last_error
+            .map(|error| error.to_string())
+            .unwrap_or_else(|| "unknown error".to_owned())
     ))
 }
 
@@ -602,7 +655,10 @@ mod tests {
         assert!(should_skip_rolled_back_release(&state, "0.6.0-beta.2"));
         assert!(!should_skip_rolled_back_release(&state, "0.6.0-beta.3"));
         assert!(!should_skip_rolled_back_release(
-            &CoreState { health: Health::Healthy, ..state },
+            &CoreState {
+                health: Health::Healthy,
+                ..state
+            },
             "0.6.0-beta.2"
         ));
     }

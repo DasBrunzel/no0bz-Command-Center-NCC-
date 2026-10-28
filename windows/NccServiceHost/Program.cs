@@ -26,7 +26,10 @@ internal sealed class CoreService : ServiceBase
     private static readonly object LogGate = new();
     private volatile Process? _core;
     private System.Threading.Timer? _updateTimer;
+    private System.Threading.Timer? _statusTimer;
     private volatile bool _stopping;
+    private DateTimeOffset _lastCheckUtc;
+    private string _updateStatus = "startet";
     internal bool IsRunning { get; private set; }
 
     internal CoreService()
@@ -45,6 +48,8 @@ internal sealed class CoreService : ServiceBase
             _stopping = false;
             StartCore();
             IsRunning = true;
+            _statusTimer = new System.Threading.Timer(_ => PublishStatus(), null,
+                TimeSpan.Zero, TimeSpan.FromSeconds(5));
             // Core verifies the approved signed release on every service start.
             // A controlled restart supplies the required periodic update check.
             _updateTimer = new System.Threading.Timer(_ => RestartForUpdate(), null,
@@ -132,6 +137,8 @@ internal sealed class CoreService : ServiceBase
             }
         };
         _core = process;
+        _lastCheckUtc = DateTimeOffset.UtcNow;
+        _updateStatus = "Prüfung gestartet";
         try
         {
             if (!process.Start()) throw new InvalidOperationException("Could not start NCC Core");
@@ -154,8 +161,19 @@ internal sealed class CoreService : ServiceBase
             if (_stopping) return;
             try
             {
+                var config = ReadConfig();
+                _lastCheckUtc = DateTimeOffset.UtcNow;
+                _updateStatus = "Prüfung läuft";
+                PublishStatus();
+                if (InstallerUpdater.CheckAndLaunch(Root, AppContext.BaseDirectory, config, Log))
+                {
+                    _updateStatus = "Installer gestartet";
+                    PublishStatus();
+                    return;
+                }
                 StopCore();
                 StartCore();
+                PublishStatus();
                 Log("Scheduled signed release check started");
             }
             catch (Exception error)
@@ -164,6 +182,33 @@ internal sealed class CoreService : ServiceBase
                 Environment.FailFast("NCC Core scheduled restart failed", error);
             }
         }
+    }
+
+    private void PublishStatus()
+    {
+        if (_stopping) return;
+        try
+        {
+            var statePath = Path.Combine(Root, "core-state", "state", "core-state.json");
+            using var state = JsonDocument.Parse(File.ReadAllText(statePath));
+            var version = state.RootElement.TryGetProperty("active_payload", out var active)
+                ? active.GetString() : null;
+            var health = state.RootElement.TryGetProperty("health", out var currentHealth)
+                ? currentHealth.GetString() : "unbekannt";
+            if (health == "healthy") _updateStatus = "Aktuell";
+            var status = new
+            {
+                version,
+                health,
+                lastCheckUtc = _lastCheckUtc,
+                updateStatus = health == "rolled_back" ? "Rollback" : _updateStatus,
+            };
+            var target = Path.Combine(AppContext.BaseDirectory, "agent-status.json");
+            var temporary = target + ".tmp";
+            File.WriteAllText(temporary, JsonSerializer.Serialize(status));
+            File.Move(temporary, target, true);
+        }
+        catch (Exception error) when (error is IOException or JsonException or UnauthorizedAccessException) { }
     }
 
     private void StopCore()
@@ -190,6 +235,8 @@ internal sealed class CoreService : ServiceBase
             _stopping = true;
             _updateTimer?.Dispose();
             _updateTimer = null;
+            _statusTimer?.Dispose();
+            _statusTimer = null;
             StopCore();
             IsRunning = false;
             Log("Core stopped by SCM");

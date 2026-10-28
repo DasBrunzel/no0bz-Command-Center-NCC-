@@ -9,12 +9,15 @@ using System.Windows.Forms;
 namespace NccTray;
 
 internal sealed record TraySettings(string ServerUrl, string Version);
+internal sealed record AgentStatus(string? Version, string? Health, DateTimeOffset? LastCheckUtc, string? UpdateStatus);
 
 internal static class Program
 {
     private const string ServiceName = "NccAgentCore";
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool DestroyIcon(IntPtr icon);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+    private static extern int RegisterApplicationRestart(string? commandLine, uint flags);
 
     private static Icon CreateNccIcon()
     {
@@ -44,6 +47,9 @@ internal static class Program
         if (!created) return;
 
         ApplicationConfiguration.Initialize();
+        // Inno Setup's Restart Manager can relaunch the tray in the same user
+        // session after a silent in-place upgrade.
+        RegisterApplicationRestart("", 0);
         Application.Run(new TrayContext(ReadSettings()));
     }
 
@@ -62,6 +68,19 @@ internal static class Program
         catch (JsonException) { }
         catch (UnauthorizedAccessException) { }
         return new TraySettings("", typeof(Program).Assembly.GetName().Version?.ToString() ?? "unbekannt");
+    }
+
+    private static AgentStatus? ReadAgentStatus()
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<AgentStatus>(
+                File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "agent-status.json")),
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        catch (IOException) { return null; }
+        catch (JsonException) { return null; }
+        catch (UnauthorizedAccessException) { return null; }
     }
 
     private sealed class TrayContext : ApplicationContext
@@ -134,7 +153,12 @@ internal static class Program
             catch (InvalidOperationException) { running = false; }
             catch (Win32Exception) { running = false; }
 
-            _icon.Text = $"NCC Agent {_settings.Version}: {(running ? "läuft" : "gestoppt")}";
+            var state = ReadAgentStatus();
+            var version = state?.Version ?? _settings.Version;
+            var checkedAt = state?.LastCheckUtc?.ToLocalTime().ToString("dd.MM HH:mm") ?? "nie";
+            var update = state?.UpdateStatus ?? "unbekannt";
+            var summary = $"NCC {version} | {(running ? "läuft" : "gestoppt")} | {update} | {checkedAt}";
+            _icon.Text = summary.Length <= 63 ? summary : summary[..63];
             // Opening the remote dashboard after the agent has been stopped
             // would misleadingly suggest the local agent is still active.
             _dashboard.Enabled = running && !string.IsNullOrWhiteSpace(_settings.ServerUrl);

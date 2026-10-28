@@ -1,0 +1,21 @@
+{
+    "channel":  "beta",
+    "signature":  {
+                      "value":  "l6oYYSJ5PfKrjgUW6jiydAgMlQ807XHTDETMS/E8t7tktcoFbucBdUGwT4J+xDfWCpovbPZSJi9LBCo68+B2DA==",
+                      "key_id":  "ncc-release-2026",
+                      "algorithm":  "ed25519"
+                  },
+    "schema_version":  1,
+    "minimum_core_version":  "0.6.0-beta.1",
+    "artifacts":  [
+                      {
+                          "architecture":  "x86_64",
+                          "payload_version":  "0.6.0-beta.7",
+                          "sha256":  "d1de6f4a76c6809c8e6ab613e93ba74cb2d4a35526ec2ae1940864a4072f2ebc",
+                          "size_bytes":  52440062,
+                          "platform":  "windows",
+                          "url":  "https://github.com/DasBrunzel/no0bz-Command-Center-NCC-/releases/download/v0.6.0-beta.7/ncc-payload-0.6.0-beta.7-windows-x86_64.zip"
+                      }
+                  ],
+    "released_at":  "2026-10-17T21:03:02.9186128Z"
+}

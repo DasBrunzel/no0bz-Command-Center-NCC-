@@ -21,8 +21,8 @@ pub struct PendingRelease {
 pub fn request_pending_release() -> Result<Option<PendingRelease>, String> {
     let server = env::var("NCC_AGENT_SERVER_URL")
         .map_err(|_| "NCC_AGENT_SERVER_URL is required for update checks")?;
-    let token = env::var("NCC_AGENT_TOKEN")
-        .map_err(|_| "NCC_AGENT_TOKEN is required for update checks")?;
+    let token =
+        env::var("NCC_AGENT_TOKEN").map_err(|_| "NCC_AGENT_TOKEN is required for update checks")?;
     let url = format!("{}/api/v1/releases/pending", server.trim_end_matches('/'));
     let mut response = ureq::get(&url)
         .header("Authorization", &format!("Bearer {token}"))
