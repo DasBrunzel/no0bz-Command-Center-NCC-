@@ -208,6 +208,23 @@ jobs:
           Start-Sleep -Seconds 3
           if (Get-Service NccAgentCore -ErrorAction SilentlyContinue) { throw 'Agent service remains after uninstall' }
           if (Test-Path $root) { throw 'Agent data remains after uninstall' }
+          if (Test-Path $appDir) { throw 'Agent application directory remains after uninstall' }
+          if (Test-Path (Join-Path $env:ProgramData 'no0bz\NCC Agent Setup')) {
+            throw 'Agent installer handoff directory remains after uninstall'
+          }
+          if (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run' -Name NccTray -ErrorAction SilentlyContinue) {
+            throw 'Agent tray autostart remains after uninstall'
+          }
+          if ($registryPaths | Where-Object { Test-Path -LiteralPath $_ }) {
+            throw 'Agent Apps and Features entry remains after uninstall'
+          }
+          if (Get-Process -Name NccTray -ErrorAction SilentlyContinue) { throw 'Agent tray remains after uninstall' }
+          if (Get-ScheduledTask -TaskName NccAgentCore -ErrorAction SilentlyContinue) {
+            throw 'Agent update task remains after uninstall'
+          }
+          if (Get-NetFirewallRule -DisplayName 'NCC Agent Core' -ErrorAction SilentlyContinue) {
+            throw 'Agent firewall rule remains after uninstall'
+          }
           $legacy = Join-Path $env:ProgramData 'no0bz\NCC'
           $legacyConfig = Join-Path $legacy 'config'
           $legacyData = Join-Path $legacy 'agent-data'
