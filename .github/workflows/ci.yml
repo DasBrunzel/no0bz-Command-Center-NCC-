@@ -145,6 +145,7 @@ jobs:
             Get-Service NccAgentCore -ErrorAction SilentlyContinue | Format-List *
             throw 'Agent service did not start'
           }
+          .\scripts\test_ncc_agent_service_acl_ci.ps1
           $root = Join-Path $env:ProgramData 'no0bz\NCC Agent'
           $config = Join-Path $root 'config\core.env'
           if (-not (Test-Path $config)) { throw 'Agent config was not created' }
