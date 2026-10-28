@@ -23,7 +23,11 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Could not create CI HTTPS certificate.' }
     $certificate = Import-Certificate -FilePath $crt -CertStoreLocation 'Cert:\LocalMachine\Root'
     Copy-Item -LiteralPath $NextSetup -Destination (Join-Path $temporary (Split-Path -Leaf $NextSetup))
-    Copy-Item -LiteralPath $NextManifest -Destination (Join-Path $temporary 'update-feed.json')
+    $feedFile = Join-Path $temporary 'update-feed.json'
+    $validFeedJson = Get-Content -LiteralPath $NextManifest -Raw
+    $unsignedFeed = $validFeedJson | ConvertFrom-Json
+    $unsignedFeed.SignatureValue = ''
+    [IO.File]::WriteAllText($feedFile, ($unsignedFeed | ConvertTo-Json -Compress), [Text.UTF8Encoding]::new($false))
     $serverScript = Join-Path $temporary 'feed.py'
     @'
 import http.server
@@ -67,6 +71,30 @@ server.serve_forever()
     $pairing = Get-Content $config | Where-Object { $_ -like 'NCC_AGENT_PAIRING_ID=*' }
     $data = Join-Path $root 'data\ci-auto-update.txt'
     Set-Content -LiteralPath $data -Value 'preserve-through-auto-update' -NoNewline
+    $hostLogPath = Join-Path $root 'logs\service-host.log'
+    function Wait-ForRejection([string]$Pattern) {
+        $until = (Get-Date).AddSeconds(80)
+        do {
+            Start-Sleep -Seconds 2
+            $text = if (Test-Path -LiteralPath $hostLogPath) { Get-Content -LiteralPath $hostLogPath -Raw } else { '' }
+            if ($text -match $Pattern) { return }
+        } while ((Get-Date) -lt $until)
+        throw "Agent did not reject an invalid installer release: $Pattern"
+    }
+    Wait-ForRejection 'Installer feed metadata is invalid'
+    if ((Get-Content (Join-Path $appDir 'installer-version.txt') -Raw).Trim() -ne '0.6.0-beta.8-dev.1') {
+        throw 'Unsigned installer was activated.'
+    }
+    $tamperedFeed = $validFeedJson | ConvertFrom-Json
+    $tamperedFeed.SignatureValue = [Convert]::ToBase64String((New-Object byte[] 64))
+    [IO.File]::WriteAllText($feedFile, ($tamperedFeed | ConvertTo-Json -Compress), [Text.UTF8Encoding]::new($false))
+    Restart-Service NccAgentCore
+    Wait-ForRejection 'Installer signature verification failed'
+    if ((Get-Content (Join-Path $appDir 'installer-version.txt') -Raw).Trim() -ne '0.6.0-beta.8-dev.1') {
+        throw 'Tampered installer signature was activated.'
+    }
+    Copy-Item -LiteralPath $NextManifest -Destination $feedFile -Force
+    Restart-Service NccAgentCore
 
     $deadline = (Get-Date).AddMinutes(4)
     $updated = $false
