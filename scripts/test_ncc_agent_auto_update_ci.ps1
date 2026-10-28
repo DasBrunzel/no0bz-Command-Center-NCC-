@@ -38,17 +38,27 @@ context.load_cert_chain(certfile=cert, keyfile=key)
 server.socket = context.wrap_socket(server.socket, server_side=True)
 server.serve_forever()
 '@ | Set-Content -LiteralPath $serverScript -Encoding ASCII
-    $server = Start-Process -FilePath $python -ArgumentList @($serverScript, $temporary, $crt, $key) -PassThru -WindowStyle Hidden
+    $serverStdout = Join-Path $temporary 'feed.stdout.log'
+    $serverStderr = Join-Path $temporary 'feed.stderr.log'
+    $server = Start-Process -FilePath $python -ArgumentList @($serverScript, $temporary, $crt, $key) `
+        -PassThru -WindowStyle Hidden -RedirectStandardOutput $serverStdout -RedirectStandardError $serverStderr
     $feedUrl = 'https://localhost:18443/update-feed.json'
     $ready = $false
+    $lastFeedError = ''
     for ($attempt = 0; $attempt -lt 20; $attempt++) {
         Start-Sleep -Seconds 1
         try {
             $response = Invoke-WebRequest -Uri $feedUrl -UseBasicParsing -TimeoutSec 2
             if ($response.StatusCode -eq 200) { $ready = $true; break }
-        } catch { }
+        } catch { $lastFeedError = $_.Exception.ToString() }
+        if ($server.HasExited) { break }
     }
-    if (-not $ready) { throw 'CI HTTPS update feed did not become ready.' }
+    if (-not $ready) {
+        Write-Output "FEED_SERVER_EXITED=$($server.HasExited) EXIT_CODE=$(if ($server.HasExited) { $server.ExitCode })"
+        Write-Output "FEED_LAST_ERROR=$lastFeedError"
+        if (Test-Path $serverStderr) { Get-Content $serverStderr -Tail 30 }
+        throw 'CI HTTPS update feed did not become ready.'
+    }
 
     $root = Join-Path $env:ProgramData 'no0bz\NCC Agent'
     $appDir = Join-Path $env:ProgramFiles 'no0bz\NCC Agent'
