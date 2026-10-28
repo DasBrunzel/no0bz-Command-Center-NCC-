@@ -1,0 +1,59 @@
+[CmdletBinding()]
+param(
+    [Parameter(Mandatory = $true)][string]$FirstSetup,
+    [Parameter(Mandatory = $true)][string]$NextSetup
+)
+
+$ErrorActionPreference = 'Stop'
+$root = Join-Path $env:ProgramData 'no0bz\NCC Agent'
+$appDir = Join-Path $env:ProgramFiles 'no0bz\NCC Agent'
+$trayExe = Join-Path $appDir 'NccTray.exe'
+$tray = $null
+function Find-TrayProcesses {
+    @(Get-CimInstance Win32_Process -Filter "Name='NccTray.exe'" -ErrorAction SilentlyContinue |
+        Where-Object { $_.ExecutablePath -and
+            [IO.Path]::GetFullPath($_.ExecutablePath).Equals([IO.Path]::GetFullPath($trayExe),
+                [StringComparison]::OrdinalIgnoreCase) })
+}
+try {
+    $args = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SERVERURL=http://127.0.0.1:8350',
+        '/CLOSEAPPLICATIONS', '/RESTARTAPPLICATIONS')
+    $install = Start-Process -FilePath $FirstSetup -ArgumentList $args -Wait -PassThru
+    if ($install.ExitCode -ne 0 -or (Get-Service NccAgentCore).Status -ne 'Running') {
+        throw 'Tray smoke: version A did not install and start.'
+    }
+    $runEntry = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run' -Name NccTray).NccTray
+    if ($runEntry -notlike "*$trayExe*") { throw 'Machine-wide tray autostart is missing.' }
+
+    Stop-Service NccAgentCore
+    (Get-Service NccAgentCore).WaitForStatus('Stopped', [TimeSpan]::FromSeconds(30))
+    $tray = Start-Process -FilePath $trayExe -PassThru
+    $deadline = (Get-Date).AddSeconds(30)
+    do {
+        Start-Sleep -Seconds 2
+        $running = (Get-Service NccAgentCore).Status -eq 'Running'
+    } while (-not $running -and (Get-Date) -lt $deadline)
+    if (-not $running) { throw 'Tray did not restart a manually stopped service at sign-in.' }
+    if ($tray.HasExited) { throw 'Tray exited instead of remaining in the user session.' }
+
+    $second = Start-Process -FilePath $trayExe -PassThru
+    Start-Sleep -Seconds 4
+    if (-not $second.HasExited -or (Find-TrayProcesses).Count -ne 1) {
+        throw 'Tray single-instance guard failed.'
+    }
+
+    $upgrade = Start-Process -FilePath $NextSetup -ArgumentList $args -Wait -PassThru
+    if ($upgrade.ExitCode -ne 0) { throw "Tray smoke: version B upgrade failed: $($upgrade.ExitCode)" }
+    Start-Sleep -Seconds 10
+    $state = Get-Content (Join-Path $root 'core-state\state\core-state.json') -Raw | ConvertFrom-Json
+    if ($state.active_payload -ne '0.6.0-beta.8-ci.2' -or $state.health -ne 'healthy') {
+        throw 'Tray smoke: version B payload is not healthy.'
+    }
+    if ((Find-TrayProcesses).Count -ne 1) { throw 'Tray did not return after silent upgrade.' }
+} finally {
+    Find-TrayProcesses | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    $uninstaller = Join-Path $appDir 'unins000.exe'
+    if (Test-Path $uninstaller) {
+        Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -Wait | Out-Null
+    }
+}

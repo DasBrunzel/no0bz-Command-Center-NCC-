@@ -251,4 +251,19 @@ jobs:
             -FirstSetup (Resolve-Path 'dist\installer-ci-first\ncc-agent-setup-0.6.0-beta.8-dev.1-windows-x86_64.exe').Path `
             -NextSetup (Resolve-Path 'dist\installer-ci-next\ncc-agent-setup-0.6.0-beta.8-dev.2-windows-x86_64.exe').Path `
             -NextManifest (Resolve-Path 'dist\installer-ci-next\ncc-agent-setup-0.6.0-beta.8-dev.2-windows-x86_64.exe.manifest.json').Path
+  windows-agent-tray-smoke:
+    needs: windows-agent-installer-build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: ncc-agent-ci-setup
+          path: dist
+      - name: Tray sign-in recovery, single instance, and upgrade restart
+        shell: powershell
+        run: |
+          .\scripts\test_ncc_agent_tray_ci.ps1 `
+            -FirstSetup (Resolve-Path 'dist\installer-ci-first\ncc-agent-setup-0.6.0-beta.8-dev.1-windows-x86_64.exe').Path `
+            -NextSetup (Resolve-Path 'dist\installer-ci-next\ncc-agent-setup-0.6.0-beta.8-dev.2-windows-x86_64.exe').Path
 
