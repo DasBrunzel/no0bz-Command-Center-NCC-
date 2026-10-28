@@ -14,7 +14,7 @@ function Find-TrayProcesses {
 }
 try {
     $args = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SERVERURL=http://127.0.0.1:8350',
-        '/CLOSEAPPLICATIONS', '/RESTARTAPPLICATIONS')
+        '/CLOSEAPPLICATIONS', '/FORCECLOSEAPPLICATIONS', '/RESTARTAPPLICATIONS', '/LOGCLOSEAPPLICATIONS')
     $install = Start-Process -FilePath $FirstSetup -ArgumentList $args -Wait -PassThru
     if ($install.ExitCode -ne 0 -or (Get-Service NccAgentCore).Status -ne 'Running') {
         throw 'Tray smoke: version A did not install and start.'
@@ -44,7 +44,7 @@ try {
     $upgrade = Start-Process -FilePath $NextSetup -ArgumentList ($args + "/LOG=$upgradeLog") -Wait -PassThru
     if ($upgrade.ExitCode -ne 0) {
         if (Test-Path -LiteralPath $upgradeLog) {
-            Get-Content -LiteralPath $upgradeLog -Tail 35 | ForEach-Object { Write-Host $_ }
+            Get-Content -LiteralPath $upgradeLog -Tail 100 | ForEach-Object { Write-Host $_ }
         }
         throw "Tray smoke: version B upgrade failed: $($upgrade.ExitCode)"
     }

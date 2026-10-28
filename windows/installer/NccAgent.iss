@@ -25,7 +25,7 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 UninstallDisplayIcon={app}\NccTray.exe
-CloseApplications=yes
+CloseApplications=force
 RestartApplications=yes
 SetupLogging=yes
 
