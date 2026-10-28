@@ -92,4 +92,44 @@ jobs:
             $parseErrors | Format-List
             exit 1
           }
+  windows-agent-installer-smoke:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: {dotnet-version: '8.0.x'}
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Inno Setup compiler
+        shell: pwsh
+        run: choco install innosetup -y --no-progress
+      - name: Build self-contained NCC Agent setup
+        shell: powershell
+        run: .\scripts\build_ncc_agent_setup.ps1
+      - name: Fresh install, reinstall, and uninstall
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = Resolve-Path 'dist\installer\ncc-agent-setup-0.6.0-beta.8-dev.1-windows-x86_64.exe'
+          $args = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SERVERURL=http://127.0.0.1:8350')
+          & $setup @args
+          if ($LASTEXITCODE -ne 0) { throw "Fresh install failed: $LASTEXITCODE" }
+          if ((Get-Service NccAgentCore).Status -ne 'Running') { throw 'Agent service did not start' }
+          $root = Join-Path $env:ProgramData 'no0bz\NCC Agent'
+          $data = Join-Path $root 'data\machine-id'
+          if (-not (Test-Path $data)) { throw 'Agent identity was not created' }
+          $identity = Get-Content $data -Raw
+          & $setup @args
+          if ($LASTEXITCODE -ne 0) { throw "Reinstall failed: $LASTEXITCODE" }
+          if ((Get-Service NccAgentCore).Status -ne 'Running') { throw 'Agent service did not survive reinstall' }
+          if ((Get-Content $data -Raw) -ne $identity) { throw 'Agent identity changed during reinstall' }
+          $uninstall = Get-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*' |
+            Where-Object DisplayName -eq 'no0bz Command Center Agent' | Select-Object -First 1
+          if (-not $uninstall -or $uninstall.UninstallString -notmatch '^"([^"]+)"') {
+            throw 'Apps and Features uninstaller not registered'
+          }
+          & $Matches[1] /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+          if ($LASTEXITCODE -ne 0) { throw "Uninstall failed: $LASTEXITCODE" }
+          Start-Sleep -Seconds 3
+          if (Get-Service NccAgentCore -ErrorAction SilentlyContinue) { throw 'Agent service remains after uninstall' }
+          if (Test-Path $root) { throw 'Agent data remains after uninstall' }
 

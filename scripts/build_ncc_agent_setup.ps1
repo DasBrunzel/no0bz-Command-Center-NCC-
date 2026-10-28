@@ -47,9 +47,15 @@ $dotnet = (Get-Command dotnet -ErrorAction Stop).Source
 $cargo = (Get-Command cargo -ErrorAction Stop).Source
 $iscc = (Get-Command ISCC.exe -ErrorAction SilentlyContinue).Source
 if (-not $iscc) {
-    $iscc = Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 7\ISCC.exe'
+    $iscc = @(
+        (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 7\ISCC.exe'),
+        'C:\Program Files (x86)\Inno Setup 7\ISCC.exe',
+        'C:\Program Files (x86)\Inno Setup 6\ISCC.exe',
+        'C:\Program Files\Inno Setup 7\ISCC.exe',
+        'C:\Program Files\Inno Setup 6\ISCC.exe'
+    ) | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
 }
-if (-not (Test-Path -LiteralPath $iscc)) { throw 'Inno Setup 7 compiler (ISCC.exe) is required to build setup.exe.' }
+if (-not $iscc -or -not (Test-Path -LiteralPath $iscc)) { throw 'Inno Setup compiler (ISCC.exe) is required to build setup.exe.' }
 
 $stage = Join-Path $project ('dist\installer-stage\' + $Version)
 New-Item -ItemType Directory -Force -Path $stage, $OutputDirectory | Out-Null
