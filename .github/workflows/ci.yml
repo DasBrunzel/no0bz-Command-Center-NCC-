@@ -241,6 +241,13 @@ jobs:
             'NCC_AGENT_PAIRING_ID=ci-legacy-pairing-id',
             'NCC_AGENT_PAIRING_SECRET=ci-legacy-pairing-secret'
           ) | Set-Content -LiteralPath (Join-Path $legacyConfig 'agent.env')
+          & sc.exe create NccAgent 'binPath=' 'C:\Windows\System32\cmd.exe' 'start=' 'demand' | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'Could not create old agent service fixture' }
+          & schtasks.exe /Create /TN NccAgent /SC ONSTART /RU SYSTEM /TR 'C:\Windows\System32\cmd.exe' /F | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'Could not create old agent task fixture' }
+          New-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run' -Name NccAgent `
+            -Value 'C:\Windows\System32\cmd.exe' -PropertyType String -Force | Out-Null
+          New-NetFirewallRule -DisplayName NccAgent -Direction Inbound -Action Block -Protocol TCP -LocalPort 19351 | Out-Null
           $process = Start-Process -FilePath $setup -ArgumentList $args -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw "Legacy migration install failed: $($process.ExitCode)" }
           if ((Get-Service NccAgentCore).Status -ne 'Running') { throw 'Migrated agent service is not running' }
@@ -252,6 +259,14 @@ jobs:
           }) -ne 'NCC_AGENT_PAIRING_ID=ci-legacy-pairing-id') { throw 'Legacy pairing was not migrated' }
           if (-not (Test-Path (Join-Path $legacyConfig 'server.env'))) { throw 'Sibling NCC Server config was removed' }
           if (Test-Path (Join-Path $legacyConfig 'agent.env')) { throw 'Old agent config remains after migration' }
+          if (Get-Service NccAgent -ErrorAction SilentlyContinue) { throw 'Old agent service remains after migration' }
+          if (Get-ScheduledTask -TaskName NccAgent -ErrorAction SilentlyContinue) { throw 'Old agent task remains after migration' }
+          if (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run' -Name NccAgent -ErrorAction SilentlyContinue) {
+            throw 'Old agent autostart remains after migration'
+          }
+          if (Get-NetFirewallRule -DisplayName NccAgent -ErrorAction SilentlyContinue) {
+            throw 'Old agent firewall rule remains after migration'
+          }
           $process = Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw "Post-migration uninstall failed: $($process.ExitCode)" }
           if (-not (Test-Path (Join-Path $legacyConfig 'server.env'))) { throw 'Sibling NCC Server config was removed by uninstall' }
