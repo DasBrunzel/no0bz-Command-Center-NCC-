@@ -24,7 +24,9 @@ Infobereich-Menü und das Verhalten nach einem Hybrid-Herunterfahren belegen.
    Starttyp ist automatisch oder verzögert automatisch, und genau ein NCC-Icon
    steht im Infobereich.
 3. Rechtsklick auf das Icon: **Dashboard öffnen** öffnet die eingegebene URL
-   im Standardbrowser. Der Tooltip nennt Version und Dienststatus.
+   im Standardbrowser. Der Tooltip nennt die unter Apps & Features installierte
+   Setup-Version und den Dienststatus. Der Payload kann eine andere Version
+   tragen und erscheint weiterhin in der Agent-Telemetrie.
 4. **Beenden** zunächst mit **Nein** beantworten: Dienst und Icon bleiben.
    Danach **Ja** wählen: Dienst stoppt, Tray endet und das Icon verschwindet
    ohne manuelles Aktualisieren der Taskleiste. Es erscheint keine UAC-Anfrage.

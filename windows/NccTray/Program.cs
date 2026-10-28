@@ -189,7 +189,9 @@ internal static class Program
             catch (Win32Exception) { running = false; }
 
             var state = ReadAgentStatus();
-            var version = state?.Version ?? _settings.Version;
+            // The payload can intentionally lag behind the installer release.
+            // The tooltip reports the version installed in Apps & Features.
+            var version = _settings.Version;
             var checkedAt = state?.LastCheckUtc?.ToLocalTime().ToString("dd.MM HH:mm") ?? "nie";
             var update = state?.UpdateStatus ?? "unbekannt";
             var summary = $"NCC {version} | {(running ? "läuft" : "gestoppt")} | {update} | {checkedAt}";

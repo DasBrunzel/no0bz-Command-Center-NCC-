@@ -31,6 +31,9 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   wurde das gültig signierte Update auf demselben Testsystem aktiviert.
   Die Bedienung des Tray-Menüs und das Verhalten nach einem echten
   Windows-Schnellstart stehen noch zur Abnahme aus.
+- Der Windows-Tray-Tooltip nennt jetzt die installierte Setup-Version. Ein
+  absichtlich älterer, aber gültiger Start-Payload überschreibt diese Anzeige
+  nicht mehr; der Payload-Stand bleibt in der Agent-Telemetrie sichtbar.
 - Dashboard, Server, Core und neue Agent-Payload-Builds tragen konsistent die
   nächste Entwicklungsnummer. Die Komponentenübersicht zeigt weiterhin die
   tatsächlich installierten Versionen vorhandener Agenten an.
