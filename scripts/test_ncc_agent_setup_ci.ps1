@@ -67,7 +67,20 @@ fn main() { loop { thread::sleep(Duration::from_secs(1)); } }
         $manifestFile = Join-Path $work 'initial-release.manifest.json'
         [IO.File]::WriteAllText($manifestFile, ($manifest | ConvertTo-Json -Depth 8), [Text.UTF8Encoding]::new($false))
         $output = Join-Path $project ('dist\installer-ci-' + $Label)
-        & (Join-Path $project 'scripts\build_ncc_agent_setup.ps1') -Version $SetupVersion -InitialManifest $manifestFile -InitialPayload $archive -TrustedKeys $keysFile -OutputDirectory $output
+        $builder = @{
+            Version = $SetupVersion
+            InitialManifest = $manifestFile
+            InitialPayload = $archive
+            TrustedKeys = $keysFile
+            OutputDirectory = $output
+            UpdateFeedUrl = 'https://localhost:18443/update-feed.json'
+        }
+        if ($Label -eq 'next') {
+            $builder.PrivateKey = $privateKey
+            $builder.KeyId = $keyId
+            $builder.ArtifactUrl = "https://localhost:18443/ncc-agent-setup-$SetupVersion-windows-x86_64.exe"
+        }
+        & (Join-Path $project 'scripts\build_ncc_agent_setup.ps1') @builder
         if ($LASTEXITCODE -ne 0) { throw "CI setup build failed: $Label" }
     }
     Build-TestVariant 'first' '0.6.0-beta.8-ci.1' '0.6.0-beta.8-dev.1' $true
