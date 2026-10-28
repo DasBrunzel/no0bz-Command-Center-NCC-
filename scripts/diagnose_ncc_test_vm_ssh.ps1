@@ -28,7 +28,7 @@ if ((Get-Service sshd).Status -eq 'Stopped') {
             $debugProcess.WaitForExit(5000) | Out-Null
         }
         if (Test-Path -LiteralPath $debugLog) {
-            $debugOutput = @(Get-Content -LiteralPath $debugLog -Tail 35 -ErrorAction SilentlyContinue)
+            $debugOutput = @([IO.File]::ReadAllLines($debugLog) | Select-Object -Last 35)
             Remove-Item -LiteralPath $debugLog -Force -ErrorAction SilentlyContinue
         }
     }
