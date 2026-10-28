@@ -169,11 +169,11 @@ if ((Get-Item -LiteralPath $bundle).Length -ne [long]$artifact.size_bytes) { thr
 if ((Get-FileHash -LiteralPath $bundle -Algorithm SHA256).Hash.ToLowerInvariant() -ne $artifact.sha256.ToLowerInvariant()) { throw 'Initial payload checksum mismatch.' }
 
 $stateFile = Join-Path $stateDir 'state\core-state.json'
-$hasActive = $false
+$activeVersion = ''
 if (Test-Path -LiteralPath $stateFile) {
-    try { $hasActive = !!((Get-Content -LiteralPath $stateFile -Raw | ConvertFrom-Json).active_payload) } catch { $hasActive = $false }
+    try { $activeVersion = [string]((Get-Content -LiteralPath $stateFile -Raw | ConvertFrom-Json).active_payload) } catch { $activeVersion = '' }
 }
-if (-not $hasActive) {
+if ($activeVersion -ne [string]$artifact.payload_version) {
     & $core --state-dir $stateDir stage --source $bundle --version $artifact.payload_version --sha256 $artifact.sha256 --size $artifact.size_bytes --key-id $manifest.signature.key_id --signature $manifest.signature.value
     if ($LASTEXITCODE -ne 0) { throw 'Signed initial NCC payload was rejected.' }
     & $core --state-dir $stateDir activate --version $artifact.payload_version
@@ -229,7 +229,8 @@ do {
     try { $health = & $core --state-dir $stateDir status | ConvertFrom-Json } catch { $health = $null }
     $running = (Get-Service -Name $name).Status -eq 'Running'
     $record = Join-Path $stateDir 'state\payload-health.json'
-    if ($running -and $health -and $health.health -eq 'healthy' -and (Test-Path -LiteralPath $record)) {
+    if ($running -and $health -and $health.health -eq 'healthy' -and
+        $health.active_payload -eq $artifact.payload_version -and (Test-Path -LiteralPath $record)) {
         try {
             $ready = Get-Content -LiteralPath $record -Raw | ConvertFrom-Json
             $freshReady = $ready.status -eq 'ready' -and
@@ -239,7 +240,8 @@ do {
         if ($freshReady) { Start-Sleep -Seconds 5; $running = (Get-Service -Name $name).Status -eq 'Running'; if ($running) { break } }
     }
 } while ((Get-Date) -lt $deadline)
-if (-not $running -or -not $health -or $health.health -ne 'healthy' -or -not $freshReady) {
+if (-not $running -or -not $health -or $health.health -ne 'healthy' -or
+    $health.active_payload -ne $artifact.payload_version -or -not $freshReady) {
     Stop-Service -Name $name -Force -ErrorAction SilentlyContinue
     foreach ($oldName in @('NccCore', 'NccAgent')) {
         $old = Get-Service -Name $oldName -ErrorAction SilentlyContinue

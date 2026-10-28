@@ -108,7 +108,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: ncc-agent-ci-setup
-          path: dist/installer-ci/ncc-agent-setup-0.6.0-beta.8-dev.1-windows-x86_64.exe
+          path: |
+            dist/installer-ci-first/ncc-agent-setup-0.6.0-beta.8-dev.1-windows-x86_64.exe
+            dist/installer-ci-next/ncc-agent-setup-0.6.0-beta.8-dev.2-windows-x86_64.exe
+            dist/installer-ci-bad/ncc-agent-setup-0.6.0-beta.8-dev.3-windows-x86_64.exe
           retention-days: 2
   windows-agent-installer-smoke:
     needs: windows-agent-installer-build
@@ -117,12 +120,14 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: ncc-agent-ci-setup
-          path: dist/installer-ci
+          path: dist
       - name: Fresh install, reinstall, and uninstall
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
-          $setup = (Resolve-Path 'dist\installer-ci\ncc-agent-setup-0.6.0-beta.8-dev.1-windows-x86_64.exe').Path
+          $setup = (Resolve-Path 'dist\installer-ci-first\ncc-agent-setup-0.6.0-beta.8-dev.1-windows-x86_64.exe').Path
+          $nextSetup = (Resolve-Path 'dist\installer-ci-next\ncc-agent-setup-0.6.0-beta.8-dev.2-windows-x86_64.exe').Path
+          $badSetup = (Resolve-Path 'dist\installer-ci-bad\ncc-agent-setup-0.6.0-beta.8-dev.3-windows-x86_64.exe').Path
           $log = Join-Path $env:TEMP 'ncc-agent-setup-ci.log'
           $args = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SERVERURL=http://127.0.0.1:8350', "/LOG=$log")
           $process = Start-Process -FilePath $setup -ArgumentList $args -Wait -PassThru
@@ -156,6 +161,29 @@ jobs:
             throw 'Agent pairing identity changed during reinstall'
           }
           if ((Get-Content $data -Raw) -ne 'keep-me') { throw 'Agent data changed during reinstall' }
+          $process = Start-Process -FilePath $nextSetup -ArgumentList $args -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Version B upgrade failed: $($process.ExitCode)" }
+          $stateFile = Join-Path $root 'core-state\state\core-state.json'
+          $state = Get-Content $stateFile -Raw | ConvertFrom-Json
+          if ($state.active_payload -ne '0.6.0-beta.8-ci.2' -or $state.health -ne 'healthy') {
+            throw 'Version B payload did not become healthy'
+          }
+          $appDir = Join-Path $env:ProgramFiles 'no0bz\NCC Agent'
+          if ((Get-Content (Join-Path $appDir 'installer-version.txt') -Raw).Trim() -ne '0.6.0-beta.8-dev.2') {
+            throw 'Version B installer was not activated'
+          }
+          if ((Get-Content $data -Raw) -ne 'keep-me') { throw 'Agent data changed during version B upgrade' }
+          $process = Start-Process -FilePath $badSetup -ArgumentList $args -Wait -PassThru
+          Start-Sleep -Seconds 10
+          $state = Get-Content $stateFile -Raw | ConvertFrom-Json
+          if ((Get-Service NccAgentCore).Status -ne 'Running' -or
+            $state.active_payload -ne '0.6.0-beta.8-ci.2' -or $state.health -ne 'healthy') {
+            throw 'Failed version C update did not restore the healthy version B service'
+          }
+          if ((Get-Content (Join-Path $appDir 'installer-version.txt') -Raw).Trim() -ne '0.6.0-beta.8-dev.2') {
+            throw 'Failed version C update did not restore version B files'
+          }
+          if ((Get-Content $data -Raw) -ne 'keep-me') { throw 'Agent data changed during failed version C update' }
           $registryPaths = @(
             'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{F038C97B-C4C6-44D7-83E4-49198FE47CB8}_is1',
             'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\{F038C97B-C4C6-44D7-83E4-49198FE47CB8}_is1'
