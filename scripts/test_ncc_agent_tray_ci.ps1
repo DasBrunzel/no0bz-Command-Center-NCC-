@@ -40,8 +40,14 @@ try {
         throw "Tray single-instance guard failed: firstExited=$($tray.HasExited), secondExited=$($second.HasExited), count=$trayCount."
     }
 
-    $upgrade = Start-Process -FilePath $NextSetup -ArgumentList $args -Wait -PassThru
-    if ($upgrade.ExitCode -ne 0) { throw "Tray smoke: version B upgrade failed: $($upgrade.ExitCode)" }
+    $upgradeLog = Join-Path $env:TEMP 'ncc-agent-tray-upgrade.log'
+    $upgrade = Start-Process -FilePath $NextSetup -ArgumentList ($args + "/LOG=$upgradeLog") -Wait -PassThru
+    if ($upgrade.ExitCode -ne 0) {
+        if (Test-Path -LiteralPath $upgradeLog) {
+            Get-Content -LiteralPath $upgradeLog -Tail 35 | ForEach-Object { Write-Host $_ }
+        }
+        throw "Tray smoke: version B upgrade failed: $($upgrade.ExitCode)"
+    }
     Start-Sleep -Seconds 10
     $state = Get-Content (Join-Path $root 'core-state\state\core-state.json') -Raw | ConvertFrom-Json
     if ($state.active_payload -ne '0.6.0-beta.8-ci.2' -or $state.health -ne 'healthy') {
