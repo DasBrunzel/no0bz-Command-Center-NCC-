@@ -109,10 +109,14 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
-          $setup = Resolve-Path 'dist\installer-ci\ncc-agent-setup-0.6.0-beta.8-dev.1-windows-x86_64.exe'
-          $args = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SERVERURL=http://127.0.0.1:8350')
-          & $setup @args
-          if ($LASTEXITCODE -ne 0) { throw "Fresh install failed: $LASTEXITCODE" }
+          $setup = (Resolve-Path 'dist\installer-ci\ncc-agent-setup-0.6.0-beta.8-dev.1-windows-x86_64.exe').Path
+          $log = Join-Path $env:TEMP 'ncc-agent-setup-ci.log'
+          $args = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SERVERURL=http://127.0.0.1:8350', "/LOG=$log")
+          $process = Start-Process -FilePath $setup -ArgumentList $args -Wait -PassThru
+          if ($process.ExitCode -ne 0) {
+            if (Test-Path $log) { Get-Content $log -Tail 100 }
+            throw "Fresh install failed: $($process.ExitCode)"
+          }
           if ((Get-Service NccAgentCore).Status -ne 'Running') { throw 'Agent service did not start' }
           $root = Join-Path $env:ProgramData 'no0bz\NCC Agent'
           $config = Join-Path $root 'config\core.env'
@@ -121,8 +125,11 @@ jobs:
           if (-not $identity) { throw 'Agent pairing identity was not created' }
           $data = Join-Path $root 'data\ci-persist.txt'
           Set-Content -LiteralPath $data -Value 'keep-me' -NoNewline
-          & $setup @args
-          if ($LASTEXITCODE -ne 0) { throw "Reinstall failed: $LASTEXITCODE" }
+          $process = Start-Process -FilePath $setup -ArgumentList $args -Wait -PassThru
+          if ($process.ExitCode -ne 0) {
+            if (Test-Path $log) { Get-Content $log -Tail 100 }
+            throw "Reinstall failed: $($process.ExitCode)"
+          }
           if ((Get-Service NccAgentCore).Status -ne 'Running') { throw 'Agent service did not survive reinstall' }
           if ((Get-Content $config | Where-Object { $_ -like 'NCC_AGENT_PAIRING_ID=*' }) -ne $identity) {
             throw 'Agent pairing identity changed during reinstall'
@@ -133,8 +140,8 @@ jobs:
           if (-not $uninstall -or $uninstall.UninstallString -notmatch '^"([^"]+)"') {
             throw 'Apps and Features uninstaller not registered'
           }
-          & $Matches[1] /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
-          if ($LASTEXITCODE -ne 0) { throw "Uninstall failed: $LASTEXITCODE" }
+          $process = Start-Process -FilePath $Matches[1] -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Uninstall failed: $($process.ExitCode)" }
           Start-Sleep -Seconds 3
           if (Get-Service NccAgentCore -ErrorAction SilentlyContinue) { throw 'Agent service remains after uninstall' }
           if (Test-Path $root) { throw 'Agent data remains after uninstall' }
