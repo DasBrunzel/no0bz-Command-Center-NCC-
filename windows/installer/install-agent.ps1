@@ -198,12 +198,12 @@ $registered = Get-Service -Name $name -ErrorAction SilentlyContinue
 if (-not $registered) {
     New-Service -Name $name -BinaryPathName ('"' + $serviceExe + '"') -DisplayName 'no0bz Command Center Agent' -Description 'Runs signed NCC Core telemetry payloads.' -StartupType Automatic | Out-Null
 } else {
-    & sc.exe config $name "binPath= `"$serviceExe`"" 'start= auto' | Out-Null
+    & sc.exe config $name 'binPath=' ('"' + $serviceExe + '"') 'start=' 'auto' | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Could not update NCC Agent service path.' }
 }
-& sc.exe config $name 'start= delayed-auto' | Out-Null
+& sc.exe config $name 'start=' 'delayed-auto' | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Could not enable automatic NCC Agent startup.' }
-& sc.exe failure $name 'reset= 86400' 'actions= restart/5000/restart/15000/restart/60000' | Out-Null
+& sc.exe failure $name 'reset=' '86400' 'actions=' 'restart/5000/restart/15000/restart/60000' | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Could not configure NCC Agent crash recovery.' }
 
 # The BUILTIN Users SID receives exactly query status, start and stop. It
