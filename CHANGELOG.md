@@ -13,9 +13,12 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   Pairing bei Erhalt der danebenliegenden NCC-Server-Konfiguration wurde geprüft.
   Ein weiterer isolierter Windows-CI-Test hat den Wechsel von Version A auf B
   mit erhaltenen Agent-Daten sowie den automatischen Rückfall von einem
-  absichtlich nicht gesund werdenden Payload auf B bestanden. Der durch den
-  Dienst selbst ausgelöste Download und die Tray-Bedienung stehen noch zur
-  Abnahme aus.
+  absichtlich nicht gesund werdenden Payload auf B bestanden. Ein separater
+  Windows-CI-Test hat auch den vom Dienst selbst ausgelösten HTTPS-Download
+  eines signierten B-Installers, dessen gesunde Aktivierung, den Erhalt von
+  Pairing und Daten und die anschließende restlose Deinstallation bestanden.
+  Die interaktive Tray-Bedienung und das Verhalten nach Schnellstart stehen
+  noch zur Abnahme aus.
 - Dashboard, Server, Core und neue Agent-Payload-Builds tragen konsistent die
   nächste Entwicklungsnummer. Die Komponentenübersicht zeigt weiterhin die
   tatsächlich installierten Versionen vorhandener Agenten an.
