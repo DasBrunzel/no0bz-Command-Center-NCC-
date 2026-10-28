@@ -22,7 +22,8 @@ Infobereich-Menü und das Verhalten nach einem Hybrid-Herunterfahren belegen.
    die Installation bestätigen. Server-URL eingeben.
 2. Nach Abschluss ohne erneute Benutzeraktion prüfen: `NccAgentCore` läuft,
    Starttyp ist automatisch oder verzögert automatisch, und genau ein NCC-Icon
-   steht im Infobereich.
+   steht im Infobereich. Das gilt auch bei einer stillen Neuinstallation aus
+   einer angemeldeten Benutzersitzung.
 3. Rechtsklick auf das Icon: **Dashboard öffnen** öffnet die eingegebene URL
    im Standardbrowser. Der Tooltip nennt die unter Apps & Features installierte
    Setup-Version und den Dienststatus. Der Payload kann eine andere Version

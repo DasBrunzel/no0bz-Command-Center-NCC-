@@ -22,9 +22,20 @@ try {
     $runEntry = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run' -Name NccTray).NccTray
     if ($runEntry -notlike "*$trayExe*") { throw 'Machine-wide tray autostart is missing.' }
 
+    Stop-Process -Id $tray.Id -Force
+    $tray.WaitForExit(10000) | Out-Null
     Stop-Service NccAgentCore
     (Get-Service NccAgentCore).WaitForStatus('Stopped', [TimeSpan]::FromSeconds(30))
     $tray = Start-Process -FilePath $trayExe -PassThru
+    $trayDeadline = (Get-Date).AddSeconds(20)
+    do {
+        Start-Sleep -Seconds 1
+        $existingTray = @(Find-TrayProcesses)
+    } while ($existingTray.Count -eq 0 -and (Get-Date) -lt $trayDeadline)
+    if ($existingTray.Count -ne 1) {
+        throw "Silent installation did not start exactly one tray: $($existingTray.Count)."
+    }
+    $tray = $existingTray[0]
     $deadline = (Get-Date).AddSeconds(30)
     do {
         Start-Sleep -Seconds 2

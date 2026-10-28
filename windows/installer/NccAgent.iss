@@ -46,7 +46,7 @@ Source: "{#Stage}\preinstall-agent.ps1"; Flags: dontcopy
 Root: HKLM; Subkey: "SOFTWARE\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "NccTray"; ValueData: """{app}\NccTray.exe"""; Flags: uninsdeletevalue
 
 [Run]
-Filename: "{app}\NccTray.exe"; Description: "NCC Agent im Infobereich starten"; Flags: nowait postinstall skipifsilent runasoriginaluser
+Filename: "{app}\NccTray.exe"; Flags: nowait runasoriginaluser; Check: CanLaunchTray
 
 [UninstallRun]
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\uninstall-agent.ps1"""; Flags: runhidden waituntilterminated; RunOnceId: NccAgentCleanup
@@ -61,6 +61,13 @@ Type: files; Name: "{app}\tray-upgrade.marker"
 [Code]
 var
   ServerPage: TInputQueryWizardPage;
+
+function CanLaunchTray(): Boolean;
+begin
+  { A service-driven update runs Setup as SYSTEM. The existing tray's
+    same-session helper restarts it after the upgrade marker disappears. }
+  Result := CompareText(GetUserNameString(), 'SYSTEM') <> 0;
+end;
 
 function ServerUrl(): String;
 begin

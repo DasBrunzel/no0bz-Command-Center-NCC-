@@ -34,6 +34,9 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 - Der Windows-Tray-Tooltip nennt jetzt die installierte Setup-Version. Ein
   absichtlich älterer, aber gültiger Start-Payload überschreibt diese Anzeige
   nicht mehr; der Payload-Stand bleibt in der Agent-Telemetrie sichtbar.
+- Das Setup startet den Tray nun auch nach einer stillen Neuinstallation in
+  der aufrufenden Benutzersitzung. Bei einem vom Dienst ausgeführten Update
+  startet weiterhin der vorhandene Tray-Helfer den Prozess in derselben Sitzung.
 - Dashboard, Server, Core und neue Agent-Payload-Builds tragen konsistent die
   nächste Entwicklungsnummer. Die Komponentenübersicht zeigt weiterhin die
   tatsächlich installierten Versionen vorhandener Agenten an.
