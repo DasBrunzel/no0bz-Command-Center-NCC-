@@ -177,4 +177,31 @@ jobs:
           Start-Sleep -Seconds 3
           if (Get-Service NccAgentCore -ErrorAction SilentlyContinue) { throw 'Agent service remains after uninstall' }
           if (Test-Path $root) { throw 'Agent data remains after uninstall' }
+          $legacy = Join-Path $env:ProgramData 'no0bz\NCC'
+          $legacyConfig = Join-Path $legacy 'config'
+          $legacyData = Join-Path $legacy 'agent-data'
+          New-Item -ItemType Directory -Force -Path $legacyConfig, $legacyData | Out-Null
+          $legacyIdentity = 'ci-legacy-machine-id'
+          Set-Content -LiteralPath (Join-Path $legacyData 'machine-id') -Value $legacyIdentity -NoNewline
+          Set-Content -LiteralPath (Join-Path $legacyConfig 'server.env') -Value 'NCC_SERVER_TEST_SENTINEL=keep-me' -NoNewline
+          @(
+            'NCC_AGENT_SERVER_URL=http://127.0.0.1:8350',
+            "NCC_AGENT_DATA_DIR=$legacyData",
+            'NCC_AGENT_PAIRING_ID=ci-legacy-pairing-id',
+            'NCC_AGENT_PAIRING_SECRET=ci-legacy-pairing-secret'
+          ) | Set-Content -LiteralPath (Join-Path $legacyConfig 'agent.env')
+          $process = Start-Process -FilePath $setup -ArgumentList $args -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Legacy migration install failed: $($process.ExitCode)" }
+          if ((Get-Service NccAgentCore).Status -ne 'Running') { throw 'Migrated agent service is not running' }
+          if ((Get-Content (Join-Path $root 'data\machine-id') -Raw) -ne $legacyIdentity) {
+            throw 'Legacy agent identity was not migrated'
+          }
+          if ((Get-Content (Join-Path $root 'config\core.env') | Where-Object {
+            $_ -like 'NCC_AGENT_PAIRING_ID=*'
+          }) -ne 'NCC_AGENT_PAIRING_ID=ci-legacy-pairing-id') { throw 'Legacy pairing was not migrated' }
+          if (-not (Test-Path (Join-Path $legacyConfig 'server.env'))) { throw 'Sibling NCC Server config was removed' }
+          if (Test-Path (Join-Path $legacyConfig 'agent.env')) { throw 'Old agent config remains after migration' }
+          $process = Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Post-migration uninstall failed: $($process.ExitCode)" }
+          if (-not (Test-Path (Join-Path $legacyConfig 'server.env'))) { throw 'Sibling NCC Server config was removed by uninstall' }
 
