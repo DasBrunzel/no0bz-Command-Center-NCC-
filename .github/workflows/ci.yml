@@ -118,6 +118,7 @@ jobs:
     needs: windows-agent-installer-build
     runs-on: windows-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           name: ncc-agent-ci-setup
