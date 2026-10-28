@@ -156,11 +156,20 @@ jobs:
             throw 'Agent pairing identity changed during reinstall'
           }
           if ((Get-Content $data -Raw) -ne 'keep-me') { throw 'Agent data changed during reinstall' }
-          $uninstall = Get-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*' |
-            Where-Object DisplayName -eq 'no0bz Command Center Agent' | Select-Object -First 1
+          $registryPaths = @(
+            'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{F038C97B-C4C6-44D7-83E4-49198FE47CB8}_is1',
+            'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\{F038C97B-C4C6-44D7-83E4-49198FE47CB8}_is1'
+          )
+          $uninstall = $registryPaths | ForEach-Object {
+            Get-ItemProperty -LiteralPath $_ -ErrorAction SilentlyContinue
+          } | Select-Object -First 1
           if (-not $uninstall) {
+            Get-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*' |
+              Where-Object { $_.DisplayName -like '*no0bz*' } |
+              Select-Object DisplayName, PSPath, UninstallString | Format-List
             throw 'Apps and Features uninstaller not registered'
           }
+          if (-not $uninstall.UninstallString) { throw 'Apps and Features uninstaller command is missing' }
           $uninstaller = Join-Path $env:ProgramFiles 'no0bz\NCC Agent\unins000.exe'
           if (-not (Test-Path $uninstaller)) { throw 'Uninstaller executable is missing' }
           $process = Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -Wait -PassThru
