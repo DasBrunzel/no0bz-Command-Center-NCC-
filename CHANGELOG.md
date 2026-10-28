@@ -37,6 +37,8 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 - Das Setup startet den Tray nun auch nach einer stillen Neuinstallation in
   der aufrufenden Benutzersitzung. Bei einem vom Dienst ausgeführten Update
   startet weiterhin der vorhandene Tray-Helfer den Prozess in derselben Sitzung.
+  Die Windows-CI wartet dabei nur auf das Ende von Setup und nicht auf dessen
+  dauerhaft laufenden Tray-Kindprozess.
 - Dashboard, Server, Core und neue Agent-Payload-Builds tragen konsistent die
   nächste Entwicklungsnummer. Die Komponentenübersicht zeigt weiterhin die
   tatsächlich installierten Versionen vorhandener Agenten an.

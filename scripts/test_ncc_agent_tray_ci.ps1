@@ -5,6 +5,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'ncc_installer_ci_helpers.ps1')
 $root = Join-Path $env:ProgramData 'no0bz\NCC Agent'
 $appDir = Join-Path $env:ProgramFiles 'no0bz\NCC Agent'
 $trayExe = Join-Path $appDir 'NccTray.exe'
@@ -15,7 +16,7 @@ function Find-TrayProcesses {
 try {
     $args = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SERVERURL=http://127.0.0.1:8350',
         '/CLOSEAPPLICATIONS', '/FORCECLOSEAPPLICATIONS', '/RESTARTAPPLICATIONS', '/LOGCLOSEAPPLICATIONS')
-    $install = Start-Process -FilePath $FirstSetup -ArgumentList $args -Wait -PassThru
+    $install = Start-NccInstallerAndWait -Path $FirstSetup -Arguments $args
     if ($install.ExitCode -ne 0 -or (Get-Service NccAgentCore).Status -ne 'Running') {
         throw 'Tray smoke: version A did not install and start.'
     }
@@ -52,7 +53,7 @@ try {
     }
 
     $upgradeLog = Join-Path $env:TEMP 'ncc-agent-tray-upgrade.log'
-    $upgrade = Start-Process -FilePath $NextSetup -ArgumentList ($args + "/LOG=$upgradeLog") -Wait -PassThru
+    $upgrade = Start-NccInstallerAndWait -Path $NextSetup -Arguments ($args + "/LOG=$upgradeLog")
     if ($upgrade.ExitCode -ne 0) {
         if (Test-Path -LiteralPath $upgradeLog) {
             Get-Content -LiteralPath $upgradeLog -Tail 100 | ForEach-Object { Write-Host $_ }

@@ -6,6 +6,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'ncc_installer_ci_helpers.ps1')
 $temporary = Join-Path $env:TEMP ('ncc-auto-update-ci-' + [Guid]::NewGuid().ToString('N'))
 $openssl = @('C:\Program Files\Git\usr\bin\openssl.exe', 'C:\Program Files\Git\mingw64\bin\openssl.exe') |
     Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
@@ -65,7 +66,7 @@ server.serve_forever()
     $root = Join-Path $env:ProgramData 'no0bz\NCC Agent'
     $appDir = Join-Path $env:ProgramFiles 'no0bz\NCC Agent'
     $setupArgs = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SERVERURL=http://127.0.0.1:8350')
-    $install = Start-Process -FilePath $FirstSetup -ArgumentList $setupArgs -Wait -PassThru
+    $install = Start-NccInstallerAndWait -Path $FirstSetup -Arguments $setupArgs
     if ($install.ExitCode -ne 0) { throw "Version A installation failed: $($install.ExitCode)" }
     $config = Join-Path $root 'config\core.env'
     $pairing = Get-Content $config | Where-Object { $_ -like 'NCC_AGENT_PAIRING_ID=*' }
