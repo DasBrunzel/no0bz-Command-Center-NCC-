@@ -47,10 +47,8 @@ server.serve_forever()
     $lastFeedError = ''
     for ($attempt = 0; $attempt -lt 20; $attempt++) {
         Start-Sleep -Seconds 1
-        try {
-            $response = Invoke-WebRequest -Uri $feedUrl -UseBasicParsing -TimeoutSec 2
-            if ($response.StatusCode -eq 200) { $ready = $true; break }
-        } catch { $lastFeedError = $_.Exception.ToString() }
+        $lastFeedError = (& curl.exe --silent --fail --max-time 3 --noproxy '*' --cacert $crt $feedUrl | Out-String).Trim()
+        if ($LASTEXITCODE -eq 0) { $ready = $true; break }
         if ($server.HasExited) { break }
     }
     if (-not $ready) {

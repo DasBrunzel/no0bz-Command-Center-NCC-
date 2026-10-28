@@ -37,7 +37,8 @@ internal static class InstallerUpdater
         }
         try
         {
-            using var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true })
+            using var client = new HttpClient(new HttpClientHandler
+                { AllowAutoRedirect = true, UseProxy = !feedUri.IsLoopback })
             { Timeout = TimeSpan.FromMinutes(10) };
             using var feedResponse = client.GetAsync(feedUri, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
                 .GetAwaiter().GetResult();
