@@ -17,7 +17,9 @@ New-Item -ItemType Directory -Force -Path $temporary | Out-Null
 try {
     $crt = Join-Path $temporary 'server.crt'
     $key = Join-Path $temporary 'server.key'
-    & $openssl req -x509 -newkey rsa:2048 -keyout $key -out $crt -days 1 -nodes -subj '/CN=localhost' -addext 'subjectAltName=DNS:localhost' 2>$null
+    & $openssl genrsa -out $key 2048
+    if ($LASTEXITCODE -ne 0) { throw 'Could not create CI HTTPS private key.' }
+    & $openssl req -new -x509 -key $key -out $crt -days 1 -subj '/CN=localhost' -addext 'subjectAltName=DNS:localhost'
     if ($LASTEXITCODE -ne 0) { throw 'Could not create CI HTTPS certificate.' }
     $certificate = Import-Certificate -FilePath $crt -CertStoreLocation 'Cert:\LocalMachine\Root'
     Copy-Item -LiteralPath $NextSetup -Destination (Join-Path $temporary (Split-Path -Leaf $NextSetup))
