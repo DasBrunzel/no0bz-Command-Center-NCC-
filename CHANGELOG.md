@@ -25,6 +25,10 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   Apps-&-Features-Eintrag, Autostart, Dienst, Programmdateien und Agent-Daten
   bei der Deinstallation verschwinden. Eine beschädigte alte Core-Zustandsdatei
   wird vor dem frischen Start gesichert und blockiert die Migration nicht.
+  Zusätzliche CI-Fälle bestätigten die Entfernung alter `NccAgent`-Dienst-,
+  Aufgaben-, Autostart- und Firewall-Einträge sowie die Ablehnung eines
+  unsignierten und eines manipuliert signierten Installer-Updates. Anschließend
+  wurde das gültig signierte Update auf demselben Testsystem aktiviert.
   Die Bedienung des Tray-Menüs und das Verhalten nach einem echten
   Windows-Schnellstart stehen noch zur Abnahme aus.
 - Dashboard, Server, Core und neue Agent-Payload-Builds tragen konsistent die
