@@ -69,6 +69,13 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   bereits ein Agent-Zugang vorliegt, ohne das Token zu lesen. Solange das
   Gerät nicht gekoppelt ist, bietet der Tray „Gerät koppeln…“ an und nennt den
   Zustand im Tooltip.
+- Eine Abnahme auf einer frischen Windows-11-Pro-VM hat Erstinstallation,
+  Browser-Pairing über den Tray, Einzelinstanz, Beenden, Neustart, ein
+  manuelles Upgrade mit erhaltener Kopplung und die restlose Deinstallation
+  bestanden. Hybrid-Herunterfahren und das automatische Update über eine
+  signierte HTTPS-Updatequelle stehen noch aus; das Protokoll steht in
+  `docs/windows-agent-installer-acceptance.md`. Die Windows-CI war auf
+  demselben Stand vollständig grün.
 - Die Backend-Typprüfung verwendet für gespeicherte Warnungsstufen eine
   explizite Typangabe statt einer zwischen Python-Versionen instabilen
   `type: ignore`-Ausnahme.

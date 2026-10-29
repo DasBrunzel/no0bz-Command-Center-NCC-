@@ -64,3 +64,25 @@ Jeden fehlgeschlagenen Punkt mit Windows-Version, Agent-Version, Zeitpunkt,
 Screenshot und dem Setup-Log aus `%TEMP%` dokumentieren. Den Test-PC bei einem
 Fehler nicht durch wiederholte Installationen bereinigen; zuerst den Zustand
 sichern.
+
+## Abnahmeprotokoll
+
+### 29.10.2026 – Windows-11-Pro-VM `DESKTOP-LACED10`
+
+Unsignierte Entwicklungs-Setups `0.6.0-beta.8-dev.1` und `-dev.2` aus Commit
+`f3ccf34`, Start-Payload `0.6.0-beta.7`, NCC-Server auf Commit `323ffb8`.
+Die VM hatte kein Visual C++ Redistributable installiert.
+
+| Punkt | Ergebnis |
+| --- | --- |
+| Interaktive Erstinstallation | Bestanden nach Commit `1ab6da6`. Zuvor startete `ncc-core.exe` mangels `VCRUNTIME140.dll` nicht. |
+| Pairing-Link und Kopplung | Bestanden. Der Link wurde über **Gerät koppeln…** im Tray geöffnet; danach Enrollment und laufende Telemetrie. |
+| Abgelaufene Pairing-Anfrage | Bestanden mit dem aktualisierten Server; die Anfrage wurde nach 15 Minuten wieder geöffnet. Der alte Payload endete bis dahin bei jeder 410-Antwort. |
+| Dienst und genau ein Tray nach Installation | Bestanden. |
+| Einzelinstanz | Bestanden; ein zweiter Tray desselben Benutzers aus einer anderen Sitzung endete sofort. |
+| **Beenden** mit **Nein** und **Ja** | Bestanden; der Dienst blieb über 20 Sekunden gestoppt, ohne Wiederherstellung durch die Dienstverwaltung. |
+| Normaler Neustart | Bestanden; Dienst (verzögert automatisch) und genau ein Tray kamen ohne Eingriff zurück, die Kopplung blieb erhalten. |
+| Manuelles stilles Upgrade `dev.1` → `dev.2` | Bestanden; Pairing-ID, Maschinen-ID und Agent-Zugang blieben gleich. Da Setup über SSH lief, startete der neue Tray in der SSH-Sitzung statt im Desktop. |
+| Deinstallation | Bestanden; Dienst, Tray, Autostart, Apps-&-Features-Eintrag, beide Agent-Verzeichnisse, Setup-Übergabeverzeichnis, Aufgabe und Firewall-Regel waren entfernt. |
+| Hybrid-Herunterfahren | Nicht geprüft. |
+| Automatisches Update über die signierte HTTPS-Updatequelle | Nicht geprüft; dafür fehlte ein signierter Installer. Belegt ist nur der CI-Test `windows-agent-auto-update`. |
