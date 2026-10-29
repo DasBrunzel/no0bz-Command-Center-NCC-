@@ -85,7 +85,9 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 - Ein vom alten Agenten übernommener Zugang in `core.env` gilt jetzt ebenfalls
   als gekoppelt. Bisher hätten Tray und Setup ein bereits gekoppeltes,
   migriertes Gerät als „nicht gekoppelt“ angezeigt und einen Pairing-Link
-  angeboten, dessen Freigabe den bestehenden Zugang ersetzt hätte.
+  angeboten, dessen Freigabe den bestehenden Zugang ersetzt hätte. Der
+  Installer-Update-Feed bietet dafür das signierte Setup `0.6.0-beta.8-dev.4`
+  aus dem Pre-Release `v0.6.0-beta.8-dev.2` an.
 - Die Backend-Typprüfung verwendet für gespeicherte Warnungsstufen eine
   explizite Typangabe statt einer zwischen Python-Versionen instabilen
   `type: ignore`-Ausnahme.
