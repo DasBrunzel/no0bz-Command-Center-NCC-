@@ -64,6 +64,7 @@ try {
     Start-Sleep -Seconds 10
     $state = Get-Content (Join-Path $root 'core-state\state\core-state.json') -Raw | ConvertFrom-Json
     if ($state.active_payload -ne '0.6.0-beta.8-ci.2' -or $state.health -ne 'healthy') {
+        Write-NccAgentDiagnostics -SetupLog $upgradeLog
         throw 'Tray smoke: version B payload is not healthy.'
     }
     if ((Find-TrayProcesses).Count -ne 1) { throw 'Tray did not return after silent upgrade.' }

@@ -170,6 +170,7 @@ jobs:
           $stateFile = Join-Path $root 'core-state\state\core-state.json'
           $state = Get-Content $stateFile -Raw | ConvertFrom-Json
           if ($state.active_payload -ne '0.6.0-beta.8-ci.2' -or $state.health -ne 'healthy') {
+            Write-NccAgentDiagnostics -SetupLog $log
             throw 'Version B payload did not become healthy'
           }
           $appDir = Join-Path $env:ProgramFiles 'no0bz\NCC Agent'
