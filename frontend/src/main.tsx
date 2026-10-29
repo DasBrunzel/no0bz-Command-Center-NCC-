@@ -48,6 +48,7 @@ import "./index.css";
 import "./enrollment.css";
 import "./device-lifecycle.css";
 import "./concept/styles.css";
+import "./design.css";
 import { Icon as ConceptIcon, Meter as ConceptMeter, SectionHead as ConceptSectionHead, Sparkline as ConceptSparkline, Status as ConceptStatus } from "./concept/components";
 import dashboardPackage from "../package.json";
 
@@ -83,6 +84,7 @@ type Node = {
   physical_device_name: string | null;
   update_channel: "beta" | "stable";
   pending_release_id: string | null;
+  update_check_requested_at?: string | null;
   latest: Telemetry | null;
 };
 type AgentRelease = {
@@ -118,24 +120,7 @@ type NetworkUsageSummary = {
   available: boolean;
 };
 type NetworkHistorySample = { recorded_at: string; network: Metrics | null };
-type Theme =
-  | "mint"
-  | "nightmare"
-  | "cachyos"
-  | "cyber"
-  | "oled"
-  | "light"
-  | "matrix"
-  | "dracula"
-  | "nordic"
-  | "amber"
-  | "glass"
-  | "terminal"
-  | "aurora"
-  | "orbit"
-  | "blueprint"
-  | "studio";
-type LayoutTheme = "orbit" | "blueprint" | "studio";
+type Theme = "system" | "light" | "dark";
 type Invitation = {
   token_id: string;
   name: string;
@@ -208,26 +193,11 @@ type ChatMessage = { message_id: string; sender_node_id: string | null; sender_u
 type ChatParticipant = { user_id: string | null; display_name: string; role: AccessRole };
 type Page = "fleet" | "explorer" | "statistics" | "alerts" | "chat" | "onboarding" | "settings";
 
-const THEMES: { id: Theme; name: string; color: string }[] = [
-  { id: "mint", name: "Command Mint", color: "#8ce5c4" },
-  { id: "nightmare", name: "Nightmare Red", color: "#ff334f" },
-  { id: "cachyos", name: "CachyOS Cyan", color: "#18d7ec" },
-  { id: "cyber", name: "Cyber Neon", color: "#ff35d3" },
-  { id: "oled", name: "Dark Matter OLED", color: "#e8edf5" },
-  { id: "light", name: "Clean Light", color: "#d52f4b" },
-  { id: "matrix", name: "Matrix Hacker", color: "#36f276" },
-  { id: "dracula", name: "Dracula", color: "#ff6680" },
-  { id: "nordic", name: "Nordic Frost", color: "#88c0d0" },
-  { id: "amber", name: "Retro Amber", color: "#ffb52e" },
-  { id: "glass", name: "Glass Command", color: "#79e6ff" },
-  { id: "terminal", name: "Terminal Grid", color: "#9cff57" },
-  { id: "aurora", name: "Aurora Horizon", color: "#b79cff" },
-  { id: "orbit", name: "Orbit Console", color: "#53d7ff" },
-  { id: "blueprint", name: "Blueprint Dock", color: "#68a7ff" },
-  { id: "studio", name: "Studio Deck", color: "#ff8eb5" },
+const THEMES: { id: Theme; name: string }[] = [
+  { id: "system", name: "Wie das System" },
+  { id: "light", name: "Hell" },
+  { id: "dark", name: "Dunkel" },
 ];
-const isLayoutTheme = (theme: Theme): theme is LayoutTheme =>
-  theme === "orbit" || theme === "blueprint" || theme === "studio";
 const num = (value: unknown) =>
   typeof value === "number" && Number.isFinite(value) ? value : 0;
 const metric = (value: unknown, digits = 1) =>
@@ -312,7 +282,7 @@ function Brand() {
         <strong>
           no<span>0</span>bz
         </strong>
-        <small>COMMAND CENTER</small>
+        <small>Command Center</small>
       </div>
     </div>
   );
@@ -321,7 +291,7 @@ function StatusDot({ online }: { online: boolean }) {
   return (
     <span className={`status-dot ${online ? "is-online" : "is-offline"}`}>
       <i />
-      {online ? "ONLINE" : "OFFLINE"}
+      {online ? "Online" : "Offline"}
     </span>
   );
 }
@@ -387,7 +357,7 @@ function Gauge({
         </svg>
         <div>
           <strong>{safe.toFixed(1)}%</strong>
-          <small>AUSLASTUNG</small>
+          <small>Auslastung</small>
         </div>
       </div>
       {footer && <footer className="gauge-footer">{footer}</footer>}
@@ -483,7 +453,7 @@ function AlertPanel({
     <section className="surface fleet-alerts">
       <header className="section-head">
         <div>
-          <span className="eyebrow">AUFMERKSAMKEIT ERFORDERLICH</span>
+          <span className="eyebrow">Aufmerksamkeit erforderlich</span>
           <h2>
             {alerts.length} aktuelle{" "}
             {alerts.length === 1 ? "Warnung" : "Warnungen"}
@@ -641,7 +611,7 @@ function Fleet({
     <div className="page-intro"><div><div className="eyebrow">FLEET / EXPLORER</div><h1>Deine Fleet.</h1><p>Physische Geräte, Profile und Zustände an einem Ort.</p></div><button type="button" className="primary-button" onClick={onAddDevice}><ConceptIcon name="plus" size={17}/> Gerät hinzufügen</button></div>
     <div className="summary-line"><span><b>{new Set(nodes.map((node) => node.physical_device_id || node.node_id)).size}</b> physische Geräte</span><span><b>{nodes.length}</b> OS-Profile</span><span><b>{nodes.filter((node) => node.online).length}</b> verbunden</span><span><b>{nodes.filter((node) => node.gaming_mode_until && new Date(node.gaming_mode_until).getTime() > Date.now()).length}</b> Gaming Mode</span></div>
     <div className="filter-bar"><label className="search-box"><ConceptIcon name="search" size={17}/><input value={query} onChange={(event) => onQuery(event.target.value)} placeholder="Gerät oder Plattform suchen…"/></label><select value={groupFilter} onChange={(event) => setGroupFilter(event.target.value)}><option>Alle Gruppen</option>{groups.map((group) => <option key={group.group_id}>{group.name}</option>)}</select><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>{["Alle Status", "Online", "Offline", "Gaming Mode"].map((status) => <option key={status}>{status}</option>)}</select><select value={sortFilter} onChange={(event) => setSortFilter(event.target.value)}><option value="name">Name A–Z</option><option value="cpu">CPU-Last</option><option value="group">Gruppe</option></select></div>
-    <div className="fleet-list"><div className="table-heading"><span>GERÄT / PLATTFORM</span><span>STATUS</span><span>CPU / RAM</span><span>LETZTER KONTAKT</span><span/></div>{visibleNodes.length ? visibleNodes.map((node) => {
+    <div className="fleet-list"><div className="table-heading"><span>Gerät / Plattform</span><span>Status</span><span>CPU / RAM</span><span>Letzter Kontakt</span><span/></div>{visibleNodes.length ? visibleNodes.map((node) => {
       const cpu = num(node.latest?.metrics.cpu?.percent), ram = num(node.latest?.metrics.memory?.percent);
       const profiles = nodes.filter((profile) => (profile.physical_device_id || profile.node_id) === (node.physical_device_id || node.node_id));
       return <button type="button" className={`fleet-item ${selected?.node_id === node.node_id ? "selected" : ""}`} key={node.node_id} onClick={() => onSelect(node.node_id)}><div className="fleet-identity"><div className="fleet-icon">{node.platform.toLowerCase().includes("linux") ? "▤" : "▣"}</div><div><b>{node.physical_device_name || node.display_name}</b><small>{node.platform} · {groups.find((group) => group.group_id === node.fleet_group_id)?.name || "Fleet"}</small>{profiles.length > 1 && <span className="profile-count">{profiles.length} OS-PROFILE <span>Dualboot</span></span>}</div></div><ConceptStatus node={{online: node.online, gaming_mode_until: node.gaming_mode_until && new Date(node.gaming_mode_until).getTime() > Date.now() ? node.gaming_mode_until : null}}/><div className="fleet-meters"><div><span>CPU</span><ConceptMeter value={cpu}/><b>{cpu.toFixed(0)}%</b></div><div><span>RAM</span><ConceptMeter value={ram} color="var(--blue)"/><b>{ram.toFixed(0)}%</b></div></div><span className="last-seen">{node.online ? "Gerade eben" : ago(node.last_seen_at)}</span><ConceptIcon name="chevron" size={18}/></button>;
@@ -651,7 +621,7 @@ function Fleet({
     {selected && <div className="concept-selected-node">
       <NodeOverview node={selected} points={points} monthlyNetwork={monthlyNetwork} canDelete={canDelete} releases={releases} token={token}/>
       {(selectedProfiles.length > 1 || canDelete) && <section className="concept-profile-link">
-        <div><span className="eyebrow">OS-PROFILE</span><h3>Physisches Gerät</h3></div>
+        <div><span className="eyebrow">OS-Profile</span><h3>Physisches Gerät</h3></div>
         {selectedProfiles.length > 1 && <div className="concept-profile-tabs">{selectedProfiles.map((profile) => <button type="button" className={profile.node_id === selected.node_id ? "active" : ""} key={profile.node_id} onClick={() => onSelect(profile.node_id)}>{profile.platform} · {profile.online ? "Online" : "Offline"}</button>)}</div>}
         {canDelete && (selected.physical_device_id
           ? <button type="button" className="outline-button" disabled={linkBusy} onClick={() => void changeProfileLink(false)}>Profil vom Gerät lösen</button>
@@ -660,467 +630,6 @@ function Fleet({
       </section>}
     </div>}
   </>;
-}
-
-type AlternateFleetProps = {
-  layout: LayoutTheme;
-  nodes: Node[];
-  selected: Node | null;
-  points: Telemetry[];
-  monthlyNetwork: NetworkUsageSummary | null;
-  onSelect: (id: string) => void;
-  alerts: AlertRecord[];
-  dismissedAlerts: Set<string>;
-  onDismissAlert: (id: string) => void;
-};
-
-function AlternateFleet({
-  layout,
-  nodes,
-  selected,
-  points,
-  monthlyNetwork,
-  onSelect,
-  alerts,
-  dismissedAlerts,
-  onDismissAlert,
-}: AlternateFleetProps) {
-  const activeAlerts = alerts.filter(
-    (alert) => alert.active && !dismissedAlerts.has(alert.alert_id),
-  );
-  if (!selected) {
-    return (
-      <section className="alternate-empty surface">
-        <Server size={44} />
-        <h2>Warte auf das erste System</h2>
-        <p>Sobald ein Agent Daten sendet, füllt sich dieses Dashboard.</p>
-      </section>
-    );
-  }
-  const props = {
-    nodes,
-    selected,
-    points,
-    monthlyNetwork,
-    onSelect,
-    activeAlerts,
-    onDismissAlert,
-  };
-  if (layout === "orbit") return <OrbitDashboard {...props} />;
-  if (layout === "blueprint") return <BlueprintDashboard {...props} />;
-  return <StudioDashboard {...props} />;
-}
-
-function CommandDeck({
-  nodes,
-  groups,
-  selected,
-  points,
-  monthlyNetwork,
-  onSelect,
-  alerts,
-  dismissedAlerts,
-  onDismissAlert,
-  canDelete,
-  releases,
-  token,
-}: {
-  nodes: Node[];
-  groups: FleetGroup[];
-  selected: Node | null;
-  points: Telemetry[];
-  monthlyNetwork: NetworkUsageSummary | null;
-  onSelect: (id: string) => void;
-  alerts: AlertRecord[];
-  dismissedAlerts: Set<string>;
-  onDismissAlert: (id: string) => void;
-  canDelete: boolean;
-  releases: AgentRelease[];
-  token: string;
-}) {
-  const [detailsOpen, setDetailsOpen] = useState(false);
-  if (!selected) return <section className="command-empty"><Server size={42} /><h1>Warte auf die erste Node</h1><p>Sobald ein NCC-Agent Telemetrie sendet, wird die Observability-Ansicht aktiviert.</p></section>;
-  const metrics = selected.latest?.metrics || {};
-  const cpu = metrics.cpu || {}, memory = metrics.memory || {}, gpu = metrics.gpus?.[0] || {}, network = metrics.network || {};
-  const disks: Metrics[] = Array.isArray(metrics.disks) ? metrics.disks : [];
-  const activeAlerts = alerts.filter((alert) => alert.active && !dismissedAlerts.has(alert.alert_id));
-  const online = nodes.filter((node) => node.online);
-  const groupedNodes = groups.map((group) => ({ ...group, nodes: nodes.filter((node) => node.fleet_group_id === group.group_id) })).filter((group) => group.nodes.length);
-  const maxNetwork = Math.max(10, ...points.flatMap((point) => [num(point.metrics.network?.download_mbps), num(point.metrics.network?.upload_mbps)]));
-  return <section className="observability-board">
-    <header className="obs-toolbar">
-      <div><span className="eyebrow">DASHBOARDS / FLEET</span><h1>Infrastructure overview</h1></div>
-      <div className="obs-toolbar-actions"><button type="button"><Clock3 size={14} /> Live · letzte 20 Min.</button><button type="button"><RefreshCw size={14} /> Auto 5 s</button></div>
-    </header>
-    <section className="obs-fleet-strip">
-      <div className="obs-fleet-health"><span>FLEET HEALTH</span><strong>{online.length}<small> / {nodes.length} erreichbar</small></strong><i style={{ width: `${nodes.length ? (online.length / nodes.length) * 100 : 0}%` }} /></div>
-      <div className="obs-fleet-stats"><span><i className="online" /> {online.length} online</span><span><i className="offline" /> {nodes.length - online.length} offline</span><span><AlertTriangle size={13} /> {activeAlerts.length} Ereignisse</span></div>
-      <div className="obs-node-picker">{groupedNodes.map((group) => <div key={group.group_id}><small>{group.name}</small>{group.nodes.map((node) => <button type="button" key={node.node_id} className={node.node_id === selected.node_id ? "active" : ""} onClick={() => onSelect(node.node_id)}><i className={node.online ? "online" : "offline"} />{node.physical_device_name || node.display_name}</button>)}</div>)}</div>
-    </section>
-    <div className="obs-grid">
-      <section className="obs-panel obs-current-node"><header><div><span className="eyebrow">SELECTED HOST</span><h2>{selected.display_name}</h2><p>{selected.platform} · {selected.agent_version || "Agent-Version unbekannt"}</p></div><StatusDot online={selected.online} /></header><div className="obs-current-node-meta"><span>{cpu.name || "Systemdaten"}</span><b>{typeof cpu.temperature_c === "number" ? `${metric(cpu.temperature_c, 0)} °C` : "Temperatur n/a"}</b><button type="button" onClick={() => setDetailsOpen((current) => !current)}>{detailsOpen ? "Details schließen" : "Details & Aktionen"}</button></div></section>
-      <section className="obs-panel obs-stat cpu"><header><Cpu size={17} /><span>CPU usage</span><strong>{num(cpu.percent).toFixed(1)}%</strong></header><Sparkline points={points} metric={(point) => num(point.cpu?.percent)} /><footer>{typeof cpu.frequency_mhz === "number" ? `${metric(cpu.frequency_mhz, 0)} MHz` : "keine Taktdaten"}</footer></section>
-      <section className="obs-panel obs-stat memory"><header><MemoryStick size={17} /><span>Memory</span><strong>{num(memory.percent).toFixed(1)}%</strong></header><Sparkline points={points} metric={(point) => num(point.memory?.percent)} color="var(--blue)" /><footer>{metric(memory.used_gb)} / {metric(memory.total_gb)} GB</footer></section>
-      <section className="obs-panel obs-stat gpu"><header><MonitorCog size={17} /><span>GPU load</span><strong>{num(gpu.percent).toFixed(1)}%</strong></header><Sparkline points={points} metric={(point) => num(point.gpus?.[0]?.percent)} color="var(--purple)" /><footer>{gpu.name || "Kein GPU-Signal"}</footer></section>
-      <section className="obs-panel obs-network"><header><div><span className="eyebrow">NETWORK TRAFFIC</span><h2>{network.interface || "Primary interface"}</h2></div><div className="obs-network-values"><b>↓ {num(network.download_mbps).toFixed(1)} Mbps</b><b>↑ {num(network.upload_mbps).toFixed(1)} Mbps</b></div></header><div className="obs-chart-stack"><Sparkline points={points} metric={(point) => num(point.network?.download_mbps)} maxValue={maxNetwork} color="var(--blue)" /><Sparkline points={points} metric={(point) => num(point.network?.upload_mbps)} maxValue={maxNetwork} color="var(--purple)" /></div><footer>{monthlyNetwork?.available ? `${trafficBytes(monthlyNetwork.received_bytes)} empfangen · ${trafficBytes(monthlyNetwork.sent_bytes)} gesendet diesen Monat` : "Monatszähler wird aufgebaut"}</footer></section>
-      <section className="obs-panel obs-storage"><header><div><HardDrive size={17} /><span>STORAGE</span></div><small>{disks.length} Volumes</small></header><div>{disks.slice(0, 5).map((disk, index) => <article key={`${disk.mount}-${index}`}><span>{disk.mount || disk.name || `Disk ${index + 1}`}</span><i><em style={{ width: `${Math.min(100, num(disk.percent))}%` }} /></i><b>{num(disk.percent).toFixed(0)}%</b></article>)}{!disks.length && <p>Keine Laufwerksdaten vorhanden.</p>}</div></section>
-      <section className="obs-panel obs-incidents"><header><div><AlertTriangle size={17} /><span>INCIDENTS</span></div><b>{activeAlerts.length}</b></header>{activeAlerts.length ? activeAlerts.slice(0, 4).map((alert) => <article key={alert.alert_id}><i className={alert.severity} /><div><strong>{alert.display_name}</strong><span>{alert.message}</span></div><button type="button" onClick={() => onDismissAlert(alert.alert_id)} aria-label="Warnung ausblenden"><X size={14} /></button></article>) : <p><Check size={18} /> Keine aktiven Ereignisse</p>}</section>
-      <section className="obs-panel obs-host-table"><header><div><span className="eyebrow">HOSTS</span><h2>Fleet signals</h2></div><small>Live-Snapshot</small></header><div className="obs-table-head"><span>Host</span><span>Status</span><span>CPU</span><span>RAM</span><span>Letzter Kontakt</span></div>{nodes.map((node) => { const current = node.latest?.metrics || {}; return <button type="button" key={node.node_id} onClick={() => onSelect(node.node_id)} className={node.node_id === selected.node_id ? "active" : ""}><span><i className={node.online ? "online" : "offline"} />{node.physical_device_name || node.display_name}</span><span>{node.online ? "Online" : "Offline"}</span><span>{node.latest ? `${num(current.cpu?.percent).toFixed(0)}%` : "—"}</span><span>{node.latest ? `${num(current.memory?.percent).toFixed(0)}%` : "—"}</span><span>{ago(node.last_seen_at)}</span></button>})}</section>
-    </div>
-    {detailsOpen && <section className="obs-details"><NodeOverview node={selected} points={points} monthlyNetwork={monthlyNetwork} canDelete={canDelete} releases={releases} token={token} /></section>}
-  </section>;
-}
-
-/**
- * The dashboard concept supplied with NCC uses a calm "Mission Control"
- * hierarchy: fleet posture first, then traffic/incidents, then the explorer.
- * Unlike the concept's mock implementation this component is deliberately
- * backed by the real NCC models and keeps NodeOverview for every privileged
- * action.
- */
-function MissionControl({
-  nodes,
-  groups,
-  selected,
-  points,
-  monthlyNetwork,
-  onSelect,
-  alerts,
-  dismissedAlerts,
-  onDismissAlert,
-  canDelete,
-  releases,
-  token,
-}: {
-  nodes: Node[];
-  groups: FleetGroup[];
-  selected: Node | null;
-  points: Telemetry[];
-  monthlyNetwork: NetworkUsageSummary | null;
-  onSelect: (id: string) => void;
-  alerts: AlertRecord[];
-  dismissedAlerts: Set<string>;
-  onDismissAlert: (id: string) => void;
-  canDelete: boolean;
-  releases: AgentRelease[];
-  token: string;
-}) {
-  const [query, setQuery] = useState("");
-  const [detailsOpen, setDetailsOpen] = useState(true);
-  const activeAlerts = alerts.filter(
-    (alert) => alert.active && !dismissedAlerts.has(alert.alert_id),
-  );
-  const onlineNodes = nodes.filter((node) => node.online);
-  const selectedMetrics = selected?.latest?.metrics || {};
-  const selectedDisks = Array.isArray(selectedMetrics.disks)
-    ? selectedMetrics.disks as Metrics[]
-    : [];
-  const traffic = points.map((point) => ({
-    download: num(point.metrics.network?.download_mbps),
-    upload: num(point.metrics.network?.upload_mbps),
-  }));
-  const latestTraffic = traffic[traffic.length - 1];
-  const maxStorage = selectedDisks.length
-    ? Math.max(...selectedDisks.map((disk) => num(disk.percent)))
-    : 0;
-  const representatives = Array.from(
-    nodes.reduce((result, node) => {
-      const key = node.physical_device_id || node.node_id;
-      const current = result.get(key);
-      if (!current || (node.online && !current.online)) result.set(key, node);
-      return result;
-    }, new Map<string, Node>()).values(),
-  );
-  const filtered = representatives.filter((node) =>
-    `${node.display_name} ${node.platform} ${node.machine_id}`
-      .toLowerCase()
-      .includes(query.trim().toLowerCase()),
-  );
-  const grouped = groups
-    .map((group) => ({
-      ...group,
-      nodes: filtered
-        .filter((node) => node.fleet_group_id === group.group_id)
-        .sort(
-          (left, right) =>
-            left.fleet_position - right.fleet_position ||
-            left.display_name.localeCompare(right.display_name, "de"),
-        ),
-    }))
-    .filter((group) => group.nodes.length);
-
-  const selectNode = (nodeId: string) => {
-    onSelect(nodeId);
-    setDetailsOpen(true);
-  };
-
-  return (
-    <section className="mission-control">
-      <header className="mission-heading">
-        <div>
-          <span className="eyebrow">NCC / MISSION CONTROL</span>
-          <h1>Command Overview</h1>
-          <p>Live-Zustand deiner Infrastruktur, priorisiert nach Aufmerksamkeit.</p>
-        </div>
-        <div className="mission-live"><Activity size={15} /><span>LIVE</span><small>Aktualisierung alle 5 Sekunden</small></div>
-      </header>
-
-      <section className="mission-kpis" aria-label="Fleet-Zusammenfassung">
-        <article className="mission-kpi fleet">
-          <span className="mission-icon"><Signal size={20} /></span>
-          <div><small>FLEET STATUS</small><strong>{onlineNodes.length}<em>/{nodes.length}</em></strong><p>Systeme erreichbar</p></div>
-          <i style={{ width: `${nodes.length ? (onlineNodes.length / nodes.length) * 100 : 0}%` }} />
-        </article>
-        <article className="mission-kpi alert">
-          <span className="mission-icon"><AlertTriangle size={20} /></span>
-          <div><small>OFFENE WARNUNGEN</small><strong>{activeAlerts.length}</strong><p>{activeAlerts.length ? "brauchen Aufmerksamkeit" : "alles im grünen Bereich"}</p></div>
-        </article>
-        <article className="mission-kpi network">
-          <span className="mission-icon"><Network size={20} /></span>
-          <div><small>TRAFFIC / LIVE</small><strong>↓ {latestTraffic?.download.toFixed(1) || "0.0"}</strong><p>↑ {latestTraffic?.upload.toFixed(1) || "0.0"} Mbps</p></div>
-        </article>
-        <article className="mission-kpi storage">
-          <span className="mission-icon"><HardDrive size={20} /></span>
-          <div><small>AKTIVE NODE</small><strong>{selectedDisks.length ? `${maxStorage.toFixed(0)}%` : "—"}</strong><p>{selectedDisks.length ? "höchste Speicherbelegung" : "keine Laufwerksdaten"}</p></div>
-        </article>
-      </section>
-
-      <section className="mission-primary-grid">
-        <article className="mission-panel mission-traffic">
-          <header><div><span className="eyebrow">LIVE TELEMETRIE</span><h2>Netzwerkverkehr</h2></div><div className="traffic-legend"><span><i /> Download</span><span><i /> Upload</span></div></header>
-          <TrafficHistoryChart values={traffic} />
-          <footer>
-            {monthlyNetwork?.available
-              ? <><b>{trafficBytes(monthlyNetwork.received_bytes)}</b> empfangen <span>·</span> <b>{trafficBytes(monthlyNetwork.sent_bytes)}</b> gesendet in diesem Monat</>
-              : "Monatszähler wird aus Telemetrie aufgebaut"}
-          </footer>
-        </article>
-        <article className="mission-panel mission-attention">
-          <header><div><span className="eyebrow">INCIDENT QUEUE</span><h2>Aufmerksamkeit erforderlich</h2></div><b>{activeAlerts.length}</b></header>
-          <div className="mission-alert-list">
-            {activeAlerts.slice(0, 4).map((alert) => (
-              <article key={alert.alert_id} className={alert.severity}>
-                <AlertTriangle size={15} />
-                <div><strong>{alert.display_name}</strong><span>{alert.message}</span><small>{ago(alert.opened_at)}</small></div>
-                <button type="button" onClick={() => onDismissAlert(alert.alert_id)} aria-label="Warnung ausblenden"><X size={14} /></button>
-              </article>
-            ))}
-            {!activeAlerts.length && <div className="mission-clear"><Check size={22} /><span>Keine aktiven Ereignisse</span></div>}
-          </div>
-        </article>
-      </section>
-
-      <section className="mission-panel mission-explorer">
-        <header>
-          <div><span className="eyebrow">FLEET EXPLORER</span><h2>Systeme &amp; Geräte</h2></div>
-          <label className="mission-search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="System suchen …" /></label>
-        </header>
-        <div className="mission-groups">
-          {grouped.map((group) => <section key={group.group_id}>
-            <header><span>{group.name}</span><b>{group.nodes.length}</b></header>
-            <div>{group.nodes.map((node) => {
-              const metrics = node.latest?.metrics || {};
-              const gaming = !!node.gaming_mode_until && new Date(node.gaming_mode_until).getTime() > Date.now();
-              return <button type="button" key={node.node_id} className={selected?.node_id === node.node_id ? "selected" : ""} onClick={() => selectNode(node.node_id)}>
-                <div className="mission-node-top"><span className={`mission-node-icon ${node.online ? "online" : "offline"}`}><Server size={17} /></span><span className={`mission-node-state ${node.online ? "online" : "offline"}`} />{gaming && <Gamepad2 size={15} />}</div>
-                <strong>{node.physical_device_name || node.display_name}</strong>
-                <small>{node.platform} · {node.agent_version || "Agent unbekannt"}</small>
-                <div className="mission-node-meters"><span><i>CPU</i><b><em style={{ width: `${Math.min(100, num(metrics.cpu?.percent))}%` }} /></b><strong>{node.latest ? `${num(metrics.cpu?.percent).toFixed(0)}%` : "—"}</strong></span><span><i>RAM</i><b><em style={{ width: `${Math.min(100, num(metrics.memory?.percent))}%` }} /></b><strong>{node.latest ? `${num(metrics.memory?.percent).toFixed(0)}%` : "—"}</strong></span></div>
-                {gaming && <mark><Gamepad2 size={12} /> Gaming Mode aktiv</mark>}
-              </button>;
-            })}</div>
-          </section>)}
-          {!grouped.length && <div className="mission-empty"><Boxes size={28} /><strong>Keine Systeme gefunden</strong><span>Ändere die Suche oder prüfe den Verbindungsstatus der Agenten.</span></div>}
-        </div>
-      </section>
-
-      <section className="mission-detail">
-        <header><div><span className="eyebrow">NODE DETAIL</span><h2>{selected?.display_name || "Kein System ausgewählt"}</h2></div><button type="button" onClick={() => setDetailsOpen((current) => !current)}>{detailsOpen ? "Details einklappen" : "Details & Aktionen öffnen"}<ChevronRight size={15} /></button></header>
-        {detailsOpen && <NodeOverview node={selected} points={points} monthlyNetwork={monthlyNetwork} canDelete={canDelete} releases={releases} token={token} />}
-      </section>
-    </section>
-  );
-}
-
-type DashboardProps = Omit<AlternateFleetProps, "layout" | "alerts" | "dismissedAlerts" | "selected"> & {
-  selected: Node;
-  activeAlerts: AlertRecord[];
-};
-
-function DeviceChoices({
-  nodes,
-  selected,
-  onSelect,
-}: Pick<DashboardProps, "nodes" | "selected" | "onSelect">) {
-  return (
-    <div className="alternate-device-choices">
-      {nodes.map((node) => (
-        <button
-          type="button"
-          key={node.node_id}
-          className={selected.node_id === node.node_id ? "selected" : ""}
-          onClick={() => onSelect(node.node_id)}
-        >
-          <i className={node.online ? "online" : "offline"} />
-          <span>{node.display_name}</span>
-          {node.access_role === "beta_tester" && <small>BETA</small>}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function AlternateAlerts({
-  alerts,
-  onDismissAlert,
-}: { alerts: AlertRecord[]; onDismissAlert: (id: string) => void }) {
-  if (!alerts.length) return null;
-  return (
-    <div className="alternate-alerts">
-      {alerts.map((alert) => (
-        <article key={alert.alert_id} className={alert.severity}>
-          <AlertTriangle size={15} />
-          <span>{alert.message} · {alert.display_name}</span>
-          <button
-            type="button"
-            title="Warnung ausblenden"
-            aria-label={`${alert.message} ausblenden`}
-            onClick={() => onDismissAlert(alert.alert_id)}
-          >
-            <X size={14} />
-          </button>
-        </article>
-      ))}
-    </div>
-  );
-}
-
-function OrbitDashboard({
-  nodes,
-  selected,
-  points,
-  monthlyNetwork,
-  onSelect,
-  activeAlerts,
-  onDismissAlert,
-}: DashboardProps) {
-  const m = selected.latest?.metrics || {};
-  const cpu = m.cpu || {}, memory = m.memory || {}, gpu = m.gpus?.[0] || {}, network = m.network || {};
-  return (
-    <section className="orbit-dashboard">
-      <header className="orbit-masthead">
-        <div>
-          <span>LIVE SYSTEM ORBIT</span>
-          <h1>{selected.display_name}</h1>
-          <p>{nodes.filter((node) => node.online).length} von {nodes.length} Systemen im Kontakt</p>
-        </div>
-        <StatusDot online={selected.online} />
-      </header>
-      <DeviceChoices nodes={nodes} selected={selected} onSelect={onSelect} />
-      <AlternateAlerts alerts={activeAlerts} onDismissAlert={onDismissAlert} />
-      <div className="orbit-workspace">
-        <article className="orbit-core">
-          <div className="orbit-ring">
-            <Cpu size={28} />
-            <strong>{num(cpu.percent).toFixed(0)}%</strong>
-            <span>CPU</span>
-          </div>
-          <div>
-            <span className="eyebrow">SYSTEMKERN</span>
-            <h2>{cpu.name || selected.platform.toUpperCase()}</h2>
-            <p>{typeof cpu.temperature_c === "number" ? `${metric(cpu.temperature_c, 0)} °C · ` : ""}{typeof cpu.frequency_mhz === "number" ? `${metric(cpu.frequency_mhz, 0)} MHz` : "Takt wird erfasst"}</p>
-          </div>
-        </article>
-        <article className="orbit-stat ram"><MemoryStick size={18} /><span>MEMORY</span><strong>{num(memory.percent).toFixed(0)}%</strong><small>{metric(memory.used_gb)} / {metric(memory.total_gb)} GB</small></article>
-        <article className="orbit-stat gpu"><MonitorCog size={18} /><span>GRAPHICS</span><strong>{num(gpu.percent).toFixed(0)}%</strong><small>{gpu.name || "Keine GPU-Daten"}</small></article>
-        <article className="orbit-network">
-          <header><Network size={17} /><span>DATENSTROM</span><b>↓ {num(network.download_mbps).toFixed(1)} · ↑ {num(network.upload_mbps).toFixed(1)} Mbps</b></header>
-          <Sparkline points={points} metric={(point) => num(point.network?.download_mbps)} maxValue={Math.max(10, ...points.map((point) => num(point.metrics.network?.download_mbps)))} color="var(--blue)" />
-          <small>{monthlyNetwork?.available ? `Monat: ${trafficBytes(monthlyNetwork.received_bytes)} empfangen · ${trafficBytes(monthlyNetwork.sent_bytes)} gesendet` : "Monatsverkehr wird aufgebaut"}</small>
-        </article>
-        <article className="orbit-disks">
-          <header><HardDrive size={17} /><span>DATENTRÄGER</span></header>
-          {(m.disks || []).slice(0, 4).map((disk: Metrics, index: number) => <div key={`${disk.mount}-${index}`}><b>{disk.mount || disk.name || `Disk ${index + 1}`}</b><i><em style={{ width: `${Math.min(100, num(disk.percent))}%` }} /></i><span>{num(disk.percent).toFixed(0)}%</span></div>)}
-          {!(m.disks || []).length && <p>Keine Laufwerksdaten</p>}
-        </article>
-      </div>
-    </section>
-  );
-}
-
-function BlueprintDashboard({
-  nodes,
-  selected,
-  points,
-  monthlyNetwork,
-  onSelect,
-  activeAlerts,
-  onDismissAlert,
-}: DashboardProps) {
-  const m = selected.latest?.metrics || {};
-  const cpu = m.cpu || {}, memory = m.memory || {}, gpu = m.gpus?.[0] || {}, network = m.network || {};
-  const processes: Metrics[] = Array.isArray(m.processes) ? m.processes : [];
-  return (
-    <section className="blueprint-dashboard">
-      <div className="blueprint-roster">
-        <span>NODE INDEX / {nodes.length.toString().padStart(2, "0")}</span>
-        <DeviceChoices nodes={nodes} selected={selected} onSelect={onSelect} />
-        <footer><b>{selected.agent_version || "Agent unbekannt"}</b><small>{selected.machine_id}</small></footer>
-      </div>
-      <div className="blueprint-canvas">
-        <header className="blueprint-title">
-          <div><span>TELEMETRY BLUEPRINT</span><h1>{selected.display_name}</h1></div>
-          <div><StatusDot online={selected.online} /><small>{ago(selected.last_seen_at)}</small></div>
-        </header>
-        <AlternateAlerts alerts={activeAlerts} onDismissAlert={onDismissAlert} />
-        <div className="blueprint-modules">
-          <article><Cpu size={22} /><span>COMPUTE</span><strong>{num(cpu.percent).toFixed(1)}%</strong><small>{typeof cpu.temperature_c === "number" ? `${metric(cpu.temperature_c, 0)} °C` : "Temperatur n/a"}</small></article>
-          <article><MemoryStick size={22} /><span>MEMORY</span><strong>{num(memory.percent).toFixed(1)}%</strong><small>{metric(memory.used_gb)} / {metric(memory.total_gb)} GB</small></article>
-          <article><MonitorCog size={22} /><span>ACCELERATOR</span><strong>{num(gpu.percent).toFixed(1)}%</strong><small>{gpu.name || "nicht erkannt"}</small></article>
-        </div>
-        <article className="blueprint-network">
-          <header><Network size={18} /><span>NETWORK ROUTE</span><b>{network.interface || "Automatisch"}</b></header>
-          <div><span>DOWN <strong>{num(network.download_mbps).toFixed(1)} Mbps</strong></span><Sparkline points={points} metric={(point) => num(point.network?.download_mbps)} maxValue={Math.max(10, ...points.map((point) => num(point.metrics.network?.download_mbps)))} color="var(--blue)" /></div>
-          <div><span>UP <strong>{num(network.upload_mbps).toFixed(1)} Mbps</strong></span><Sparkline points={points} metric={(point) => num(point.network?.upload_mbps)} maxValue={Math.max(10, ...points.map((point) => num(point.metrics.network?.upload_mbps)))} color="var(--purple)" /></div>
-          <footer>{monthlyNetwork?.available ? `${trafficBytes(monthlyNetwork.received_bytes)} ↓ / ${trafficBytes(monthlyNetwork.sent_bytes)} ↑ in diesem Monat` : "Monatszähler wird aufgebaut"}</footer>
-        </article>
-        <div className="blueprint-lower">
-          <article className="blueprint-storage"><header><HardDrive size={17} /><span>STORAGE MAP</span></header>{(m.disks || []).slice(0, 5).map((disk: Metrics, index: number) => <div key={`${disk.mount}-${index}`}><span>{disk.mount || disk.name || `Disk ${index + 1}`}</span><i><em style={{ width: `${Math.min(100, num(disk.percent))}%` }} /></i><b>{num(disk.percent).toFixed(0)}%</b></div>)}</article>
-          <article className="blueprint-processes"><header><Activity size={17} /><span>ACTIVE TASKS</span></header>{processes.slice(0, 5).map((process: Metrics) => <div key={process.pid}><span>{process.name || "Unbekannt"}</span><b>{Math.min(100, num(process.cpu)).toFixed(1)}%</b></div>)}{!processes.length && <p>Keine Prozessdaten</p>}</article>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function StudioDashboard({
-  nodes,
-  selected,
-  points,
-  monthlyNetwork,
-  onSelect,
-  activeAlerts,
-  onDismissAlert,
-}: DashboardProps) {
-  const m = selected.latest?.metrics || {};
-  const cpu = m.cpu || {}, memory = m.memory || {}, gpu = m.gpus?.[0] || {}, network = m.network || {};
-  return (
-    <section className="studio-dashboard">
-      <header className="studio-hero">
-        <div><span>YOUR INFRASTRUCTURE, CURATED</span><h1>{selected.display_name}</h1><p>{selected.platform.toUpperCase()} · {selected.access_role === "beta_tester" ? "BETA-TESTER" : "COMMANDER NODE"}</p></div>
-        <div className="studio-availability"><StatusDot online={selected.online} /><strong>{ago(selected.last_seen_at)}</strong></div>
-      </header>
-      <DeviceChoices nodes={nodes} selected={selected} onSelect={onSelect} />
-      <AlternateAlerts alerts={activeAlerts} onDismissAlert={onDismissAlert} />
-      <div className="studio-gallery">
-        <article className="studio-feature"><span>CPU LOAD</span><strong>{num(cpu.percent).toFixed(0)}<small>%</small></strong><p>{typeof cpu.temperature_c === "number" ? `${metric(cpu.temperature_c, 0)} °C aktuell` : "Temperatur nicht verfügbar"}</p><div className="studio-bars">{Array.isArray(cpu.per_core) && cpu.per_core.slice(0, 16).map((value: unknown, index: number) => <i key={index} style={{ height: `${Math.max(8, num(value))}%` }} />)}</div></article>
-        <article className="studio-feature memory"><span>MEMORY</span><strong>{num(memory.percent).toFixed(0)}<small>%</small></strong><p>{metric(memory.used_gb)} GB von {metric(memory.total_gb)} GB genutzt</p><div className="studio-meter"><i style={{ width: `${Math.min(100, num(memory.percent))}%` }} /></div></article>
-        <article className="studio-feature graphics"><span>GRAPHICS</span><strong>{num(gpu.percent).toFixed(0)}<small>%</small></strong><p>{gpu.name || "Keine GPU-Telemetrie"}</p><div className="studio-meter"><i style={{ width: `${Math.min(100, num(gpu.percent))}%` }} /></div></article>
-        <article className="studio-traffic"><header><span>NETWORK STORY</span><b>↓ {num(network.download_mbps).toFixed(1)} Mbps</b></header><Sparkline points={points} metric={(point) => num(point.network?.download_mbps)} maxValue={Math.max(10, ...points.map((point) => num(point.metrics.network?.download_mbps)))} color="var(--blue)" /><footer>{monthlyNetwork?.available ? `${trafficBytes(monthlyNetwork.received_bytes)} diesen Monat empfangen` : "Verkehr wird erfasst"}</footer></article>
-        <article className="studio-library"><header><HardDrive size={17} /><span>DEVICE LIBRARY</span></header>{(m.disks || []).slice(0, 4).map((disk: Metrics, index: number) => <div key={`${disk.mount}-${index}`}><b>{disk.mount || disk.name || `Disk ${index + 1}`}</b><span>{num(disk.percent).toFixed(0)}% belegt</span><i><em style={{ width: `${Math.min(100, num(disk.percent))}%` }} /></i></div>)}{!(m.disks || []).length && <p>Keine Laufwerksdaten</p>}</article>
-      </div>
-    </section>
-  );
 }
 
 function UnraidStorageCard({ metrics }: { metrics: Metrics }) {
@@ -1135,7 +644,7 @@ function UnraidStorageCard({ metrics }: { metrics: Metrics }) {
     <article className="surface compact unraid-storage-card">
       <header>
         <HardDrive size={16} />
-        <span>SPEICHERBELEGUNG</span>
+        <span>Speicherbelegung</span>
       </header>
       <div className="unraid-storage-list">
         {wanted.map((disk: Metrics) => (
@@ -1196,8 +705,8 @@ function UnraidWorkloadCard({
             <strong>{item.name || `Unbenannt ${kind}`}</strong>
             <span className={running(item.state) ? "running" : "stopped"}>
               {running(item.state)
-                ? "LÄUFT"
-                : String(item.state || "GESTOPPT").toUpperCase()}
+                ? "Läuft"
+                : String(item.state || "Gestoppt")}
             </span>
           </div>
         ))}
@@ -1206,150 +715,6 @@ function UnraidWorkloadCard({
         )}
       </div>
     </article>
-  );
-}
-
-/**
- * Production implementation of the supplied "Alles im Blick" dashboard.
- * It intentionally has no mock controls or placeholder data: every number is
- * derived from the existing NCC API state passed in by App.
- */
-function CommandOverviewV3({
-  nodes,
-  selected,
-  points,
-  alerts,
-  dismissedAlerts,
-  onSelect,
-  onOpenAlerts,
-  onOpenExplorer,
-}: {
-  nodes: Node[];
-  selected: Node | null;
-  points: Telemetry[];
-  alerts: AlertRecord[];
-  dismissedAlerts: Set<string>;
-  onSelect: (nodeId: string) => void;
-  onOpenAlerts: () => void;
-  onOpenExplorer: () => void;
-}) {
-  const activeAlerts = alerts.filter(
-    (alert) => alert.active && !dismissedAlerts.has(alert.alert_id),
-  );
-  const representatives = Array.from(
-    nodes.reduce((result, node) => {
-      const key = node.physical_device_id || node.node_id;
-      const current = result.get(key);
-      if (!current || (node.online && !current.online)) result.set(key, node);
-      return result;
-    }, new Map<string, Node>()).values(),
-  );
-  const online = representatives.filter((node) => node.online);
-  const offline = representatives.length - online.length;
-  const metrics = selected?.latest?.metrics || {};
-  const traffic = points.map((point) => ({
-    download: num(point.metrics.network?.download_mbps),
-    upload: num(point.metrics.network?.upload_mbps),
-  }));
-  const latestTraffic = traffic[traffic.length - 1] || { download: 0, upload: 0 };
-  const availability = representatives.length
-    ? representatives.reduce((total, node) => total + num(node.availability_percent), 0) / representatives.length
-    : 0;
-  const rowNodes = representatives.slice(0, 6);
-  const today = new Date();
-  const freshness = selected?.last_seen_at ? ago(selected.last_seen_at) : "warte auf Telemetrie";
-  const events: { label: string; detail: string; tone: "critical" | "warning" | "ok" }[] = activeAlerts.slice(0, 4).map((alert) => ({
-    label: alert.message,
-    detail: `${alert.display_name} · ${ago(alert.updated_at)}`,
-    tone: alert.severity,
-  }));
-  if (!events.length) {
-    events.push(...online.slice(0, 4).map((node) => ({
-      label: `${node.physical_device_name || node.display_name} meldet sich`,
-      detail: ago(node.last_seen_at),
-      tone: "ok" as const,
-    })));
-  }
-
-  return (
-    <section className="nccv3-overview">
-      <header className="nccv3-heading">
-        <div>
-          <span className="nccv3-eyebrow">
-            {today.toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "long", year: "numeric" }).toUpperCase()}
-          </span>
-          <h1>Alles im Blick.</h1>
-          <p>Deine Infrastruktur in Echtzeit. Ruhig, bis etwas deine Aufmerksamkeit braucht.</p>
-        </div>
-        <div className="nccv3-fresh"><i /> Daten frisch <span>· Aktualisiert {freshness}</span></div>
-      </header>
-
-      <div className="nccv3-dashboard-grid">
-        <article className="nccv3-card nccv3-priority">
-          <header><span className="nccv3-eyebrow">PRIORITY SIGNAL</span><b>{activeAlerts.length ? `${activeAlerts.length} AKTIV` : "STABIL"}</b></header>
-          <div className="nccv3-priority-body">
-            <span className={`nccv3-priority-icon ${activeAlerts.length ? "warning" : "ok"}`}>
-              {activeAlerts.length ? <AlertTriangle size={23} /> : <Check size={23} />}
-            </span>
-            <div>
-              <h2>{activeAlerts.length ? "Was braucht gerade Aufmerksamkeit?" : "Alles läuft nach Plan."}</h2>
-              <strong>{activeAlerts[0]?.display_name || "Fleet"}: {activeAlerts[0]?.message || "keine offenen Warnungen"}</strong>
-              <p>{activeAlerts.length ? "Ein Signal liegt außerhalb des normalen Bereichs." : "Alle erreichbaren Geräte senden aktuelle Telemetrie."}</p>
-              <button type="button" onClick={onOpenAlerts}>{activeAlerts.length ? "Warnungen prüfen" : "Warnungszentrale öffnen"} <ChevronRight size={15} /></button>
-            </div>
-          </div>
-        </article>
-
-        <article className="nccv3-card nccv3-system-status">
-          <span className="nccv3-eyebrow">SYSTEM STATUS</span>
-          <strong>{representatives.length}<small>Knoten</small></strong>
-          <div className="nccv3-status-meter"><i style={{ width: `${representatives.length ? (online.length / representatives.length) * 100 : 0}%` }} /></div>
-          <div className="nccv3-status-legend"><span><i className="online" />{online.length} Online</span><span><i className="alert" />{activeAlerts.length} Warnung</span><span><i className="offline" />{offline} Offline</span></div>
-          <footer><span>Agent-Heartbeat</span><b>{offline ? "Beobachten" : "Stabil"}</b></footer>
-        </article>
-
-        <article className="nccv3-card nccv3-network-card">
-          <header><div><span className="nccv3-eyebrow">LIVE NETWORK</span><h2>Netzwerkverkehr</h2></div><b><i /> LIVE</b></header>
-          <div className="nccv3-network-values"><div><span>DOWNLOAD</span><strong>{latestTraffic.download.toFixed(1)}<small> Mbit/s</small></strong></div><div><span>UPLOAD</span><strong>{latestTraffic.upload.toFixed(1)}<small> Mbit/s</small></strong></div></div>
-          <DashboardTrafficChart values={traffic} />
-          <footer><span>VOR 2 MIN</span><span>VOR 1 MIN</span><span>JETZT</span></footer>
-        </article>
-
-        <article className="nccv3-card nccv3-activity-card">
-          <header><div><span className="nccv3-eyebrow">ACTIVITY LOG</span><h2>Ereignis-Zeitstrahl</h2></div></header>
-          <div className="nccv3-events">
-            {events.map((event, index) => <article key={`${event.label}-${index}`}><i className={event.tone} /><div><strong>{event.label}</strong><span>{event.detail}</span></div></article>)}
-          </div>
-          <button type="button" onClick={onOpenAlerts}>Zum Ereigniscenter <ChevronRight size={14} /></button>
-        </article>
-
-        <article className="nccv3-card nccv3-fleet-pulse">
-          <header><div><span className="nccv3-eyebrow">FLEET PULSE</span><h2>Geräte im Fokus</h2></div><button type="button" onClick={onOpenExplorer}>Alle Geräte <ChevronRight size={14} /></button></header>
-          <div className="nccv3-node-list">
-            {rowNodes.map((node) => {
-              const nodeMetrics = node.latest?.metrics || {};
-              return <button type="button" key={node.node_id} onClick={() => { onSelect(node.node_id); onOpenExplorer(); }}>
-                <span className={`nccv3-node-icon ${node.online ? "online" : "offline"}`}><Server size={15} /></span>
-                <span className="nccv3-node-name"><strong>{node.physical_device_name || node.display_name}</strong><small>{node.platform}</small></span>
-                <span className="nccv3-node-state"><i className={node.online ? "online" : "offline"} />{node.online ? "Online" : "Offline"}</span>
-                <span className="nccv3-node-cpu">CPU {num(nodeMetrics.cpu?.percent).toFixed(0)}%<em><i style={{ width: `${Math.min(100, num(nodeMetrics.cpu?.percent))}%` }} /></em></span>
-                <ChevronRight size={16} />
-              </button>;
-            })}
-          </div>
-        </article>
-
-        <article className="nccv3-card nccv3-signal-card">
-          <span className="nccv3-eyebrow">SIGNAL QUALITY</span>
-          <strong>{availability.toFixed(1)}<small>%</small></strong>
-          <p>Fleet-Verfügbarkeit · seit Aufnahme</p>
-          <div className="nccv3-signal-bars" aria-label="Fleet-Verfügbarkeit">
-            {Array.from({ length: 25 }, (_, index) => <i key={index} style={{ height: `${Math.max(22, Math.min(100, availability + ((index * 17) % 19) - 9))}%` }} />)}
-          </div>
-          <footer>Alle Knoten werden überwacht</footer>
-        </article>
-      </div>
-    </section>
   );
 }
 
@@ -1407,28 +772,28 @@ function CommandOverviewExact({
     </div>
     <div className="hero-grid">
       <div className="attention-card">
-        <div className="attention-top"><span className="eyebrow">PRIORITY SIGNAL</span><span className={`severity ${active.length ? "critical" : "info"}`}>● {active.length ? `${active.length} AKTIV` : "STABIL"}</span></div>
+        <div className="attention-top"><span className="eyebrow">Wichtig</span><span className={`severity ${active.length ? "critical" : "info"}`}>● {active.length ? `${active.length} aktiv` : "Stabil"}</span></div>
         <div className="attention-body"><div className="attention-icon"><ConceptIcon name={active.length ? "alert" : "check"} size={26}/></div><div><h2>{active.length ? "Was braucht gerade Aufmerksamkeit?" : "Alles läuft nach Plan."}</h2><p>{active[0]?.message || "Keine aktiven Vorfälle"}</p><small>{active.length ? `${active[0].display_name} · ${ago(active[0].updated_at)}` : "Alle erreichbaren Geräte senden aktuelle Telemetrie."}</small></div></div>
         <button className="text-link" onClick={onOpenAlerts}>Warnungen prüfen <ConceptIcon name="arrow" size={16}/></button>
       </div>
       <div className="system-card">
-        <div className="eyebrow">SYSTEM STATUS</div>
-        <div className="system-big">{representatives.length}<span> Knoten</span></div>
+        <div className="eyebrow">Systemstatus</div>
+        <div className="system-big">{representatives.length}<span> Geräte</span></div>
         <div className="system-bar"><span style={{width:`${representatives.length ? online / representatives.length * 100 : 0}%`}}/></div>
         <div className="system-legend"><span><i className="legend-online"/> {online} Online</span><span><i className="legend-warn"/> {active.length} Warnung</span><span><i className="legend-offline"/> {offline} Offline</span></div>
-        <div className="system-foot">Agent-Heartbeat <b>{offline ? "Beobachten" : "Stabil"}</b></div>
+        <div className="system-foot">Erreichbarkeit <b>{offline ? "Eingeschränkt" : "Stabil"}</b></div>
       </div>
     </div>
     <div className="overview-main">
       <div className="overview-left">
         <div className="traffic-card">
-          <div className="card-head"><div><div className="eyebrow">LIVE NETWORK</div><h2>Netzwerkverkehr</h2></div><span className="live-tag"><i/> LIVE</span></div>
-          <div className="traffic-values"><div><small>DOWNLOAD</small><strong>{down.toFixed(1)} <span>Mb/s</span></strong></div><div><small>UPLOAD</small><strong>{up.toFixed(1)} <span>Mb/s</span></strong></div></div>
+          <div className="card-head"><div><div className="eyebrow">Netzwerk</div><h2>Netzwerkverkehr</h2></div><span className="live-tag"><i/> Live</span></div>
+          <div className="traffic-values"><div><small>Download</small><strong>{down.toFixed(1)} <span>Mb/s</span></strong></div><div><small>Upload</small><strong>{up.toFixed(1)} <span>Mb/s</span></strong></div></div>
           <div className="traffic-chart"><div className="chart-grid"><span>{Math.ceil(Math.max(1, ...netHistory))}</span><span>{Math.ceil(Math.max(1, ...netHistory) / 2)}</span><span>0</span></div><ConceptSparkline values={netHistory} color="var(--mint)" height={188} fill/></div>
-          <div className="chart-axis"><span>VERLAUF: {selected?.display_name || "KEIN GERÄT"}</span><span>LETZTE MESSPUNKTE</span><span>JETZT</span></div>
+          <div className="chart-axis"><span>Verlauf: {selected?.display_name || "Kein Gerät"}</span><span>Letzte Messpunkte</span><span>Jetzt</span></div>
         </div>
         <div className="fleet-strip">
-          <ConceptSectionHead eyebrow="FLEET PULSE" title="Geräte im Fokus" aside={<button className="text-link" onClick={onOpenExplorer}>Alle Geräte <ConceptIcon name="arrow" size={15}/></button>}/>
+          <ConceptSectionHead eyebrow="Geräte" title="Geräte im Fokus" aside={<button className="text-link" onClick={onOpenExplorer}>Alle Geräte <ConceptIcon name="arrow" size={15}/></button>}/>
           <div className="node-rows">{representatives.slice(0, 5).map((node) => <button className="node-row" key={node.node_id} onClick={() => showNode(node)}>
             <div className="node-symbol">{node.fleet_group_id === "default-servers" ? "▤" : "▣"}</div>
             <div className="node-row-name"><b>{node.physical_device_name || node.display_name}</b><small>{node.platform}</small></div>
@@ -1439,8 +804,8 @@ function CommandOverviewExact({
         </div>
       </div>
       <div className="overview-right">
-        <div className="event-card"><ConceptSectionHead eyebrow="ACTIVITY LOG" title="Ereignis-Zeitstrahl"/><div className="timeline">{events.map((event, index) => <div className="timeline-item" key={`${event.label}-${index}`}><span className={`timeline-dot ${event.hot ? "hot" : ""}`}/><div><b>{event.label}</b><small>{event.when}</small></div></div>)}</div><button className="text-link" onClick={onOpenAlerts}>Zum Ereigniscenter <ConceptIcon name="arrow" size={15}/></button></div>
-        <div className="signal-card"><div className="eyebrow">SIGNAL QUALITY</div><div className="signal-score">{availability.toFixed(1)}<span>%</span></div><p>Fleet-Verfügbarkeit · seit Aufnahme</p><div className="signal-bars" role="img" aria-label={`Fleet-Verfügbarkeit ${availability.toFixed(1)} Prozent`}>{Array.from({length:28},(_,i)=><span key={i} style={{height: i < Math.round(availability / 100 * 28) ? "100%" : "20%", opacity: i < Math.round(availability / 100 * 28) ? 0.65 : 0.18}}/>)}</div><small>Alle Knoten werden überwacht</small></div>
+        <div className="event-card"><ConceptSectionHead eyebrow="Ereignisse" title="Ereignis-Zeitstrahl"/><div className="timeline">{events.map((event, index) => <div className="timeline-item" key={`${event.label}-${index}`}><span className={`timeline-dot ${event.hot ? "hot" : ""}`}/><div><b>{event.label}</b><small>{event.when}</small></div></div>)}</div><button className="text-link" onClick={onOpenAlerts}>Alle Warnungen <ConceptIcon name="arrow" size={15}/></button></div>
+        <div className="signal-card"><div className="eyebrow">Verfügbarkeit</div><div className="signal-score">{availability.toFixed(1)}<span>%</span></div><p>Fleet-Verfügbarkeit · seit Aufnahme</p><div className="signal-bars" role="img" aria-label={`Fleet-Verfügbarkeit ${availability.toFixed(1)} Prozent`}>{Array.from({length:28},(_,i)=><span key={i} style={{height: i < Math.round(availability / 100 * 28) ? "100%" : "20%", opacity: i < Math.round(availability / 100 * 28) ? 0.65 : 0.18}}/>)}</div><small>Alle Knoten werden überwacht</small></div>
       </div>
     </div>
   </>;
@@ -1602,6 +967,23 @@ function NodeOverview({
     }
     if (channelReleases.length === 1) void setRelease(channelReleases[0].release_id);
   };
+  const [updateCheckState, setUpdateCheckState] = useState<"idle" | "sending" | "requested">(
+    node.update_check_requested_at ? "requested" : "idle",
+  );
+  useEffect(() => {
+    // The server clears the request once the agent's next heartbeat picked it up.
+    if (!node.update_check_requested_at) setUpdateCheckState((state) => (state === "requested" ? "idle" : state));
+  }, [node.update_check_requested_at]);
+  const requestUpdateCheck = async () => {
+    setUpdateCheckState("sending");
+    try {
+      await postJson(`/api/v1/fleet/nodes/${node.node_id}/update-check`, token);
+      setUpdateCheckState("requested");
+    } catch {
+      setUpdateCheckState("idle");
+      window.alert("Die Update-Prüfung konnte nicht angefordert werden.");
+    }
+  };
   const changeUpdateChannel = async () => {
     const channel = node.update_channel === "beta" ? "stable" : "beta";
     setUpdatingRelease(true);
@@ -1641,21 +1023,31 @@ function NodeOverview({
   return <section className="concept-node-page">
     <div className="node-header"><div className="node-header-left"><div className="node-large-icon">{isUnraid ? "▤" : "▣"}</div><div><div className="eyebrow">NODE / {node.machine_id}</div><h1>{node.display_name}</h1><div className="node-sub"><ConceptStatus node={{online:node.online,gaming_mode_until:gamingActive ? node.gaming_mode_until : null}}/><span>{operatingSystem}</span><span>Agent v{node.agent_version || "—"}</span><span>Kontakt {ago(node.last_seen_at)}</span></div></div></div><div className="node-actions">
       {!isUnraid && canDelete && <button type="button" className="outline-button" disabled={updatingGaming} onClick={() => void updateGamingMode(gamingActive ? 0 : 120)}><ConceptIcon name="bolt" size={16}/>{gamingActive ? "Gaming Mode beenden" : "Gaming Mode"}</button>}
+      {canDelete && node.platform === "windows" && <button
+        type="button"
+        className="outline-button"
+        disabled={updateCheckState !== "idle" || !node.online}
+        title={node.online ? "Payload-Release und Installer-Update sofort prüfen statt bis zu 6 Stunden zu warten" : "Das Gerät ist offline"}
+        onClick={() => void requestUpdateCheck()}
+      >
+        <RefreshCw size={16} className={updateCheckState === "sending" ? "spin" : ""} />
+        {updateCheckState === "requested" ? "Update-Prüfung angefordert" : "Jetzt aktualisieren"}
+      </button>}
       <button type="button" className="outline-button" onClick={() => setActionOpen((open) => !open)}>Aktionen ⌄</button>
       {actionOpen && <div className="action-menu"><button type="button" disabled={renaming} onClick={() => void rename()}>Gerät umbenennen</button>{canDelete && <button type="button" disabled={updatingRole} onClick={() => void toggleRole()}>{node.access_role === "beta_tester" ? "Zu Commander machen" : "Als Beta-Tester markieren"}</button>}{canDelete && !isUnraid && <><button type="button" disabled={updatingRelease} onClick={() => void changeUpdateChannel()}>Update-Kanal: {node.update_channel.toUpperCase()}</button><button type="button" disabled={updatingRelease} onClick={() => void assignRelease()}>{pendingRelease ? `Freigabe aufheben: ${pendingRelease.payload_version}` : "Update bewusst freigeben"}</button>{!pendingRelease && channelReleases.length > 1 && <select aria-label="Release auswählen" defaultValue="" onChange={(event) => { if(event.target.value) void setRelease(event.target.value); }}><option value="">Release auswählen …</option>{channelReleases.map((release) => <option key={release.release_id} value={release.release_id}>{release.payload_version}</option>)}</select>}</>}{canDelete && <button type="button" className="danger" disabled={forgetting} onClick={() => void forget()}>Gerät vergessen</button>}</div>}
     </div></div>
-    <div className="node-meta"><span>PHYSISCHES GERÄT <b>{node.physical_device_name || node.display_name}</b></span><span>PLATTFORM <b>{node.platform}</b></span><span>UPDATE <b>{pendingRelease?.payload_version || node.update_channel.toUpperCase()}</b></span><span>DATENFRISCHE <b>{node.online ? "Live" : ago(node.last_seen_at)}</b></span></div>
-    <div className="node-chart-card"><div className="card-head"><div><div className="eyebrow">PERFORMANCE HISTORY</div><h2>Ressourcen im Verlauf</h2></div><span className="muted-small">Letzte {points.length} Messpunkte</span></div><div className="chart-key"><span><i style={{background:"var(--mint)"}}/> CPU</span><span><i style={{background:"var(--blue)"}}/> GPU</span></div><div className="dual-chart"><ConceptSparkline values={cpuSeries} color="var(--mint)" height={190} fill/><ConceptSparkline values={gpuSeries} color="var(--blue)" height={190}/></div><div className="chart-axis"><span>VERLAUF</span><span>JETZT</span></div></div>
+    <div className="node-meta"><span>Physisches Gerät <b>{node.physical_device_name || node.display_name}</b></span><span>Plattform <b>{node.platform}</b></span><span>Update <b>{pendingRelease?.payload_version || node.update_channel.toUpperCase()}</b></span><span>Datenfrische <b>{node.online ? "Live" : ago(node.last_seen_at)}</b></span></div>
+    <div className="node-chart-card"><div className="card-head"><div><div className="eyebrow">Verlauf</div><h2>Ressourcen im Verlauf</h2></div><span className="muted-small">Letzte {points.length} Messpunkte</span></div><div className="chart-key"><span><i style={{background:"var(--accent)"}}/> CPU</span><span><i style={{background:"var(--purple)"}}/> GPU</span></div><div className="dual-chart"><ConceptSparkline values={cpuSeries} color="var(--accent)" height={190} fill/><ConceptSparkline values={gpuSeries} color="var(--purple)" height={190}/></div><div className="chart-axis"><span>Verlauf</span><span>Jetzt</span></div></div>
     <div className="metric-grid">
       <div className="metric-card"><div className="metric-title"><span>CPU</span><ConceptIcon name="activity" size={17}/></div><div className="metric-value">{num(cpu.percent).toFixed(1)}%</div><p>{cpuModel}</p><ConceptSparkline values={cpuSeries} height={48}/><div className="metric-items"><div><span>Temperatur</span><b>{typeof cpu.temperature_c === "number" ? `${num(cpu.temperature_c).toFixed(0)} °C` : "—"}</b></div><div><span>Takt</span><b>{typeof cpu.frequency_mhz === "number" ? `${num(cpu.frequency_mhz).toFixed(0)} MHz` : "—"}</b></div></div></div>
       <div className="metric-card"><div className="metric-title"><span>Arbeitsspeicher</span><ConceptIcon name="grid" size={17}/></div><div className="metric-value">{num(memory.used_gb).toFixed(1)} GB</div><p>von {num(memory.total_gb).toFixed(1)} GB belegt</p><div className="metric-meter"><ConceptMeter value={num(memory.percent)}/></div><div className="metric-items"><div><span>Auslastung</span><b>{num(memory.percent).toFixed(1)}%</b></div></div></div>
       {!isUnraid && <div className="metric-card"><div className="metric-title"><span>Grafikprozessor</span><ConceptIcon name="bolt" size={17}/></div><div className="metric-value">{m.gpus?.length ? `${num(gpu.percent).toFixed(1)}%` : "—"}</div><p>{gpuModel}</p><ConceptSparkline values={gpuSeries} color="var(--blue)" height={48}/><div className="metric-items"><div><span>Temperatur</span><b>{typeof (lhmGpu.temperature_c ?? gpu.temperature_c) === "number" ? `${num(lhmGpu.temperature_c ?? gpu.temperature_c).toFixed(0)} °C` : "—"}</b></div><div><span>Leistung</span><b>{typeof (lhmGpu.power_w ?? gpu.power_w) === "number" ? `${num(lhmGpu.power_w ?? gpu.power_w).toFixed(1)} W` : "—"}</b></div></div></div>}
       <div className="metric-card"><div className="metric-title"><span>Netzwerk</span><ConceptIcon name="chart" size={17}/></div><div className="metric-value">{num(network.download_mbps).toFixed(1)} Mb/s</div><p>↓ Download · {network.interface || "Automatisch"}</p><ConceptSparkline values={downSeries} height={48}/><div className="metric-items"><div><span>Upload</span><b>{num(network.upload_mbps).toFixed(1)} Mb/s</b></div><div><span>Monat ↓ / ↑</span><b>{monthlyNetwork?.available ? `${trafficBytes(monthlyNetwork.received_bytes)} / ${trafficBytes(monthlyNetwork.sent_bytes)}` : "—"}</b></div></div></div>
     </div>
-    <div className="detail-bottom"><div className="detail-card"><ConceptSectionHead eyebrow="STORAGE" title="Laufwerke"/>{storage.map((disk: Metrics, index: number) => <div className="disk-row" key={`${disk.mount || disk.name}-${index}`}><div><b>{disk.mount || disk.name || `Disk ${index + 1}`}</b><span>{num(disk.used_gb).toFixed(1)} / {num(disk.total_gb).toFixed(1)} GB</span></div><ConceptMeter value={num(disk.percent)}/><small>Lesen {num(disk.read_mbps).toFixed(1)} · Schreiben {num(disk.write_mbps).toFixed(1)} MiB/s</small></div>)}{!storage.length && <div className="empty">Keine Laufwerksdaten vorhanden.</div>}</div><div className="detail-card"><ConceptSectionHead eyebrow="HARDWARE" title="Sensoren"/><div className="sensor-row"><span>CPU Temperatur</span><b>{typeof cpu.temperature_c === "number" ? `${num(cpu.temperature_c).toFixed(1)} °C` : "—"}</b></div><div className="sensor-row"><span>GPU Temperatur</span><b>{typeof (lhmGpu.temperature_c ?? gpu.temperature_c) === "number" ? `${num(lhmGpu.temperature_c ?? gpu.temperature_c).toFixed(1)} °C` : "—"}</b></div><div className="sensor-row"><span>CPU Leistung</span><b>{typeof cpu.power_w === "number" ? `${num(cpu.power_w).toFixed(1)} W` : "—"}</b></div><div className="sensor-row"><span>GPU Lüfter</span><b>{typeof lhmGpu.fan_rpm === "number" ? `${num(lhmGpu.fan_rpm).toFixed(0)} RPM` : "—"}</b></div><div className="process-note">{processes.length ? `Top-Prozesse: ${processes.slice(0, 4).map((process: Metrics) => `${process.name} ${num(process.cpu).toFixed(0)}%`).join(" · ")}` : "Keine Prozessdaten verfügbar."}</div></div></div>
-    {Array.isArray(cpu.per_core) && cpu.per_core.length > 0 && <div className="detail-card concept-core-load"><ConceptSectionHead eyebrow="CPU THREADS" title="Last pro Kern"/><div className="concept-core-bars">{cpu.per_core.map((value: unknown, index: number) => <div key={index} title={`Kern ${index + 1}: ${num(value).toFixed(1)}%`}><span>{index + 1}</span><ConceptMeter value={num(value)}/></div>)}</div></div>}
-    {hardware.provider === "librehardwaremonitor" && <div className="detail-card concept-hardware"><ConceptSectionHead eyebrow="LIBRE HARDWARE MONITOR" title="Live-Hardware-Sensoren"/><div className="hardware-sensor-grid"><SensorValue label="CPU TEMPERATUR" value={cpu.temperature_c} unit="°C"/><SensorValue label="CPU LEISTUNG" value={cpu.power_w} unit="W"/><SensorValue label="CPU TAKT" value={cpu.frequency_mhz} unit="MHz"/><SensorValue label="GPU HOTSPOT" value={lhmGpu.hotspot_temperature_c} unit="°C"/><SensorValue label="GPU LEISTUNG" value={lhmGpu.power_w ?? gpu.power_w} unit="W"/><SensorValue label="GPU LÜFTER" value={lhmGpu.fan_rpm} unit="RPM"/></div></div>}
-    {isUnraid && <div className="detail-bottom concept-unraid"><UnraidStorageCard metrics={m}/><div className="unraid-services-grid"><UnraidWorkloadCard title="VIRTUAL MACHINES" icon={<MonitorCog size={16}/>} items={m.vms || []} kind="vm"/><UnraidWorkloadCard title="DOCKER CONTAINER" icon={<Boxes size={16}/>} items={m.containers || []} kind="container"/></div></div>}
+    <div className="detail-bottom"><div className="detail-card"><ConceptSectionHead eyebrow="Speicher" title="Laufwerke"/>{storage.map((disk: Metrics, index: number) => <div className="disk-row" key={`${disk.mount || disk.name}-${index}`}><div><b>{disk.mount || disk.name || `Disk ${index + 1}`}</b><span>{num(disk.used_gb).toFixed(1)} / {num(disk.total_gb).toFixed(1)} GB</span></div><ConceptMeter value={num(disk.percent)}/><small>Lesen {num(disk.read_mbps).toFixed(1)} · Schreiben {num(disk.write_mbps).toFixed(1)} MiB/s</small></div>)}{!storage.length && <div className="empty">Keine Laufwerksdaten vorhanden.</div>}</div><div className="detail-card"><ConceptSectionHead eyebrow="Hardware" title="Sensoren"/><div className="sensor-row"><span>CPU Temperatur</span><b>{typeof cpu.temperature_c === "number" ? `${num(cpu.temperature_c).toFixed(1)} °C` : "—"}</b></div><div className="sensor-row"><span>GPU Temperatur</span><b>{typeof (lhmGpu.temperature_c ?? gpu.temperature_c) === "number" ? `${num(lhmGpu.temperature_c ?? gpu.temperature_c).toFixed(1)} °C` : "—"}</b></div><div className="sensor-row"><span>CPU Leistung</span><b>{typeof cpu.power_w === "number" ? `${num(cpu.power_w).toFixed(1)} W` : "—"}</b></div><div className="sensor-row"><span>GPU Lüfter</span><b>{typeof lhmGpu.fan_rpm === "number" ? `${num(lhmGpu.fan_rpm).toFixed(0)} RPM` : "—"}</b></div><div className="process-note">{processes.length ? `Top-Prozesse: ${processes.slice(0, 4).map((process: Metrics) => `${process.name} ${num(process.cpu).toFixed(0)}%`).join(" · ")}` : "Keine Prozessdaten verfügbar."}</div></div></div>
+    {Array.isArray(cpu.per_core) && cpu.per_core.length > 0 && <div className="detail-card concept-core-load"><ConceptSectionHead eyebrow="CPU-Threads" title="Last pro Kern"/><div className="concept-core-bars">{cpu.per_core.map((value: unknown, index: number) => <div key={index} title={`Kern ${index + 1}: ${num(value).toFixed(1)}%`}><span>{index + 1}</span><ConceptMeter value={num(value)}/></div>)}</div></div>}
+    {hardware.provider === "librehardwaremonitor" && <div className="detail-card concept-hardware"><ConceptSectionHead eyebrow="LibreHardwareMonitor" title="Live-Hardware-Sensoren"/><div className="hardware-sensor-grid"><SensorValue label="CPU-Temperatur" value={cpu.temperature_c} unit="°C"/><SensorValue label="CPU-Leistung" value={cpu.power_w} unit="W"/><SensorValue label="CPU-Takt" value={cpu.frequency_mhz} unit="MHz"/><SensorValue label="GPU-Hotspot" value={lhmGpu.hotspot_temperature_c} unit="°C"/><SensorValue label="GPU-Leistung" value={lhmGpu.power_w ?? gpu.power_w} unit="W"/><SensorValue label="GPU-Lüfter" value={lhmGpu.fan_rpm} unit="RPM"/></div></div>}
+    {isUnraid && <div className="detail-bottom concept-unraid"><UnraidStorageCard metrics={m}/><div className="unraid-services-grid"><UnraidWorkloadCard title="Virtuelle Maschinen" icon={<MonitorCog size={16}/>} items={m.vms || []} kind="vm"/><UnraidWorkloadCard title="Docker-Container" icon={<Boxes size={16}/>} items={m.containers || []} kind="container"/></div></div>}
   </section>;
 }
 
@@ -1832,23 +1224,23 @@ function StatisticsPage({
   return <>
     <div className="page-intro"><div><div className="eyebrow">INSIGHTS / FLEET</div><h1>Muster erkennen.</h1><p>Verfügbarkeit, Rekorde und Traffic über die gesamte Fleet.</p></div></div>
     <div className="stats-summary">
-      <div><small>FLEET-VERFÜGBARKEIT · SEIT AUFNAHME</small><strong>{averageAvailability.toFixed(2)}<span>%</span></strong><p>Durchschnitt aller OS-Profile</p></div>
-      <div><small>GESAMT-DOWNLOAD · DIESER MONAT</small><strong>{trafficAvailable ? trafficBytes(totalReceived) : "…"}</strong><p>{trafficAvailable ? `${evaluatedDevices}/${trafficDevices.length} Geräte ausgewertet` : "Monatswerte werden berechnet"}</p></div>
-      <div><small>GESAMT-UPLOAD · DIESER MONAT</small><strong>{trafficAvailable ? trafficBytes(totalSent) : "…"}</strong><p>{trafficAvailable ? `${evaluatedDevices}/${trafficDevices.length} Geräte ausgewertet` : "Monatswerte werden berechnet"}</p></div>
+      <div><small>Verfügbarkeit seit Aufnahme</small><strong>{averageAvailability.toFixed(2)}<span>%</span></strong><p>Durchschnitt aller OS-Profile</p></div>
+      <div><small>Download in diesem Monat</small><strong>{trafficAvailable ? trafficBytes(totalReceived) : "…"}</strong><p>{trafficAvailable ? `${evaluatedDevices}/${trafficDevices.length} Geräte ausgewertet` : "Monatswerte werden berechnet"}</p></div>
+      <div><small>Upload in diesem Monat</small><strong>{trafficAvailable ? trafficBytes(totalSent) : "…"}</strong><p>{trafficAvailable ? `${evaluatedDevices}/${trafficDevices.length} Geräte ausgewertet` : "Monatswerte werden berechnet"}</p></div>
     </div>
     <div className="stats-layout">
       <div className="detail-card">
-        <ConceptSectionHead eyebrow="ALL-TIME LEADERBOARD" title="Verfügbarkeits-Rangliste" aside={<span className="muted-small">Seit Aufnahme des Geräts</span>}/>
+        <ConceptSectionHead eyebrow="Bestenliste" title="Verfügbarkeits-Rangliste" aside={<span className="muted-small">Seit Aufnahme des Geräts</span>}/>
         <div className="ranking">{availability.map(({node, value}, index) => <div className="ranking-entry" key={node.node_id}>
           <span className="rank-number">{String(index + 1).padStart(2, "0")}</span><span className="rank-name"><b>{node.display_name}</b><small>{node.platform}</small></span>
           <span className="rank-bar"><ConceptMeter value={value}/></span><span className="rank-percent">{value.toFixed(2)}%</span><span className="rank-record">Rekord {duration(node.uptime_record_seconds)}</span>
         </div>)}</div>
       </div>
       <div className="detail-card">
-        <ConceptSectionHead eyebrow="TRAFFIC COMPARISON" title="Netzwerk nach Gerät"/>
+        <ConceptSectionHead eyebrow="Traffic-Vergleich" title="Netzwerk nach Gerät"/>
         <div className="segmented stats-tabs"><button type="button" className={selectedTrafficDirection === "download" ? "selected" : ""} onClick={() => setSelectedTrafficDirection("download")}>Download</button><button type="button" className={selectedTrafficDirection === "upload" ? "selected" : ""} onClick={() => setSelectedTrafficDirection("upload")}>Upload</button></div>
         <ConceptSparkline values={trafficSeries} color="var(--mint)" height={172} fill/>
-        <div className="chart-axis"><span>LIVE-VERLAUF · LETZTE MESSPUNKTE</span><span>JETZT</span></div>
+        <div className="chart-axis"><span>Verlauf der letzten Messpunkte</span><span>Jetzt</span></div>
         <div className="traffic-breakdown">{trafficRanking.map((device) => {
           const value = selectedTrafficDirection === "download" ? device.received : device.sent;
           return <div key={device.key}><span>{device.name}</span><ConceptMeter value={selectedTotal ? value / selectedTotal * 100 : 0}/><b>{device.available ? trafficBytes(value) : "—"}</b></div>;
@@ -1883,7 +1275,7 @@ function TelemetryPage({
     <div className="telemetry-page">
       <div className="surface telemetry-title">
         <div>
-          <span className="eyebrow">LIVE TELEMETRIE</span>
+          <span className="eyebrow">Live-Telemetrie</span>
           <h1>{node.display_name}</h1>
           <p>{points.length} Messpunkte im aktuellen Diagramm</p>
         </div>
@@ -1896,7 +1288,7 @@ function TelemetryPage({
               <Cpu size={17} />
             </div>
             <div>
-              <span>CPU-LAST</span>
+              <span>CPU-Last</span>
               <strong>{num(cpu.percent).toFixed(1)}%</strong>
             </div>
           </header>
@@ -1908,7 +1300,7 @@ function TelemetryPage({
               <MemoryStick size={17} />
             </div>
             <div>
-              <span>RAM-AUSLASTUNG</span>
+              <span>RAM-Auslastung</span>
               <strong>{num(memory.percent).toFixed(1)}%</strong>
             </div>
           </header>
@@ -1919,19 +1311,19 @@ function TelemetryPage({
           />
         </article>
         <article className="surface chart-card">
-          <header><div className="chart-icon blue"><Network size={17} /></div><div><span>NETZWERK · DOWNLOAD</span><strong>{num(network.download_mbps).toFixed(1)} Mbps</strong></div></header>
+          <header><div className="chart-icon blue"><Network size={17} /></div><div><span>Netzwerk-Download</span><strong>{num(network.download_mbps).toFixed(1)} Mbps</strong></div></header>
           <Sparkline points={points} metric={(m) => num(m.network?.download_mbps)} maxValue={Math.max(10, ...points.map((point) => num(point.metrics.network?.download_mbps)))} color="var(--blue)" />
         </article>
         <article className="surface chart-card">
-          <header><div className="chart-icon purple"><Network size={17} /></div><div><span>NETZWERK · UPLOAD</span><strong>{num(network.upload_mbps).toFixed(1)} Mbps</strong></div></header>
+          <header><div className="chart-icon purple"><Network size={17} /></div><div><span>Netzwerk-Upload</span><strong>{num(network.upload_mbps).toFixed(1)} Mbps</strong></div></header>
           <Sparkline points={points} metric={(m) => num(m.network?.upload_mbps)} maxValue={Math.max(10, ...points.map((point) => num(point.metrics.network?.upload_mbps)))} color="var(--purple)" />
         </article>
         <article className="surface chart-card">
-          <header><div className="chart-icon blue"><HardDrive size={17} /></div><div><span>HÖCHSTE LAUFWERKBELEGUNG</span><strong>{diskUse.toFixed(1)}%</strong></div></header>
+          <header><div className="chart-icon blue"><HardDrive size={17} /></div><div><span>Höchste Laufwerksbelegung</span><strong>{diskUse.toFixed(1)}%</strong></div></header>
           <Sparkline points={points} metric={(m) => Math.max(0, ...(m.disks || []).map((disk: Metrics) => num(disk.percent)))} color="var(--blue)" />
         </article>
         {typeof cpu.temperature_c === "number" && <article className="surface chart-card">
-          <header><div className="chart-icon red"><Cpu size={17} /></div><div><span>CPU-TEMPERATUR</span><strong>{num(cpu.temperature_c).toFixed(0)} °C</strong></div></header>
+          <header><div className="chart-icon red"><Cpu size={17} /></div><div><span>CPU-Temperatur</span><strong>{num(cpu.temperature_c).toFixed(0)} °C</strong></div></header>
           <Sparkline points={points} metric={(m) => num(m.cpu?.temperature_c)} color="var(--amber)" />
         </article>}
         <article className="surface chart-card">
@@ -1940,7 +1332,7 @@ function TelemetryPage({
               <MonitorCog size={17} />
             </div>
             <div>
-              <span>GPU-LAST</span>
+              <span>GPU-Last</span>
               <strong>{num(gpu.percent).toFixed(1)}%</strong>
             </div>
           </header>
@@ -1954,7 +1346,7 @@ function TelemetryPage({
       <section className="surface metadata">
         <header className="section-head">
           <div>
-            <span className="eyebrow">NODE INFORMATION</span>
+            <span className="eyebrow">Geräteinformationen</span>
             <h2>Systemdetails</h2>
           </div>
         </header>
@@ -2252,7 +1644,7 @@ function FleetChat({ token, identity }: { token: string; identity: DashboardUser
         <small>Enter senden · Umschalt+Enter neue Zeile · Anhänge bis 100 MB</small>
       </form>
     </div>
-    {preview && <div className="chat-preview-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setPreview(null)}><section className="chat-preview"><header><div><span className="eyebrow">DATEIVORSCHAU</span><h2>{preview.attachment.name}</h2></div><button onClick={() => setPreview(null)} aria-label="Vorschau schließen"><X size={18} /></button></header><div className="chat-preview-content">{preview.kind === "image" ? <img src={preview.url} alt={preview.attachment.name} /> : <iframe src={preview.url} title={preview.attachment.name} />}</div><footer><span>{(preview.attachment.size / 1024 / 1024).toFixed(1)} MB</span><a href={preview.url} download={preview.attachment.name}><Download size={15} />Download</a></footer></section></div>}
+    {preview && <div className="chat-preview-backdrop" onMouseDown={(event) => event.target === event.currentTarget && setPreview(null)}><section className="chat-preview"><header><div><span className="eyebrow">Dateivorschau</span><h2>{preview.attachment.name}</h2></div><button onClick={() => setPreview(null)} aria-label="Vorschau schließen"><X size={18} /></button></header><div className="chat-preview-content">{preview.kind === "image" ? <img src={preview.url} alt={preview.attachment.name} /> : <iframe src={preview.url} title={preview.attachment.name} />}</div><footer><span>{(preview.attachment.size / 1024 / 1024).toFixed(1)} MB</span><a href={preview.url} download={preview.attachment.name}><Download size={15} />Download</a></footer></section></div>}
   </section>;
 }
 
@@ -2267,7 +1659,7 @@ function AlertsPage({ alerts, canClear, onClear }: { alerts: AlertRecord[]; canC
     <div className="page-intro"><div><div className="eyebrow">INCIDENT / CENTER</div><h1>Warnungszentrale.</h1><p>Vorfälle mit Kontext, Verlauf und klaren nächsten Schritten.</p></div>{canClear && active.length > 0 && <button type="button" className="outline-button" disabled={clearing} onClick={() => { if (window.confirm("Alle aktiven Warnungen als erledigt markieren?")) { setClearing(true); void onClear().finally(() => setClearing(false)); } }}>{clearing ? "Wird erledigt …" : "Alle erledigt"}</button>}</div>
     <div className="alert-summary"><div><strong>{active.length}</strong><span>Aktiv</span></div><div><strong>{active.filter((alert) => alert.severity === "critical").length}</strong><span>Kritisch</span></div><div><strong>{alerts.length - active.length}</strong><span>Gelöst</span></div></div>
     <div className="filter-bar alert-filters"><div className="segmented">{["Alle", "Aktiv", "Gelöst"].map((value) => <button type="button" key={value} className={filter === value ? "selected" : ""} onClick={() => setFilter(value)}>{value}</button>)}</div><select value={severity} onChange={(event) => setSeverity(event.target.value)}><option>Alle Schweregrade</option><option value="critical">Kritisch</option><option value="warning">Warnung</option></select></div>
-    <div className="alert-list">{shown.length ? shown.map((alert) => <div className={`alert-item ${alert.active ? alert.severity : "resolved"}`} key={alert.alert_id}><div className="alert-item-main" role="button" tabIndex={0} onClick={() => setExpanded(expanded === alert.alert_id ? null : alert.alert_id)} onKeyDown={(event) => { if (event.key === "Enter") setExpanded(expanded === alert.alert_id ? null : alert.alert_id); }}><div className={`alert-indicator ${alert.active ? alert.severity : "info"}`}><ConceptIcon name="alert" size={19}/></div><div className="alert-copy"><div className="alert-title-line"><span className={`severity ${alert.severity}`}>{alert.severity.toUpperCase()}</span><span className="alert-state">{alert.active ? "Aktiv" : "Gelöst"}</span><span>{new Date(alert.opened_at).toLocaleString("de-DE")}</span></div><h3>{alert.message}</h3><p>{alert.display_name} · {alert.kind.toUpperCase()}</p></div><span className="expand-caret">{expanded === alert.alert_id ? "⌃" : "⌄"}</span></div>{expanded === alert.alert_id && <div className="alert-expanded"><div className="eyebrow">EREIGNISVERLAUF</div><div className="history-line"><span/>Erkannt {new Date(alert.opened_at).toLocaleString("de-DE")}</div>{!alert.active && <div className="history-line"><span/>Behoben {new Date(alert.resolved_at || alert.updated_at).toLocaleString("de-DE")}</div>}</div>}</div>) : <div className="empty">Keine Vorfälle in dieser Auswahl.</div>}</div>
+    <div className="alert-list">{shown.length ? shown.map((alert) => <div className={`alert-item ${alert.active ? alert.severity : "resolved"}`} key={alert.alert_id}><div className="alert-item-main" role="button" tabIndex={0} onClick={() => setExpanded(expanded === alert.alert_id ? null : alert.alert_id)} onKeyDown={(event) => { if (event.key === "Enter") setExpanded(expanded === alert.alert_id ? null : alert.alert_id); }}><div className={`alert-indicator ${alert.active ? alert.severity : "info"}`}><ConceptIcon name="alert" size={19}/></div><div className="alert-copy"><div className="alert-title-line"><span className={`severity ${alert.severity}`}>{alert.severity.toUpperCase()}</span><span className="alert-state">{alert.active ? "Aktiv" : "Gelöst"}</span><span>{new Date(alert.opened_at).toLocaleString("de-DE")}</span></div><h3>{alert.message}</h3><p>{alert.display_name} · {alert.kind.toUpperCase()}</p></div><span className="expand-caret">{expanded === alert.alert_id ? "⌃" : "⌄"}</span></div>{expanded === alert.alert_id && <div className="alert-expanded"><div className="eyebrow">Ereignisverlauf</div><div className="history-line"><span/>Erkannt {new Date(alert.opened_at).toLocaleString("de-DE")}</div>{!alert.active && <div className="history-line"><span/>Behoben {new Date(alert.resolved_at || alert.updated_at).toLocaleString("de-DE")}</div>}</div>}</div>) : <div className="empty">Keine Vorfälle in dieser Auswahl.</div>}</div>
   </>;
 }
 
@@ -2406,21 +1798,21 @@ function SettingsPage({
       <section className="surface settings-card">
         <header className="section-head">
           <div>
-            <span className="eyebrow">DARSTELLUNG</span>
-            <h2>Theme auswählen</h2>
+            <span className="eyebrow">Darstellung</span>
+            <h2>Farbschema</h2>
           </div>
           <Moon size={19} />
         </header>
-        <div className="theme-grid">
+        <div className="scheme-switch" role="radiogroup" aria-label="Farbschema">
           {THEMES.map((item) => (
             <button
               key={item.id}
+              role="radio"
+              aria-checked={theme === item.id}
               className={theme === item.id ? "active" : ""}
               onClick={() => onTheme(item.id)}
             >
-              <i style={{ background: item.color }} />
-              <span>{item.name}</span>
-              {theme === item.id && <Check size={15} />}
+              {item.name}
             </button>
           ))}
         </div>
@@ -2490,7 +1882,7 @@ function SettingsPage({
               ] as const
             ).map((key) => (
               <label key={key}>
-                {key.replace("_threshold", "").toUpperCase()}
+                <span className="policy-label">{{ cpu_threshold: "CPU", memory_threshold: "Arbeitsspeicher", gpu_threshold: "GPU", disk_threshold: "Laufwerk" }[key]}</span>
                 <input
                   type="number"
                   min="50"
@@ -2684,7 +2076,7 @@ function EnrollmentPage({
         <section className="surface enrollment-form">
           <header className="section-head">
             <div>
-              <span className="eyebrow">NEUE EINLADUNG</span>
+              <span className="eyebrow">Neue Einladung</span>
               <h2>Gerät vorbereiten</h2>
             </div>
           </header>
@@ -2731,7 +2123,7 @@ function EnrollmentPage({
         </section>
         {issued ? (
           <section className="surface token-reveal">
-            <span className="eyebrow">SCHRITT 1 · NUR JETZT SICHTBAR</span>
+            <span className="eyebrow">Schritt 1 · nur jetzt sichtbar</span>
             <h2>
               {platformName} für {issued.name} einrichten
             </h2>
@@ -2749,7 +2141,7 @@ function EnrollmentPage({
               </button>
             </div>
             <div className="setup-step">
-              <span>SCHRITT 2 · AUF DEM ZIELGERÄT AUSFÜHREN</span>
+              <span>Schritt 2 · auf dem Zielgerät ausführen</span>
               <div>
                 <code>{command}</code>
                 <button
@@ -2797,7 +2189,7 @@ function EnrollmentPage({
       {canManageAccess && <><section className="surface invitation-list">
         <header className="section-head">
           <div>
-            <span className="eyebrow">BROWSER-ZUGANG</span>
+            <span className="eyebrow">Browser-Zugang</span>
             <h2>Admin-Code erstellen</h2>
           </div>
           <ShieldCheck size={19} />
@@ -2897,7 +2289,7 @@ function EnrollmentPage({
       <section className="surface invitation-list">
         <header className="section-head">
           <div>
-            <span className="eyebrow">GERÄTE-PAIRING</span>
+            <span className="eyebrow">Geräte-Pairing</span>
             <h2>Neue Geräte</h2>
           </div>
           <UserPlus size={19} />
@@ -2944,11 +2336,11 @@ function EnrollmentPage({
       <section className="surface invitation-list">
         <header className="section-head">
           <div>
-            <span className="eyebrow">EINLADUNGEN</span>
+            <span className="eyebrow">Einladungen</span>
             <h2>Token-Verwaltung</h2>
           </div>
           <b>
-            {invitations.filter((item) => item.status === "ready").length} AKTIV
+            {invitations.filter((item) => item.status === "ready").length} aktiv
           </b>
         </header>
         <div className="invitation-rows">
@@ -3052,7 +2444,7 @@ function Login({
         <div className="login-icon">
           <KeyRound size={26} />
         </div>
-        <span className="eyebrow">GESCHÜTZTER ZUGANG</span>
+        <span className="eyebrow">Geschützter Zugang</span>
         <h1>Willkommen, Commander.</h1>
         <p>{mode === "code" ? "Gib deinen achtstelligen Admin-Code ein. Er wird im Dashboard erzeugt und gewährt den vorgesehenen Zugang." : "Melde dich mit deinem persönlichen NCC-Konto an."}</p>
         <div className="segmented login-methods"><button type="button" className={mode === "code" ? "selected" : ""} onClick={() => { setMode("code"); setLocalError(false); }}>Admin-Code</button><button type="button" className={mode === "account" ? "selected" : ""} onClick={() => { setMode("account"); setLocalError(false); }}>Benutzerkonto</button></div>
@@ -3090,9 +2482,10 @@ function Login({
 }
 
 function App() {
-  const [theme, setTheme] = useState<Theme>(
-    () => (localStorage.getItem("ncc-concept-theme") as Theme) || "mint",
-  );
+  const [theme, setTheme] = useState<Theme>(() => {
+    const stored = localStorage.getItem("ncc-color-scheme");
+    return stored === "light" || stored === "dark" ? stored : "system";
+  });
   const [token, setToken] = useState(
     () => localStorage.getItem("ncc-dashboard-token") || "",
   );
@@ -3121,8 +2514,7 @@ function App() {
     [query, setQuery] = useState(""),
     [loading, setLoading] = useState(true),
     [sidebar, setSidebar] = useState(false),
-    [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem("ncc-sidebar-collapsed") === "true"),
-    [clock, setClock] = useState(new Date());
+    [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem("ncc-sidebar-collapsed") === "true");
   const selected =
     nodes.find((node) => node.node_id === selectedId) || nodes[0] || null;
   const activeLoadsRef = useRef(0);
@@ -3234,8 +2626,10 @@ function App() {
     [token, loadConfiguration],
   );
   useEffect(() => {
+    // design.css follows prefers-color-scheme for "system".
     document.documentElement.dataset.theme = theme;
-    localStorage.setItem("ncc-concept-theme", theme);
+    localStorage.setItem("ncc-color-scheme", theme);
+    localStorage.removeItem("ncc-concept-theme");
   }, [theme]);
   useEffect(() => localStorage.setItem("ncc-sidebar-collapsed", String(sidebarCollapsed)), [sidebarCollapsed]);
   useEffect(() => {
@@ -3258,10 +2652,6 @@ function App() {
     document.addEventListener("visibilitychange", resume);
     return () => { clearInterval(poll); document.removeEventListener("visibilitychange", resume); };
   }, [load, authenticated]);
-  useEffect(() => {
-    const timer = window.setInterval(() => setClock(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
   useEffect(() => {
     if (!selected) return;
     const nodeId = selected.node_id;
@@ -3456,59 +2846,73 @@ function App() {
     await load(false, false);
   };
   const canManageAccess = accessRole === "commander";
-  if (authenticated === null) return <div className="login"><section><Brand /><span className="eyebrow">NCC-VERBINDUNG</span><h1>{loading ? "Verbindung wird hergestellt." : "NCC-Server nicht erreichbar."}</h1><p>{loading ? "Das Dashboard lädt die aktuellen Fleet-Daten." : "Die Anmeldung wurde nicht zurückgesetzt. Prüfe die Verbindung und versuche es erneut."}</p>{!loading && <button className="primary-button" type="button" onClick={() => void load()}>Erneut verbinden <RefreshCw size={16} /></button>}</section></div>;
+  if (authenticated === null) return <div className="login"><section><Brand /><span className="eyebrow">NCC-Verbindung</span><h1>{loading ? "Verbindung wird hergestellt." : "NCC-Server nicht erreichbar."}</h1><p>{loading ? "Das Dashboard lädt die aktuellen Fleet-Daten." : "Die Anmeldung wurde nicht zurückgesetzt. Prüfe die Verbindung und versuche es erneut."}</p>{!loading && <button className="primary-button" type="button" onClick={() => void load()}>Erneut verbinden <RefreshCw size={16} /></button>}</section></div>;
   if (authenticated === false)
     return (
       <Login onSave={saveToken} error={authenticated === false && authError} />
     );
   const title =
     page === "fleet"
-      ? "Command Overview"
+      ? "Übersicht"
       : page === "explorer"
-        ? "Fleet Explorer"
+        ? "Geräte"
       : page === "statistics"
         ? "Statistiken"
         : page === "alerts"
-          ? "Warnungszentrum"
+          ? "Warnungen"
           : page === "chat"
-            ? "Fleet Chat"
+            ? "Chat"
           : page === "onboarding"
             ? "Gerät hinzufügen"
-            : "System Settings";
+            : "Einstellungen";
+  const activeAlertCount = alerts.filter((alert) => alert.active).length;
+  const navGroups: { label: string; items: { id: Page; label: string; icon: React.ReactNode }[] }[] = [
+    { label: "Überwachen", items: [
+      { id: "fleet", label: "Übersicht", icon: <LayoutDashboard size={18} /> },
+      { id: "explorer", label: "Geräte", icon: <Server size={18} /> },
+      { id: "statistics", label: "Statistiken", icon: <BarChart3 size={18} /> },
+      { id: "alerts", label: "Warnungen", icon: <AlertTriangle size={18} /> },
+    ] },
+    { label: "Verwalten", items: [
+      { id: "chat", label: "Chat", icon: <MessageSquare size={18} /> },
+      { id: "settings", label: "Einstellungen", icon: <Settings size={18} /> },
+    ] },
+  ];
   return (
     <div className="app-shell ncc-production">
       <aside className={`sidebar ${sidebar ? "open" : ""}`}>
         <div className="brand">
-          <div className="brand-mark"><span/><span/><span/><span/></div>
-          <div><strong>no0bz</strong><small>COMMAND CENTER</small></div>
+          <div className="brand-mark" aria-hidden="true"><span/><span/><span/><span/></div>
+          <div><strong>no0bz</strong><small>Command Center</small></div>
           <button className="mobile-close icon-button" onClick={() => setSidebar(false)} aria-label="Menü schließen"><ConceptIcon name="close" /></button>
         </div>
-        <div className="workspace-label">WORKSPACE <span className="tiny-dot"/> PRIVATE CLOUD</div>
         <nav aria-label="Hauptnavigation">
-          <div className="nav-caption">OBSERVE</div>
-          {[
-            { id: "fleet" as Page, label: "Command Overview", icon: <LayoutDashboard size={17} /> },
-            { id: "explorer" as Page, label: "Fleet Explorer", icon: <Server size={17} /> },
-            { id: "statistics" as Page, label: "Statistiken", icon: <BarChart3 size={17} /> },
-            { id: "alerts" as Page, label: "Warnungszentrale", icon: <AlertTriangle size={17} /> },
-          ].map((item) => <button key={item.id} className={`nav-item ${page === item.id ? "active" : ""}`} onClick={() => { setPage(item.id); setSidebar(false); }}>{item.icon}<span>{item.label}</span>{item.id === "alerts" && alerts.some((alert) => alert.active) && <em>{alerts.filter((alert) => alert.active).length}</em>}</button>)}
-          <div className="nav-caption nav-second">MANAGE</div>
-          {[
-            { id: "chat" as Page, label: "Fleet Chat", icon: <MessageSquare size={17} /> },
-            { id: "settings" as Page, label: "Einstellungen", icon: <Settings size={17} /> },
-          ].map((item) => <button key={item.id} className={`nav-item ${page === item.id ? "active" : ""}`} onClick={() => { setPage(item.id); setSidebar(false); }}>{item.icon}<span>{item.label}</span></button>)}
+          {navGroups.map((group) => (
+            <div className="nav-group" key={group.label}>
+              <div className="nav-caption">{group.label}</div>
+              {group.items.map((item) => (
+                <button
+                  key={item.id}
+                  className={`nav-item ${page === item.id ? "active" : ""}`}
+                  aria-current={page === item.id ? "page" : undefined}
+                  onClick={() => { setPage(item.id); setSidebar(false); }}
+                >
+                  {item.icon}<span>{item.label}</span>
+                  {item.id === "alerts" && activeAlertCount > 0 && <em aria-label={`${activeAlertCount} aktive Warnungen`}>{activeAlertCount}</em>}
+                </button>
+              ))}
+            </div>
+          ))}
         </nav>
         <div className="sidebar-bottom">
           <div className="fleet-health">
-            <div className="fleet-health-top"><span><span className="pulse-dot"/> SYSTEM OPERATIONAL</span><b>{summary?.online_nodes || 0}/{summary?.total_nodes || 0}</b></div>
-            <div className="fleet-health-line"><span style={{ width: `${summary?.total_nodes ? (summary.online_nodes / summary.total_nodes) * 100 : 0}%` }} /></div>
-            <small>Fleet online · Live-Messdaten</small>
+            <span className={`fleet-health-dot${summary && summary.online_nodes < summary.total_nodes ? " partial" : ""}`} aria-hidden="true" />
+            <span><b>{summary?.online_nodes || 0} von {summary?.total_nodes || 0}</b> Geräten online</span>
           </div>
-          {canManageAccess && <button className="sidebar-add" type="button" onClick={() => setPage("onboarding")}><ConceptIcon name="plus" size={16} /> Gerät hinzufügen <ConceptIcon name="arrow" size={15} /></button>}
+          {canManageAccess && <button className="sidebar-add" type="button" onClick={() => setPage("onboarding")}><ConceptIcon name="plus" size={16} /> Gerät hinzufügen</button>}
           <div className="profile">
-            <div className="avatar">{(identity?.username || "C").slice(0, 1).toUpperCase()}</div>
+            <div className="avatar" aria-hidden="true">{(identity?.username || "C").slice(0, 1).toUpperCase()}</div>
             <div><b>{identity?.username || (canManageAccess ? "Commander" : "Beta-Tester")}</b><small>{canManageAccess ? "Commander" : "Beta-Tester"}</small></div>
-            <span>⌄</span>
           </div>
         </div>
       </aside>
@@ -3517,27 +2921,27 @@ function App() {
         <header className="topbar">
           <div className="top-left">
             <button className="mobile-menu icon-button" onClick={() => setSidebar(true)} aria-label="Menü öffnen"><Menu size={20} /></button>
-            <span className="breadcrumb">NCC <span>/</span> {title}</span>
+            <h1 className="page-title">{title}</h1>
           </div>
           <div className="top-actions">
-            <span className={`live-pill${connectionOnline ? "" : " disconnected"}`}><i/> {connectionOnline ? "LIVE" : "VERBINDUNG UNTERBROCHEN"}</span>
-            <span className="top-clock">{clock.toLocaleDateString("de-DE", { day: "2-digit", month: "short", year: "numeric" })}</span>
+            <span className={`live-pill${connectionOnline ? "" : " disconnected"}`}><i aria-hidden="true"/> {connectionOnline ? "Live" : "Verbindung unterbrochen"}</span>
             <button
               className="top-alert icon-button"
-              aria-label="Warnungszentrum"
+              aria-label={activeAlertCount ? `Warnungen (${activeAlertCount} aktiv)` : "Warnungen"}
+              title="Warnungen"
               onClick={() => setPage("alerts")}
             >
               <ConceptIcon name="alert" size={19} />
-              {alerts.some((alert) => alert.active) && <i />}
+              {activeAlertCount > 0 && <i />}
             </button>
             <button
               className="icon-button"
               onClick={() => void load()}
-              aria-label="Aktualisieren"
+              aria-label="Daten neu laden"
+              title="Daten neu laden"
             >
               <RefreshCw size={17} className={loading ? "spin" : ""} />
             </button>
-            <div className="top-avatar">{(identity?.username || "C").slice(0, 1).toUpperCase()}</div>
           </div>
         </header>
         <main className="content">

@@ -99,6 +99,19 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   reguläre signierte Prüfung von Payload-Release und Installer-Feed aus,
   statt bis zu sechs Stunden zu warten. 0.5-Agenten ignorieren das neue Feld.
   Die Migration `20261029_0019` ergänzt dafür eine Spalte an `nodes`.
+- Das Dashboard hat ein ruhigeres, sachliches Design: eine dunkle und eine
+  helle Fassung mit einer dezenten Akzentfarbe, die standardmäßig der
+  Systemeinstellung folgt (Einstellungen → Farbschema). Die bisherigen
+  16 Farbthemen entfallen. Statt nie geladener Webfonts mit Serifen-Ersatz
+  nutzt es die Systemschrift in lesbaren Größen; gesperrte Großbuchstaben,
+  Leuchteffekte und englische Zwischenüberschriften sind ersetzt. Die
+  Navigation heißt jetzt Übersicht, Geräte, Statistiken, Warnungen, Chat und
+  Einstellungen, und der Seitentitel steht in der Kopfzeile. Nicht mehr
+  verwendete Übersichtsvarianten wurden entfernt. Commander finden in der
+  Geräteansicht von Windows-Geräten den Knopf „Jetzt aktualisieren“.
+  `frontend/src/design.css` enthält das Design-System;
+  `scripts/generate_dashboard_readability_css.py` erzeugt daraus die
+  Lesbarkeitskorrekturen für die älteren Stylesheets.
 - Die Backend-Typprüfung verwendet für gespeicherte Warnungsstufen eine
   explizite Typangabe statt einer zwischen Python-Versionen instabilen
   `type: ignore`-Ausnahme.
