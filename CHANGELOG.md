@@ -112,6 +112,10 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   `frontend/src/design.css` enthält das Design-System;
   `scripts/generate_dashboard_readability_css.py` erzeugt daraus die
   Lesbarkeitskorrekturen für die älteren Stylesheets.
+- Entwicklungs-Pre-Release `v0.6.0-beta.8-dev.3`: signierter Windows-Payload
+  `0.6.0-beta.8-dev.3` mit der Weitergabe von „Jetzt aktualisieren“ und
+  signiertes Agent-Setup `0.6.0-beta.8-dev.5`, das ihn mitliefert. Der
+  Installer-Update-Feed bietet dieses Setup an.
 - Die Backend-Typprüfung verwendet für gespeicherte Warnungsstufen eine
   explizite Typangabe statt einer zwischen Python-Versionen instabilen
   `type: ignore`-Ausnahme.
