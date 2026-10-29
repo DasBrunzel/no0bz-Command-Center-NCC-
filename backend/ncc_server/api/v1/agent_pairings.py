@@ -47,6 +47,21 @@ async def register(
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="pairing identifier is unavailable")
         if record.cancelled_at is not None or record.claimed_at is not None:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="pairing is no longer available")
+        if _as_utc(record.expires_at) <= now:
+            # The agent keeps its installer-generated pairing identity, so an
+            # expired request is reopened instead of stranding the device. A
+            # stale approval does not carry over; it needs a fresh approval.
+            record.expires_at = now + PAIRING_LIFETIME
+            record.approved_at = None
+            session.add(
+                AuditEvent(
+                    actor_type="agent-pairing",
+                    actor_id=record.id,
+                    action="agent-pairing.renewed",
+                    details=json.dumps({"machine_id": record.machine_id}, separators=(",", ":")),
+                )
+            )
+            session.commit()
         return _response(record)
     record = AgentPairing(
         id=payload.pairing_id,

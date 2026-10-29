@@ -76,7 +76,9 @@ class AgentClient:
             json={"pairing_secret": self.settings.pairing_secret.get_secret_value()},
             pending_ok=True,
         )
-        return None if response.status_code == 409 else str(response.json()["token"])
+        # 409 waits for approval; 410 means the request expired and the next
+        # registration reopens it. Neither may end the payload process.
+        return None if response.status_code in {409, 410} else str(response.json()["token"])
 
     def enroll(self) -> int:
         response = self._request(
@@ -155,7 +157,7 @@ class AgentClient:
 
     def _request_public(self, method: str, path: str, *, pending_ok: bool = False, **kwargs: Any) -> httpx.Response:
         response = self._client.request(method, f"{self.server_url}{path}", **kwargs)
-        if pending_ok and response.status_code == 409:
+        if pending_ok and response.status_code in {409, 410}:
             return response
         if response.status_code in {400, 401, 403, 410, 422}:
             raise AgentRejectedError(f"server rejected agent pairing ({response.status_code})")

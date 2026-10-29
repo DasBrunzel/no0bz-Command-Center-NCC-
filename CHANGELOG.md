@@ -57,6 +57,11 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   den gestoppten Dienst noch mit dem alten Payload neu; der neue Payload wurde
   dadurch nie gesund und die Installation zurückgerollt. Das Skript startet
   einen zwischenzeitlich wieder laufenden Dienst zusätzlich selbst neu.
+- Eine nach 15 Minuten abgelaufene Pairing-Anfrage bleibt nicht mehr dauerhaft
+  verloren. Registriert sich der Agent mit derselben Pairing-ID und dem
+  passenden Geheimnis erneut, öffnet der Server die Anfrage wieder; eine vor
+  dem Ablauf erteilte Freigabe gilt dabei nicht weiter. Der Agent wertet eine
+  abgelaufene Anfrage als weiteres Warten, statt den Payload zu beenden.
 - Die Backend-Typprüfung verwendet für gespeicherte Warnungsstufen eine
   explizite Typangabe statt einer zwischen Python-Versionen instabilen
   `type: ignore`-Ausnahme.

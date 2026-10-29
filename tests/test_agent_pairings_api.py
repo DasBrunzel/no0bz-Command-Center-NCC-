@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+from datetime import timedelta
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 from ncc_server.app import create_app
 from ncc_server.config import ServerSettings
 from ncc_server.database import Database
-from ncc_server.models import AgentToken, Base, Node
+from ncc_server.models import AgentPairing, AgentToken, AuditEvent, Base, Node, utc_now
 from pydantic import SecretStr
+from sqlalchemy import select
 
 
 def make_database(path: Path) -> Database:
@@ -61,6 +63,84 @@ def test_dashboard_approves_pairing_and_agent_claims_internal_token(tmp_path: Pa
             f"/api/v1/agent-pairings/{payload['pairing_id']}/claim",
             json={"pairing_secret": payload["pairing_secret"]},
         ).status_code == 409
+
+
+def expire_pairing(database: Database, pairing_id: str) -> None:
+    with database.session() as session:
+        record = session.get(AgentPairing, pairing_id)
+        assert record is not None
+        record.expires_at = utc_now() - timedelta(minutes=1)
+        session.commit()
+
+
+def test_expired_pairing_is_reopened_by_its_agent_and_needs_fresh_approval(tmp_path: Path) -> None:
+    database = make_database(tmp_path / "pairing-renew.db")
+    app = create_app(
+        ServerSettings(database_url="sqlite+pysqlite://", dashboard_token=SecretStr("dashboard-secret")),
+        database,
+    )
+    dashboard = {"X-NCC-Dashboard-Token": "dashboard-secret"}
+    payload = pairing_payload()
+    claim = {"pairing_secret": payload["pairing_secret"]}
+    with TestClient(app) as client:
+        assert client.post("/api/v1/agent-pairings/register", json=payload).status_code == 201
+        assert client.post(
+            f"/api/v1/agent-pairings/{payload['pairing_id']}/approve", headers=dashboard
+        ).status_code == 200
+        expire_pairing(database, str(payload["pairing_id"]))
+        assert client.post(
+            f"/api/v1/agent-pairings/{payload['pairing_id']}/claim", json=claim
+        ).status_code == 410
+        assert client.post(
+            f"/api/v1/agent-pairings/{payload['pairing_id']}/approve", headers=dashboard
+        ).status_code == 410
+
+        renewed = client.post("/api/v1/agent-pairings/register", json=payload)
+        assert renewed.status_code == 201
+        assert renewed.json()["status"] == "waiting"
+        # The approval granted before expiry does not carry over.
+        assert client.post(
+            f"/api/v1/agent-pairings/{payload['pairing_id']}/claim", json=claim
+        ).status_code == 409
+        assert client.post(
+            f"/api/v1/agent-pairings/{payload['pairing_id']}/approve", headers=dashboard
+        ).status_code == 200
+        claimed = client.post(f"/api/v1/agent-pairings/{payload['pairing_id']}/claim", json=claim)
+        assert claimed.status_code == 200
+
+    with database.session() as session:
+        actions = session.scalars(select(AuditEvent.action)).all()
+    assert "agent-pairing.renewed" in actions
+
+
+def test_expired_pairing_is_not_reopened_with_a_wrong_secret_or_after_claim(tmp_path: Path) -> None:
+    database = make_database(tmp_path / "pairing-renew-guard.db")
+    app = create_app(
+        ServerSettings(database_url="sqlite+pysqlite://", dashboard_token=SecretStr("dashboard-secret")),
+        database,
+    )
+    dashboard = {"X-NCC-Dashboard-Token": "dashboard-secret"}
+    payload = pairing_payload()
+    with TestClient(app) as client:
+        assert client.post("/api/v1/agent-pairings/register", json=payload).status_code == 201
+        expire_pairing(database, str(payload["pairing_id"]))
+        wrong = client.post(
+            "/api/v1/agent-pairings/register", json={**payload, "pairing_secret": "b" * 43}
+        )
+        assert wrong.status_code == 409
+        listed = client.get("/api/v1/agent-pairings", headers=dashboard)
+        assert listed.json()[0]["status"] == "expired"
+
+        assert client.post("/api/v1/agent-pairings/register", json=payload).status_code == 201
+        assert client.post(
+            f"/api/v1/agent-pairings/{payload['pairing_id']}/approve", headers=dashboard
+        ).status_code == 200
+        assert client.post(
+            f"/api/v1/agent-pairings/{payload['pairing_id']}/claim",
+            json={"pairing_secret": payload["pairing_secret"]},
+        ).status_code == 200
+        expire_pairing(database, str(payload["pairing_id"]))
+        assert client.post("/api/v1/agent-pairings/register", json=payload).status_code == 409
 
 
 def test_pairing_never_exposes_its_secret_to_dashboard(tmp_path: Path) -> None:

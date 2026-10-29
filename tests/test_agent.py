@@ -10,7 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 from ncc.collectors.registry import SnapshotCollector
 from ncc_agent.buffer import TelemetryBuffer
-from ncc_agent.client import AgentClient
+from ncc_agent.client import AgentClient, AgentRejectedError
 from ncc_agent.config import AgentSettings
 from ncc_agent.identity import load_or_create_machine_id
 from ncc_agent.runner import _is_new_snapshot, _next_wake_seconds
@@ -177,6 +177,42 @@ def test_failed_upload_stays_in_offline_buffer(tmp_path: Path) -> None:
     with pytest.raises(httpx.HTTPStatusError):
         client.flush()
     assert buffer.count() == 1
+    client.close()
+    buffer.close()
+
+
+@pytest.mark.parametrize("status_code", [409, 410])
+def test_pending_or_expired_pairing_claim_keeps_waiting(tmp_path: Path, status_code: int) -> None:
+    buffer = TelemetryBuffer(tmp_path / "queue.sqlite3", max_points=10)
+    client = AgentClient(
+        AgentSettings(
+            server_url="https://ncc.example.test",
+            pairing_id="pairing_example_123456",
+            pairing_secret=SecretStr("a" * 43),
+            data_dir=tmp_path,
+        ),
+        "ncc-12345678-1234-4234-8234-123456789abc", buffer,
+        transport=httpx.MockTransport(lambda _: httpx.Response(status_code)),
+    )
+    assert client.claim_pairing() is None
+    client.close()
+    buffer.close()
+
+
+def test_rejected_pairing_secret_still_stops_the_claim(tmp_path: Path) -> None:
+    buffer = TelemetryBuffer(tmp_path / "queue.sqlite3", max_points=10)
+    client = AgentClient(
+        AgentSettings(
+            server_url="https://ncc.example.test",
+            pairing_id="pairing_example_123456",
+            pairing_secret=SecretStr("a" * 43),
+            data_dir=tmp_path,
+        ),
+        "ncc-12345678-1234-4234-8234-123456789abc", buffer,
+        transport=httpx.MockTransport(lambda _: httpx.Response(401)),
+    )
+    with pytest.raises(AgentRejectedError):
+        client.claim_pairing()
     client.close()
     buffer.close()
 
