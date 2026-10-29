@@ -52,6 +52,11 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   Setup-Build ruft Cargo außerdem im Core-Verzeichnis auf, damit die dort
   hinterlegte Stackgröße von 8 MiB tatsächlich in das ausgelieferte Binary
   gelangt.
+- Beim Upgrade startet das Setup den Tray erst nach erfolgreichem
+  Installationsskript. Als `[Run]`-Eintrag lief er bisher davor und startete
+  den gestoppten Dienst noch mit dem alten Payload neu; der neue Payload wurde
+  dadurch nie gesund und die Installation zurückgerollt. Das Skript startet
+  einen zwischenzeitlich wieder laufenden Dienst zusätzlich selbst neu.
 - Die Backend-Typprüfung verwendet für gespeicherte Warnungsstufen eine
   explizite Typangabe statt einer zwischen Python-Versionen instabilen
   `type: ignore`-Ausnahme.

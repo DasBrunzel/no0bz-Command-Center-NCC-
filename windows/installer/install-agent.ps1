@@ -254,6 +254,12 @@ if ($descriptor -notmatch '\(A;;LCRPWP;;;BU\)') {
     if ($LASTEXITCODE -ne 0) { throw 'Could not grant start/stop rights for the NCC tray.' }
 }
 
+# Preinstall stopped the service; if anything (such as a tray) started it
+# again meanwhile, it still runs the previous payload and must be restarted.
+if ((Get-Service -Name $name).Status -ne 'Stopped') {
+    Stop-Service -Name $name -Force -ErrorAction Stop
+    (Get-Service -Name $name).WaitForStatus('Stopped', [TimeSpan]::FromSeconds(30))
+}
 $serviceStartedAt = (Get-Date).ToUniversalTime()
 Start-Service -Name $name
 $deadline = (Get-Date).AddSeconds($HealthTimeoutSeconds)

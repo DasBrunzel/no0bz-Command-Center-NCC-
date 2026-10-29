@@ -45,9 +45,6 @@ Source: "{#Stage}\preinstall-agent.ps1"; Flags: dontcopy
 [Registry]
 Root: HKLM; Subkey: "SOFTWARE\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "NccTray"; ValueData: """{app}\NccTray.exe"""; Flags: uninsdeletevalue
 
-[Run]
-Filename: "{app}\NccTray.exe"; Flags: nowait runasoriginaluser; Check: CanLaunchTray
-
 [UninstallRun]
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\uninstall-agent.ps1"""; Flags: runhidden waituntilterminated; RunOnceId: NccAgentCleanup
 
@@ -145,6 +142,7 @@ procedure CurStepChanged(CurStep: TSetupStep);
 var
   PreinstallScript: String;
   ServerUrlFile: String;
+  TrayResult: Integer;
 begin
   if CurStep = ssInstall then
   begin
@@ -159,6 +157,11 @@ begin
       RaiseException('NCC-Server-Adresse konnte nicht vorbereitet werden.');
     RunRequiredScript(ExpandConstant('{app}\install-agent.ps1'),
       '-AppDir "' + ExpandConstant('{app}') + '" -ServerUrlFile "' + ServerUrlFile + '"');
+    { Not a [Run] entry: those run before ssPostInstall, and a new tray would
+      restart the stopped service on the old payload before install-agent.ps1
+      activates the new one. }
+    if CanLaunchTray() then
+      ExecAsOriginalUser(ExpandConstant('{app}\NccTray.exe'), '', '', SW_SHOWNORMAL, ewNoWait, TrayResult);
   end;
 end;
 
