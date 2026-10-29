@@ -210,15 +210,19 @@ internal sealed class CoreService : ServiceBase
             var health = state.RootElement.TryGetProperty("health", out var currentHealth)
                 ? currentHealth.GetString() : "unbekannt";
             if (health == "healthy" && _updateStatus != "Installer gestartet") _updateStatus = "Aktuell";
+            // A migrated agent keeps its token in core.env; a browser-paired one
+            // in the credential file. ReadConfig merges both. Only the presence
+            // is published; the tray runs as the user and never sees the token.
+            bool paired;
+            try { paired = ReadConfig().TryGetValue("NCC_AGENT_TOKEN", out var token) && !string.IsNullOrWhiteSpace(token); }
+            catch (Exception error) when (error is InvalidDataException or IOException or UnauthorizedAccessException) { paired = false; }
             var status = new
             {
                 version,
                 health,
                 lastCheckUtc = _lastCheckUtc,
                 updateStatus = health == "rolled_back" ? "Rollback" : _updateStatus,
-                // Only the credential's presence is published; the tray runs
-                // as the user and must never read the token itself.
-                paired = File.Exists(Path.Combine(Root, "data", "agent-credential.json")),
+                paired,
             };
             var target = Path.Combine(AppContext.BaseDirectory, "agent-status.json");
             var temporary = target + ".tmp";

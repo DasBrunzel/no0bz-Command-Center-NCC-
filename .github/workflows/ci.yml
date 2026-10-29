@@ -244,7 +244,8 @@ jobs:
             'NCC_AGENT_SERVER_URL=http://127.0.0.1:8350',
             "NCC_AGENT_DATA_DIR=$legacyData",
             'NCC_AGENT_PAIRING_ID=ci-legacy-pairing-id',
-            'NCC_AGENT_PAIRING_SECRET=ci-legacy-pairing-secret'
+            'NCC_AGENT_PAIRING_SECRET=ci-legacy-pairing-secret',
+            'NCC_AGENT_TOKEN=ci-legacy-agent-token'
           ) | Set-Content -LiteralPath (Join-Path $legacyConfig 'agent.env')
           & sc.exe create NccAgent 'binPath=' 'C:\Windows\System32\cmd.exe' 'start=' 'demand' | Out-Null
           if ($LASTEXITCODE -ne 0) { throw 'Could not create old agent service fixture' }
@@ -262,6 +263,14 @@ jobs:
           if ((Get-Content (Join-Path $root 'config\core.env') | Where-Object {
             $_ -like 'NCC_AGENT_PAIRING_ID=*'
           }) -ne 'NCC_AGENT_PAIRING_ID=ci-legacy-pairing-id') { throw 'Legacy pairing was not migrated' }
+          # A migrated token lives in core.env, not in the browser-pairing credential file.
+          $statusFile = Join-Path $env:ProgramFiles 'no0bz\NCC Agent\agent-status.json'
+          $statusDeadline = (Get-Date).AddSeconds(30)
+          do {
+            Start-Sleep -Seconds 2
+            $agentStatus = try { Get-Content -LiteralPath $statusFile -Raw -ErrorAction Stop | ConvertFrom-Json } catch { $null }
+          } while (($null -eq $agentStatus -or $agentStatus.paired -ne $true) -and (Get-Date) -lt $statusDeadline)
+          if ($null -eq $agentStatus -or $agentStatus.paired -ne $true) { throw 'Migrated agent token is not reported as paired' }
           if (-not (Test-Path (Join-Path $legacyConfig 'server.env'))) { throw 'Sibling NCC Server config was removed' }
           if (Test-Path (Join-Path $legacyConfig 'agent.env')) { throw 'Old agent config remains after migration' }
           if (Get-Service NccAgent -ErrorAction SilentlyContinue) { throw 'Old agent service remains after migration' }

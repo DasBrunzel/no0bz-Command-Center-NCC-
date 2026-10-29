@@ -82,6 +82,10 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   `windows/installer/update-feed.json` bietet dieses Setup an. Auf der
   Test-VM aktualisierte sich ein Setup `dev.2` darüber selbst auf `dev.3`,
   aktivierte den neuen Payload gesund und koppelte danach im Browser.
+- Ein vom alten Agenten übernommener Zugang in `core.env` gilt jetzt ebenfalls
+  als gekoppelt. Bisher hätten Tray und Setup ein bereits gekoppeltes,
+  migriertes Gerät als „nicht gekoppelt“ angezeigt und einen Pairing-Link
+  angeboten, dessen Freigabe den bestehenden Zugang ersetzt hätte.
 - Die Backend-Typprüfung verwendet für gespeicherte Warnungsstufen eine
   explizite Typangabe statt einer zwischen Python-Versionen instabilen
   `type: ignore`-Ausnahme.

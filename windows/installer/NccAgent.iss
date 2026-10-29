@@ -97,13 +97,26 @@ begin
   PairingEdit.Visible := False;
 end;
 
+function HasMigratedToken(): Boolean;
+var
+  Lines: TArrayOfString;
+  I: Integer;
+begin
+  { Agents paired before this installer keep their token in core.env. }
+  Result := False;
+  if LoadStringsFromFile(ExpandConstant('{commonappdata}\no0bz\NCC Agent\config\core.env'), Lines) then
+    for I := 0 to GetArrayLength(Lines) - 1 do
+      if (Pos('NCC_AGENT_TOKEN=', Trim(Lines[I])) = 1) and (Length(Trim(Lines[I])) > Length('NCC_AGENT_TOKEN=')) then
+        Result := True;
+end;
+
 procedure ReadPairingUrl();
 var
   Url: AnsiString;
 begin
   { A device that already holds an agent credential keeps its pairing. }
   PairingUrl := '';
-  if FileExists(ExpandConstant('{commonappdata}\no0bz\NCC Agent\data\agent-credential.json')) then
+  if FileExists(ExpandConstant('{commonappdata}\no0bz\NCC Agent\data\agent-credential.json')) or HasMigratedToken() then
     Exit;
   if LoadStringFromFile(ExpandConstant('{app}\pairing-url.txt'), Url) then
     PairingUrl := Trim(String(Url));
