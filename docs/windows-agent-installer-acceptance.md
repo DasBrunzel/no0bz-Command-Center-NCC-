@@ -100,4 +100,4 @@ Windows-Schnellstart aktiv, Dualboot über einen Bootloader.
 | Übernahme von Identität und Zugang | Bestanden; das bestehende Gerät liefert im Dashboard weiter Daten, ohne neues Pairing. Tray und Status melden das Gerät als gekoppelt. |
 | Entfernen der Altinstallation | Bestanden; `NccCore`, `NccAgent`, alte Agent-Konfiguration und `venv` sind entfernt. `release-signer` blieb unverändert. |
 | Dienst, Payload und Tray | Bestanden; `NccAgentCore` läuft, Payload `0.6.0-beta.8-dev.2` ist gesund, ein Tray in der Konsolensitzung. |
-| Herunterfahren mit Schnellstart | Ausstehend. |
+| Herunterfahren mit Schnellstart | Bestanden. Normales Herunterfahren über das Startmenü, Start über den Bootloader direkt in Windows; das Ereignis Kernel-Boot 27 meldet Starttyp `0x1` (Schnellstart). Der Dienst lief ohne Neustart weiter, der Tray kam nach der Anmeldung in der neuen Konsolensitzung von selbst zurück, die in der Zwischenzeit gepufferten Messpunkte wurden nachgesendet. Maschinen-ID unverändert; Core meldete `already-active` für das im Dashboard zugewiesene Release. |
