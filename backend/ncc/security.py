@@ -13,7 +13,7 @@ from fastapi import Depends, Header, HTTPException, Request, WebSocket, status
 from ncc.config import Settings, get_settings
 
 SECURITY_HEADERS = {
-    "Content-Security-Policy": "default-src 'self'; connect-src 'self' ws: wss:; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'",
+    "Content-Security-Policy": "default-src 'self'; connect-src 'self' ws: wss:; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'",
     "X-Frame-Options": "DENY",
     "Referrer-Policy": "no-referrer",
     "X-Content-Type-Options": "nosniff",

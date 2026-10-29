@@ -7,6 +7,7 @@ from ncc_server.api.v1.admin_codes import router as admin_codes_router
 from ncc_server.api.v1.agent_pairings import router as agent_pairings_router
 from ncc_server.api.v1.chat import router as chat_router
 from ncc_server.api.v1.fleet import router as fleet_router
+from ncc_server.api.v1.games import router as games_router
 from ncc_server.api.v1.invitations import router as invitations_router
 from ncc_server.api.v1.nodes import router as nodes_router
 from ncc_server.api.v1.releases import router as releases_router
@@ -15,6 +16,7 @@ from ncc_server.api.v1.users import router as users_router
 router = APIRouter(prefix="/api/v1")
 router.include_router(nodes_router)
 router.include_router(fleet_router)
+router.include_router(games_router)
 router.include_router(chat_router)
 router.include_router(invitations_router)
 router.include_router(admin_codes_router)

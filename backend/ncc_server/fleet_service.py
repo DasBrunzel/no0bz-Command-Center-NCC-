@@ -9,12 +9,14 @@ from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from ncc_server.config import ServerSettings
+from ncc_server.game_service import now_playing
 from ncc_server.models import (
     AgentToken,
     AlertState,
     AuditEvent,
     FleetChatMessage,
     FleetGroup,
+    GameSession,
     Node,
     PhysicalDevice,
     TelemetryPoint,
@@ -31,6 +33,7 @@ from ncc_server.schemas import (
     FleetTelemetryPoint,
     NetworkHistorySample,
     NetworkUsageSummary,
+    NowPlayingResponse,
 )
 
 DEFAULT_FLEET_GROUPS = (
@@ -199,6 +202,9 @@ def set_fleet_gaming_mode(session: Session, node_id: str, minutes: int) -> Node 
         return None
     now = utc_now()
     node.gaming_mode_until = now + timedelta(minutes=minutes) if minutes else None
+    if not minutes:
+        # Ending gaming mode also ends the automatic one until the next game point.
+        node.auto_gaming_until = None
     node.updated_at = now
     session.add(AuditEvent(
         actor_type="dashboard", actor_id=node.id, action="node.gaming-mode.updated",
@@ -485,6 +491,7 @@ def forget_fleet_node(session: Session, node_id: str) -> bool:
     )
     session.execute(delete(AlertState).where(AlertState.node_id == node.id))
     session.execute(delete(TelemetryPoint).where(TelemetryPoint.node_id == node.id))
+    session.execute(delete(GameSession).where(GameSession.node_id == node.id))
     session.execute(delete(AgentToken).where(AgentToken.node_id == node.id))
     session.add(
         AuditEvent(
@@ -567,6 +574,10 @@ def _node_response(
         availability_started_at=node.availability_started_at,
         uptime_record_seconds=round(node.availability_record_seconds),
         gaming_mode_until=node.gaming_mode_until,
+        auto_gaming_until=node.auto_gaming_until,
+        game_tracking=node.game_tracking,  # type: ignore[arg-type]
+        auto_gaming_mode=node.auto_gaming_mode,
+        now_playing=_now_playing_response(session, node),
         update_check_requested_at=node.update_check_requested_at,
         physical_device_id=node.physical_device_id,
         physical_device_name=node.physical_device.display_name if node.physical_device else None,
@@ -576,6 +587,11 @@ def _node_response(
         pending_release_id=node.pending_release_id,
         latest=_telemetry_response(latest) if latest is not None else None,
     )
+
+
+def _now_playing_response(session: Session, node: Node) -> NowPlayingResponse | None:
+    value = now_playing(session, node)
+    return NowPlayingResponse(**value) if value is not None else None
 
 
 def _availability_percent(node: Node, now: datetime | None = None) -> float:

@@ -103,6 +103,16 @@ class NetworkHistorySample(BaseModel):
     network: dict[str, object] | None
 
 
+class NowPlayingResponse(BaseModel):
+    session_id: str
+    game_id: str | None
+    title: str | None
+    launcher: str | None
+    started_at: datetime
+    has_artwork: bool
+    genres: list[str]
+
+
 class FleetNodeResponse(BaseModel):
     node_id: str
     machine_id: str
@@ -119,6 +129,10 @@ class FleetNodeResponse(BaseModel):
     availability_started_at: datetime | None
     uptime_record_seconds: int
     gaming_mode_until: datetime | None
+    auto_gaming_until: datetime | None = None
+    game_tracking: Literal["off", "presence", "titles"] = "titles"
+    auto_gaming_mode: bool = True
+    now_playing: NowPlayingResponse | None = None
     update_check_requested_at: datetime | None
     physical_device_id: str | None
     physical_device_name: str | None
@@ -249,6 +263,31 @@ class FleetNodeRoleUpdateRequest(BaseModel):
 
 class FleetGamingModeRequest(BaseModel):
     minutes: int = Field(ge=0, le=480)
+
+
+class FleetGameSettingsRequest(BaseModel):
+    game_tracking: Literal["off", "presence", "titles"]
+    auto_gaming_mode: bool
+
+
+class GameMatchUpdateRequest(BaseModel):
+    # A Steam app id, or null when the game is not on Steam.
+    steam_app_id: int | None = Field(default=None, ge=1, le=99_999_999)
+
+
+class GameResponse(BaseModel):
+    game_id: str
+    title: str
+    launcher: str
+    steam_app_id: int | None
+    match_state: str
+    manual_match: bool
+    store_name: str | None
+    description: str | None
+    genres: list[str]
+    developers: list[str]
+    release_date: str | None
+    has_artwork: bool
 
 
 class AgentReleaseManifestCreateRequest(BaseModel):

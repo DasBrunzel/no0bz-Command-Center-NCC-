@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from ncc.collectors.base import Capabilities, SensorProvider
+from ncc.collectors.games import GamesProvider
 from ncc.collectors.system import (
     DemoProvider,
     LibreHardwareMonitorProvider,
@@ -57,6 +58,7 @@ class ProviderRegistry:
                 LibreHardwareMonitorProvider(str(settings.lhm_url)),
                 SmartctlProvider(),
                 LinuxHwmonProvider(),
+                GamesProvider(),
             ]
         )
         self.providers = sorted(providers, key=lambda item: item.priority)

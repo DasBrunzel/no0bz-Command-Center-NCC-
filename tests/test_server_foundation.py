@@ -55,6 +55,8 @@ def test_foundation_metadata_contains_persistent_entities() -> None:
         "dashboard_sessions",
         "fleet_chat_messages",
         "fleet_groups",
+        "game_sessions",
+        "games",
         "nodes",
         "physical_devices",
         "telemetry_points",

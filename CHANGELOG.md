@@ -116,6 +116,23 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   `0.6.0-beta.8-dev.3` mit der Weitergabe von „Jetzt aktualisieren“ und
   signiertes Agent-Setup `0.6.0-beta.8-dev.5`, das ihn mitliefert. Der
   Installer-Update-Feed bietet dieses Setup an.
+- Der Windows-Agent erkennt laufende Spiele aus Steam, Epic Games, GOG und der
+  Xbox-App. Er liest dafür nur Launcher-Manifeste, die Registry und die
+  Prozessliste und meldet Titel und Launcher mit jedem Messpunkt. Aus diesen
+  Punkten bildet der Server Spielsitzungen, auch nachträglich aus gepufferten
+  Daten, und schaltet den Gaming Mode automatisch mit fünf Minuten Nachlauf
+  ein. Pro Gerät lässt sich die Erkennung auf „nur spielt gerade“ reduzieren
+  oder abschalten; dann verwirft der Server Titel bzw. Spieldaten beim Empfang.
+  Cover und Infos holt nur der Server aus dem Steam-Shop und liefert sie selbst
+  aus; Commander können eine falsche Zuordnung korrigieren. Das Dashboard zeigt
+  „Spielt gerade“ in Übersicht und Geräteansicht sowie unter „Statistiken“ eine
+  Spielzeit-Auswertung mit Verlauf, Wochentag-Uhrzeit-Heatmap, Bestenliste,
+  Hardware-Werten pro Spiel und den letzten Sitzungen. Migration
+  `20261030_0020`.
+- Die Sicherheitsrichtlinie des Dashboards erlaubt lokal erzeugte
+  `blob:`-Bilder und -Medien. Spiel-Cover und die Bild-, Video- und
+  Audiovorschau im Chat wurden zuvor blockiert.
+- Die Knopfleiste der Geräteansicht bricht auf schmalen Bildschirmen um.
 - Die Backend-Typprüfung verwendet für gespeicherte Warnungsstufen eine
   explizite Typangabe statt einer zwischen Python-Versionen instabilen
   `type: ignore`-Ausnahme.

@@ -50,6 +50,7 @@ import "./device-lifecycle.css";
 import "./concept/styles.css";
 import "./design.css";
 import { Icon as ConceptIcon, Meter as ConceptMeter, SectionHead as ConceptSectionHead, Sparkline as ConceptSparkline, Status as ConceptStatus } from "./concept/components";
+import { activeGamingUntil, NowPlayingCard, NowPlayingStrip, PlaytimeStatistics, type GameTracking, type NowPlaying } from "./Games";
 import dashboardPackage from "../package.json";
 
 const Markdown = React.lazy(() => import("react-markdown"));
@@ -78,6 +79,10 @@ type Node = {
   availability_started_at: string | null;
   uptime_record_seconds: number;
   gaming_mode_until: string | null;
+  auto_gaming_until?: string | null;
+  auto_gaming_mode?: boolean;
+  game_tracking?: GameTracking;
+  now_playing?: NowPlaying | null;
   fleet_group_id: string;
   fleet_position: number;
   physical_device_id: string | null;
@@ -601,7 +606,7 @@ function Fleet({
     (statusFilter === "Alle Status" ||
       (statusFilter === "Online" && node.online) ||
       (statusFilter === "Offline" && !node.online) ||
-      (statusFilter === "Gaming Mode" && !!node.gaming_mode_until && new Date(node.gaming_mode_until).getTime() > Date.now())),
+      (statusFilter === "Gaming Mode" && !!activeGamingUntil(node))),
   ).sort((left, right) => sortFilter === "cpu"
     ? num(right.latest?.metrics.cpu?.percent) - num(left.latest?.metrics.cpu?.percent)
     : sortFilter === "group"
@@ -609,12 +614,12 @@ function Fleet({
       : left.display_name.localeCompare(right.display_name, "de"));
   return <>
     <div className="page-intro"><div><div className="eyebrow">FLEET / EXPLORER</div><h1>Deine Fleet.</h1><p>Physische Geräte, Profile und Zustände an einem Ort.</p></div><button type="button" className="primary-button" onClick={onAddDevice}><ConceptIcon name="plus" size={17}/> Gerät hinzufügen</button></div>
-    <div className="summary-line"><span><b>{new Set(nodes.map((node) => node.physical_device_id || node.node_id)).size}</b> physische Geräte</span><span><b>{nodes.length}</b> OS-Profile</span><span><b>{nodes.filter((node) => node.online).length}</b> verbunden</span><span><b>{nodes.filter((node) => node.gaming_mode_until && new Date(node.gaming_mode_until).getTime() > Date.now()).length}</b> Gaming Mode</span></div>
+    <div className="summary-line"><span><b>{new Set(nodes.map((node) => node.physical_device_id || node.node_id)).size}</b> physische Geräte</span><span><b>{nodes.length}</b> OS-Profile</span><span><b>{nodes.filter((node) => node.online).length}</b> verbunden</span><span><b>{nodes.filter((node) => activeGamingUntil(node)).length}</b> Gaming Mode</span></div>
     <div className="filter-bar"><label className="search-box"><ConceptIcon name="search" size={17}/><input value={query} onChange={(event) => onQuery(event.target.value)} placeholder="Gerät oder Plattform suchen…"/></label><select value={groupFilter} onChange={(event) => setGroupFilter(event.target.value)}><option>Alle Gruppen</option>{groups.map((group) => <option key={group.group_id}>{group.name}</option>)}</select><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>{["Alle Status", "Online", "Offline", "Gaming Mode"].map((status) => <option key={status}>{status}</option>)}</select><select value={sortFilter} onChange={(event) => setSortFilter(event.target.value)}><option value="name">Name A–Z</option><option value="cpu">CPU-Last</option><option value="group">Gruppe</option></select></div>
     <div className="fleet-list"><div className="table-heading"><span>Gerät / Plattform</span><span>Status</span><span>CPU / RAM</span><span>Letzter Kontakt</span><span/></div>{visibleNodes.length ? visibleNodes.map((node) => {
       const cpu = num(node.latest?.metrics.cpu?.percent), ram = num(node.latest?.metrics.memory?.percent);
       const profiles = nodes.filter((profile) => (profile.physical_device_id || profile.node_id) === (node.physical_device_id || node.node_id));
-      return <button type="button" className={`fleet-item ${selected?.node_id === node.node_id ? "selected" : ""}`} key={node.node_id} onClick={() => onSelect(node.node_id)}><div className="fleet-identity"><div className="fleet-icon">{node.platform.toLowerCase().includes("linux") ? "▤" : "▣"}</div><div><b>{node.physical_device_name || node.display_name}</b><small>{node.platform} · {groups.find((group) => group.group_id === node.fleet_group_id)?.name || "Fleet"}</small>{profiles.length > 1 && <span className="profile-count">{profiles.length} OS-PROFILE <span>Dualboot</span></span>}</div></div><ConceptStatus node={{online: node.online, gaming_mode_until: node.gaming_mode_until && new Date(node.gaming_mode_until).getTime() > Date.now() ? node.gaming_mode_until : null}}/><div className="fleet-meters"><div><span>CPU</span><ConceptMeter value={cpu}/><b>{cpu.toFixed(0)}%</b></div><div><span>RAM</span><ConceptMeter value={ram} color="var(--blue)"/><b>{ram.toFixed(0)}%</b></div></div><span className="last-seen">{node.online ? "Gerade eben" : ago(node.last_seen_at)}</span><ConceptIcon name="chevron" size={18}/></button>;
+      return <button type="button" className={`fleet-item ${selected?.node_id === node.node_id ? "selected" : ""}`} key={node.node_id} onClick={() => onSelect(node.node_id)}><div className="fleet-identity"><div className="fleet-icon">{node.platform.toLowerCase().includes("linux") ? "▤" : "▣"}</div><div><b>{node.physical_device_name || node.display_name}</b><small>{node.platform} · {groups.find((group) => group.group_id === node.fleet_group_id)?.name || "Fleet"}</small>{profiles.length > 1 && <span className="profile-count">{profiles.length} OS-PROFILE <span>Dualboot</span></span>}</div></div><ConceptStatus node={{online: node.online, gaming_mode_until: activeGamingUntil(node)}}/><div className="fleet-meters"><div><span>CPU</span><ConceptMeter value={cpu}/><b>{cpu.toFixed(0)}%</b></div><div><span>RAM</span><ConceptMeter value={ram} color="var(--blue)"/><b>{ram.toFixed(0)}%</b></div></div><span className="last-seen">{node.online ? "Gerade eben" : ago(node.last_seen_at)}</span><ConceptIcon name="chevron" size={18}/></button>;
     }) : <div className="empty">Keine Geräte entsprechen diesen Filtern.</div>}</div>
     <div className="concept-fleet-actions"><button type="button" className="outline-button" onClick={() => setEditing((value) => !value)}>{editing ? "Gruppen schließen" : "Gruppen bearbeiten"}</button>{editing && <button type="button" className="outline-button" onClick={() => { const name = window.prompt("Name der neuen Gruppe"); if (name?.trim()) void onCreateGroup(name.trim()); }}>+ Gruppe</button>}</div>
     {editing && <div className="concept-group-editor">{grouped.map((group) => <div key={group.group_id} className="detail-card" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); void moveNode(group.group_id); }}><strong>{group.name}</strong>{group.nodes.map((node) => <button type="button" key={node.node_id} draggable onDragStart={() => setDraggedNodeId(node.node_id)} onDragEnd={() => setDraggedNodeId(null)} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); event.stopPropagation(); void moveNode(group.group_id, node.node_id); }}>{node.display_name}</button>)}</div>)}</div>}
@@ -720,8 +725,9 @@ function UnraidWorkloadCard({
 
 /** The overview uses the original markup and CSS from the approved local demo. */
 function CommandOverviewExact({
-  nodes, selected, points, alerts, dismissedAlerts, onSelect, onOpenAlerts, onOpenExplorer,
+  nodes, selected, points, alerts, dismissedAlerts, onSelect, onOpenAlerts, onOpenExplorer, token,
 }: {
+  token: string;
   nodes: Node[];
   selected: Node | null;
   points: Telemetry[];
@@ -770,6 +776,7 @@ function CommandOverviewExact({
       </div>
       <div className="freshness"><span className="pulse-dot"/> Daten frisch <b>·</b> {selected?.last_seen_at ? `Aktualisiert ${ago(selected.last_seen_at)}` : "Warte auf Telemetrie"}</div>
     </div>
+    <NowPlayingStrip nodes={nodes} token={token} onOpen={(nodeId) => { onSelect(nodeId); onOpenExplorer(); }}/>
     <div className="hero-grid">
       <div className="attention-card">
         <div className="attention-top"><span className="eyebrow">Wichtig</span><span className={`severity ${active.length ? "critical" : "info"}`}>● {active.length ? `${active.length} aktiv` : "Stabil"}</span></div>
@@ -864,7 +871,7 @@ function NodeOverview({
     network = m.network || {},
     processes = m.processes || [],
     isUnraid = node.metadata.source === "unraid-api";
-  const gamingActive = !!node.gaming_mode_until && new Date(node.gaming_mode_until).getTime() > Date.now();
+  const gamingActive = !!activeGamingUntil(node);
   const updateGamingMode = async (minutes: number) => {
     setUpdatingGaming(true);
     const dashboardToken = localStorage.getItem("ncc-dashboard-token") || "";
@@ -1021,7 +1028,7 @@ function NodeOverview({
   const downSeries = points.map((point) => num(point.metrics.network?.download_mbps));
   const storage = Array.isArray(m.disks) ? m.disks : [];
   return <section className="concept-node-page">
-    <div className="node-header"><div className="node-header-left"><div className="node-large-icon">{isUnraid ? "▤" : "▣"}</div><div><div className="eyebrow">NODE / {node.machine_id}</div><h1>{node.display_name}</h1><div className="node-sub"><ConceptStatus node={{online:node.online,gaming_mode_until:gamingActive ? node.gaming_mode_until : null}}/><span>{operatingSystem}</span><span>Agent v{node.agent_version || "—"}</span><span>Kontakt {ago(node.last_seen_at)}</span></div></div></div><div className="node-actions">
+    <div className="node-header"><div className="node-header-left"><div className="node-large-icon">{isUnraid ? "▤" : "▣"}</div><div><div className="eyebrow">NODE / {node.machine_id}</div><h1>{node.display_name}</h1><div className="node-sub"><ConceptStatus node={{online:node.online,gaming_mode_until:activeGamingUntil(node)}}/><span>{operatingSystem}</span><span>Agent v{node.agent_version || "—"}</span><span>Kontakt {ago(node.last_seen_at)}</span></div></div></div><div className="node-actions">
       {!isUnraid && canDelete && <button type="button" className="outline-button" disabled={updatingGaming} onClick={() => void updateGamingMode(gamingActive ? 0 : 120)}><ConceptIcon name="bolt" size={16}/>{gamingActive ? "Gaming Mode beenden" : "Gaming Mode"}</button>}
       {canDelete && node.platform === "windows" && <button
         type="button"
@@ -1037,6 +1044,7 @@ function NodeOverview({
       {actionOpen && <div className="action-menu"><button type="button" disabled={renaming} onClick={() => void rename()}>Gerät umbenennen</button>{canDelete && <button type="button" disabled={updatingRole} onClick={() => void toggleRole()}>{node.access_role === "beta_tester" ? "Zu Commander machen" : "Als Beta-Tester markieren"}</button>}{canDelete && !isUnraid && <><button type="button" disabled={updatingRelease} onClick={() => void changeUpdateChannel()}>Update-Kanal: {node.update_channel.toUpperCase()}</button><button type="button" disabled={updatingRelease} onClick={() => void assignRelease()}>{pendingRelease ? `Freigabe aufheben: ${pendingRelease.payload_version}` : "Update bewusst freigeben"}</button>{!pendingRelease && channelReleases.length > 1 && <select aria-label="Release auswählen" defaultValue="" onChange={(event) => { if(event.target.value) void setRelease(event.target.value); }}><option value="">Release auswählen …</option>{channelReleases.map((release) => <option key={release.release_id} value={release.release_id}>{release.payload_version}</option>)}</select>}</>}{canDelete && <button type="button" className="danger" disabled={forgetting} onClick={() => void forget()}>Gerät vergessen</button>}</div>}
     </div></div>
     <div className="node-meta"><span>Physisches Gerät <b>{node.physical_device_name || node.display_name}</b></span><span>Plattform <b>{node.platform}</b></span><span>Update <b>{pendingRelease?.payload_version || node.update_channel.toUpperCase()}</b></span><span>Datenfrische <b>{node.online ? "Live" : ago(node.last_seen_at)}</b></span></div>
+    <NowPlayingCard node={node} token={token} canManage={canDelete}/>
     <div className="node-chart-card"><div className="card-head"><div><div className="eyebrow">Verlauf</div><h2>Ressourcen im Verlauf</h2></div><span className="muted-small">Letzte {points.length} Messpunkte</span></div><div className="chart-key"><span><i style={{background:"var(--accent)"}}/> CPU</span><span><i style={{background:"var(--purple)"}}/> GPU</span></div><div className="dual-chart"><ConceptSparkline values={cpuSeries} color="var(--accent)" height={190} fill/><ConceptSparkline values={gpuSeries} color="var(--purple)" height={190}/></div><div className="chart-axis"><span>Verlauf</span><span>Jetzt</span></div></div>
     <div className="metric-grid">
       <div className="metric-card"><div className="metric-title"><span>CPU</span><ConceptIcon name="activity" size={17}/></div><div className="metric-value">{num(cpu.percent).toFixed(1)}%</div><p>{cpuModel}</p><ConceptSparkline values={cpuSeries} height={48}/><div className="metric-items"><div><span>Temperatur</span><b>{typeof cpu.temperature_c === "number" ? `${num(cpu.temperature_c).toFixed(0)} °C` : "—"}</b></div><div><span>Takt</span><b>{typeof cpu.frequency_mhz === "number" ? `${num(cpu.frequency_mhz).toFixed(0)} MHz` : "—"}</b></div></div></div>
@@ -1061,12 +1069,21 @@ function StatisticsPage({
   summary,
   token,
   trafficResetRevision,
+  canManage,
 }: {
   nodes: Node[];
   summary: Summary | null;
   token: string;
   trafficResetRevision: number;
+  canManage: boolean;
 }) {
+  const [view, setView] = useState<"fleet" | "playtime">(() => {
+    try { return localStorage.getItem("ncc-statistics-view") === "playtime" ? "playtime" : "fleet"; } catch { return "fleet"; }
+  });
+  const chooseView = (value: "fleet" | "playtime") => {
+    setView(value);
+    try { localStorage.setItem("ncc-statistics-view", value); } catch { /* Only a convenience. */ }
+  };
   const [traffic, setTraffic] = useState<Record<string, NetworkUsageSummary>>({});
   const [trafficHistory, setTrafficHistory] = useState<Record<string, NetworkHistorySample[]>>({});
   // The fleet itself is refreshed every five seconds.  Statistics requests may
@@ -1222,7 +1239,10 @@ function StatisticsPage({
     ? availability.reduce((total, entry) => total + entry.value, 0) / availability.length
     : 0;
   return <>
-    <div className="page-intro"><div><div className="eyebrow">INSIGHTS / FLEET</div><h1>Muster erkennen.</h1><p>Verfügbarkeit, Rekorde und Traffic über die gesamte Fleet.</p></div></div>
+    <div className="page-intro"><div><div className="eyebrow">INSIGHTS / FLEET</div><h1>Muster erkennen.</h1><p>{view === "playtime" ? "Welche Spiele wann und wie lange laufen, mit den Hardware-Werten dazu." : "Verfügbarkeit, Rekorde und Traffic über die gesamte Fleet."}</p></div>
+      <div className="segmented stats-view-switch"><button type="button" className={view === "fleet" ? "selected" : ""} onClick={() => chooseView("fleet")}>Fleet</button><button type="button" className={view === "playtime" ? "selected" : ""} onClick={() => chooseView("playtime")}>Spielzeit</button></div>
+    </div>
+    {view === "playtime" ? <PlaytimeStatistics nodes={nodes} token={token} canManage={canManage}/> : <>
     <div className="stats-summary">
       <div><small>Verfügbarkeit seit Aufnahme</small><strong>{averageAvailability.toFixed(2)}<span>%</span></strong><p>Durchschnitt aller OS-Profile</p></div>
       <div><small>Download in diesem Monat</small><strong>{trafficAvailable ? trafficBytes(totalReceived) : "…"}</strong><p>{trafficAvailable ? `${evaluatedDevices}/${trafficDevices.length} Geräte ausgewertet` : "Monatswerte werden berechnet"}</p></div>
@@ -1247,6 +1267,7 @@ function StatisticsPage({
         })}</div>
       </div>
     </div>
+    </>}
   </>;
 
 }
@@ -2955,6 +2976,7 @@ function App() {
               dismissedAlerts={dismissedAlertIds}
               onOpenAlerts={() => setPage("alerts")}
               onOpenExplorer={() => setPage("explorer")}
+              token={token}
             />
           ) : page === "explorer" ? (
             <Fleet
@@ -2979,7 +3001,7 @@ function App() {
               onAddDevice={() => setPage("onboarding")}
             />
           ) : page === "statistics" ? (
-            <StatisticsPage nodes={nodes} summary={summary} token={token} trafficResetRevision={trafficResetRevision} />
+            <StatisticsPage nodes={nodes} summary={summary} token={token} trafficResetRevision={trafficResetRevision} canManage={canManageAccess} />
           ) : page === "alerts" ? (
             <AlertsPage alerts={alerts} canClear={canManageAccess} onClear={clearAllAlerts} />
           ) : page === "chat" ? (

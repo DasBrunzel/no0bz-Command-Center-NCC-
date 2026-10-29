@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from ncc_server.game_service import prepare_game_metric, record_game_point
 from ncc_server.models import AgentToken, AuditEvent, Node, PhysicalDevice, TelemetryPoint, utc_now
 from ncc_server.schemas import (
     NodeEnrollmentRequest,
@@ -159,6 +160,8 @@ def store_telemetry(
             duplicates += 1
             _record_duplicate_telemetry(session, node, point.recorded_at)
             continue
+        # Strip or reduce game data per the node's privacy level before it is stored.
+        reported_game = prepare_game_metric(node, point.metrics)
         try:
             with session.begin_nested():
                 session.add(
@@ -176,6 +179,8 @@ def store_telemetry(
             existing.add(sample_id)
             latest_recorded_at = point.recorded_at
             accepted += 1
+            if reported_game is not None:
+                record_game_point(session, node, point.recorded_at, reported_game, point.metrics)
     now = utc_now()
     node.last_seen_at = now
     node.updated_at = now

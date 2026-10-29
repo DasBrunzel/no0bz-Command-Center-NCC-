@@ -16,6 +16,7 @@ from ncc_server.alert_service import evaluate_alerts, mark_notified
 from ncc_server.api.v1 import router as v1_router
 from ncc_server.config import ServerSettings, get_server_settings
 from ncc_server.database import Database
+from ncc_server.game_metadata import refresh_game_metadata
 from ncc_server.telegram import get_telegram_settings, send_telegram_alert
 from ncc_server.unraid_service import collect_unraid
 
@@ -36,11 +37,15 @@ def create_app(
             active_database.ping()
         alert_task = asyncio.create_task(_alert_loop(active_database, active_settings))
         unraid_task = asyncio.create_task(_unraid_loop(active_database, active_settings))
+        game_task = asyncio.create_task(_game_metadata_loop(active_database, active_settings))
         try:
             yield
         finally:
             alert_task.cancel()
             unraid_task.cancel()
+            game_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await game_task
             with suppress(asyncio.CancelledError):
                 await alert_task
             with suppress(asyncio.CancelledError):
@@ -107,3 +112,16 @@ async def _unraid_loop(database: Database, settings: ServerSettings) -> None:
         except Exception as exc:
             logger.warning("Unraid collector failed: %s", exc)
         await asyncio.sleep(30)
+
+
+async def _game_metadata_loop(database: Database, settings: ServerSettings) -> None:
+    if not settings.game_metadata_enabled:
+        return
+    while True:
+        # Start late so a short-lived process, such as a test, never goes online.
+        await asyncio.sleep(20)
+        try:
+            await refresh_game_metadata(database)
+        except Exception as exc:
+            logger.warning("Game metadata refresh failed: %s", exc)
+        await asyncio.sleep(40)

@@ -37,6 +37,8 @@ class ServerSettings(BaseSettings):
         default="horsttower",
         validation_alias=AliasChoices("NCC_SERVER_UNRAID_DISPLAY_NAME", "NCC_UNRAID_DISPLAY_NAME"),
     )
+    # Fetch game artwork and details from the Steam store.
+    game_metadata_enabled: bool = True
     chat_upload_dir: Path = Field(default_factory=lambda: ROOT / "ncc_chat_uploads")
 
 

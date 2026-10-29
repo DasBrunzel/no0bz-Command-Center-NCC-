@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from ncc_server import __version__
 from ncc_server.config import ServerSettings
+from ncc_server.game_service import gaming_mode_active
 from ncc_server.models import AlertPolicy, AlertState, AuditEvent, Node, TelemetryPoint, utc_now
 from ncc_server.node_service import is_online
 
@@ -181,12 +182,7 @@ def _physical_device_online(session: Session, node: Node, settings: ServerSettin
 
 
 def _gaming_mode_active(node: Node) -> bool:
-    until = node.gaming_mode_until
-    if until is None:
-        return False
-    if until.tzinfo is None:
-        until = until.replace(tzinfo=timezone.utc)
-    return until > utc_now()
+    return gaming_mode_active(node)
 
 
 def _agent_health_alerts(

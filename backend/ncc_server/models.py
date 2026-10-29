@@ -11,11 +11,12 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import DeclarativeBase, Mapped, deferred, mapped_column, relationship
 
 
 def utc_now() -> datetime:
@@ -65,6 +66,12 @@ class Node(Base):
     gaming_mode_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Set by a commander, delivered once with the next heartbeat.
     update_check_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Game detection: "off" drops game data, "presence" keeps only that a game
+    # runs, "titles" keeps the title for the now-playing card and statistics.
+    game_tracking: Mapped[str] = mapped_column(String(16), default="titles", nullable=False)
+    auto_gaming_mode: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Extended by telemetry while a game runs; a manual gaming_mode_until wins.
+    auto_gaming_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     physical_device_id: Mapped[str | None] = mapped_column(
         ForeignKey("physical_devices.id", ondelete="SET NULL")
     )
@@ -82,6 +89,53 @@ class Node(Base):
     tokens: Mapped[list[AgentToken]] = relationship(
         back_populates="node", cascade="all, delete-orphan"
     )
+
+
+class Game(Base):
+    """A detected game with artwork and store details fetched by the server."""
+
+    __tablename__ = "games"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    # "steam:<app id>", "<launcher>:<id>" or "name:<normalized title>".
+    key: Mapped[str] = mapped_column(String(192), unique=True, nullable=False)
+    title: Mapped[str] = mapped_column(String(128), nullable=False)
+    launcher: Mapped[str] = mapped_column(String(16), nullable=False)
+    steam_app_id: Mapped[int | None] = mapped_column(Integer)
+    # pending -> matched | none; "manual" marks a commander's correction.
+    match_state: Mapped[str] = mapped_column(String(16), default="pending", nullable=False)
+    manual_match: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    store_name: Mapped[str | None] = mapped_column(String(256))
+    description: Mapped[str | None] = mapped_column(Text)
+    genres: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    developers: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    release_date: Mapped[str | None] = mapped_column(String(64))
+    header_image: Mapped[bytes | None] = deferred(mapped_column(LargeBinary))
+    header_content_type: Mapped[str | None] = mapped_column(String(64))
+    metadata_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    metadata_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
+class GameSession(Base):
+    """One continuous stretch of play, built from telemetry points."""
+
+    __tablename__ = "game_sessions"
+    __table_args__ = (
+        Index("ix_game_sessions_node_ended", "node_id", "ended_at"),
+        Index("ix_game_sessions_started", "started_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    node_id: Mapped[str] = mapped_column(ForeignKey("nodes.id", ondelete="CASCADE"), nullable=False)
+    # Null when the node only reports that a game runs.
+    game_id: Mapped[str | None] = mapped_column(ForeignKey("games.id", ondelete="SET NULL"))
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ended_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    sample_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # {metric: [sum, count, max]} for hardware values seen during the session.
+    hardware: Mapped[dict[str, list[float]]] = mapped_column(JSON, default=dict, nullable=False)
+    game: Mapped[Game | None] = relationship()
 
 
 class FleetGroup(Base):

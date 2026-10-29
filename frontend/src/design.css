@@ -414,3 +414,87 @@ button.selected {
   .topbar { padding: 0 16px; }
   .content { padding: 20px 16px 64px; }
 }
+
+/* ---------- Games: now playing, playtime statistics ---------- */
+.game-art { flex: none; overflow: hidden; border-radius: 8px; background: var(--panel2); border: 1px solid var(--line); display: grid; place-items: center; color: var(--muted); font-weight: 700; }
+.game-art.large { width: 230px; aspect-ratio: 460 / 215; font-size: 34px; }
+.game-art.small { width: 64px; aspect-ratio: 460 / 215; font-size: 14px; border-radius: 5px; }
+.game-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.game-now-card { margin-bottom: 16px; }
+.game-now-card.playing { border-color: color-mix(in srgb, var(--purple) 45%, var(--line)); }
+.game-now { display: flex; gap: 20px; align-items: center; }
+.game-now-info { min-width: 0; }
+.game-now-info h2 { margin: 4px 0 2px; font-size: 22px; }
+.game-now-info p { margin: 0; color: var(--muted); }
+.game-now-label { display: inline-flex; align-items: center; gap: 8px; color: var(--purple); font-size: 13px; font-weight: 600; }
+.game-now-label .pulse-dot { background: var(--purple); box-shadow: 0 0 0 4px color-mix(in srgb, var(--purple) 15%, transparent); }
+.game-genres { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.game-genres span { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--panel2); border: 1px solid var(--line); color: var(--muted); }
+.game-now-sensors { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 12px; font-size: 13px; color: var(--muted); }
+.game-now-sensors b { color: var(--text); }
+.game-auto { color: var(--purple); }
+.game-settings { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+.game-settings label { display: inline-flex; align-items: center; gap: 10px; }
+.game-settings select { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; }
+.game-now-card:not(.playing) .game-settings { margin-top: 4px; }
+
+.now-playing-strip { display: flex; flex-wrap: wrap; gap: 10px; margin: -12px 0 20px; }
+.now-playing-strip button { display: flex; align-items: center; gap: 12px; padding: 8px 14px 8px 8px; border-radius: var(--radius); background: var(--panel); border: 1px solid color-mix(in srgb, var(--purple) 40%, var(--line)); color: var(--text); text-align: left; }
+.now-playing-strip button:hover { background: var(--panel2); }
+.now-playing-strip span { display: flex; flex-direction: column; min-width: 0; }
+.now-playing-strip small { color: var(--muted); font-size: 12px; }
+.now-playing-strip em { font-style: normal; color: var(--muted); font-size: 12px; margin-left: 8px; }
+
+.stats-view-switch { align-self: flex-end; }
+.playtime-filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 16px; }
+.playtime-filters select { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; }
+.playtime-summary { grid-template-columns: repeat(4, 1fr); }
+.playtime-summary .playtime-title { display: block; font-size: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.playtime-empty { text-align: center; padding: 48px 20px; color: var(--muted); }
+.playtime-empty h2 { color: var(--text); margin: 12px 0 6px; }
+.playtime-chart-focus { display: flex; justify-content: space-between; gap: 12px; min-height: 20px; font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+.playtime-chart-focus b { color: var(--text); }
+.playtime-bars { height: 170px; display: flex; align-items: flex-end; gap: 2px; border-bottom: 1px solid var(--line); }
+.playtime-bar { flex: 1; height: 100%; display: flex; align-items: flex-end; min-width: 0; cursor: default; }
+.playtime-bar span { width: 100%; background: var(--purple); border-radius: 4px 4px 0 0; opacity: .85; }
+.playtime-bar.hovered span { opacity: 1; }
+.playtime-bars:hover .playtime-bar:not(.hovered) span { opacity: .45; }
+.playtime-axis { display: flex; gap: 2px; margin-top: 6px; }
+.playtime-axis span { flex: 1; min-width: 0; font-size: 11px; color: var(--subtle); text-align: center; white-space: nowrap; overflow: visible; }
+.stats-layout > * { min-width: 0; }
+.playtime-summary strong small { display: inline; font-size: .5em; color: var(--muted); font-weight: 600; margin-left: 4px; }
+.heatmap-grid { display: grid; grid-template-columns: 26px repeat(24, 1fr); gap: 2px; align-items: center; }
+.heatmap-grid i { aspect-ratio: 1; border-radius: 3px; background: var(--panel2); }
+.heatmap-grid i.filled { background: var(--purple); }
+.heatmap-day, .heatmap-hour { font-size: 11px; color: var(--subtle); text-align: center; }
+.heatmap-day { text-align: left; }
+.game-ranking { display: flex; flex-direction: column; }
+.game-rank { display: grid; grid-template-columns: 28px 64px minmax(0, 1.4fr) minmax(80px, 1fr) 130px auto; gap: 14px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+.game-rank:first-child { border-top: 0; }
+.game-rank-name, .game-rank-time { display: flex; flex-direction: column; min-width: 0; }
+.game-rank-name b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.game-rank small { color: var(--muted); font-size: 12px; }
+.game-rank-time { text-align: right; }
+.game-rank .link-button { background: none; border: 0; color: var(--accent); font-size: 12px; padding: 4px; }
+.table-scroll { overflow-x: auto; }
+.game-hardware { width: 100%; border-collapse: collapse; font-size: 13px; }
+.game-hardware th { text-align: left; color: var(--muted); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.game-hardware td { padding: 8px; border-bottom: 1px solid var(--line); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.game-hardware td small { color: var(--subtle); margin-left: 4px; }
+.session-list > div { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); }
+.session-list > div:first-child { border-top: 0; }
+.session-list span { display: flex; flex-direction: column; min-width: 0; }
+.session-list small { color: var(--muted); font-size: 12px; }
+.session-list em { font-style: normal; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.playtime-devices b { white-space: nowrap; }
+.playtime-devices { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
+@media (max-width: 760px) {
+  .game-now { flex-direction: column; align-items: flex-start; }
+  .game-art.large { width: 100%; }
+  .playtime-summary { grid-template-columns: repeat(2, 1fr); }
+  .game-rank { grid-template-columns: 24px 56px minmax(0, 1fr) auto; }
+  .game-rank .rank-bar, .game-rank .link-button { display: none; }
+  .heatmap-grid { grid-template-columns: 22px repeat(24, 1fr); gap: 1px; }
+  .stats-view-switch { align-self: flex-start; }
+  .node-actions { flex-wrap: wrap; }
+}
