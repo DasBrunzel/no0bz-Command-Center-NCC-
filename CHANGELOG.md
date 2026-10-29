@@ -133,6 +133,10 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   `blob:`-Bilder und -Medien. Spiel-Cover und die Bild-, Video- und
   Audiovorschau im Chat wurden zuvor blockiert.
 - Die Knopfleiste der Geräteansicht bricht auf schmalen Bildschirmen um.
+- Entwicklungs-Pre-Release `v0.6.0-beta.8-dev.4`: signierter Windows-Payload
+  `0.6.0-beta.8-dev.4` mit der Spielerkennung. Das Agent-Setup bleibt
+  `0.6.0-beta.8-dev.5`; der Update-Feed ist unverändert. Auf HorstPC wurde ein
+  laufendes Steam-Spiel erkannt und im Dashboard angezeigt.
 - Die Backend-Typprüfung verwendet für gespeicherte Warnungsstufen eine
   explizite Typangabe statt einer zwischen Python-Versionen instabilen
   `type: ignore`-Ausnahme.
