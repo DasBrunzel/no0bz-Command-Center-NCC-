@@ -61,6 +61,7 @@ Type: files; Name: "{app}\tray-upgrade.marker"
 [Code]
 var
   ServerPage: TInputQueryWizardPage;
+  InstallScriptFailed: Boolean;
 
 function CanLaunchTray(): Boolean;
 begin
@@ -118,9 +119,26 @@ begin
   if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
     '-NoProfile -ExecutionPolicy Bypass -File "' + Filename + '" ' + Parameters,
     '', SW_HIDE, ewWaitUntilTerminated, ExitCode) then
+  begin
+    InstallScriptFailed := True;
     RaiseException('NCC-Installationsskript konnte nicht gestartet werden.');
+  end;
   if ExitCode <> 0 then
+  begin
+    InstallScriptFailed := True;
     RaiseException('NCC-Installationsskript meldete Fehlercode ' + IntToStr(ExitCode) + '. Siehe Setup-Log.');
+  end;
+end;
+
+function GetCustomSetupExitCode(): Integer;
+begin
+  { An exception after ssInstall is only shown (and suppressed in silent
+    mode); Setup would otherwise exit 0 after install-agent.ps1 rolled back.
+    10 stays clear of Inno Setup's reserved exit codes 1-8. }
+  if InstallScriptFailed then
+    Result := 10
+  else
+    Result := 0;
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);

@@ -56,9 +56,7 @@ try {
     $upgradeLog = Join-Path $env:TEMP 'ncc-agent-tray-upgrade.log'
     $upgrade = Start-NccInstallerAndWait -Path $NextSetup -Arguments ($args + "/LOG=$upgradeLog")
     if ($upgrade.ExitCode -ne 0) {
-        if (Test-Path -LiteralPath $upgradeLog) {
-            Get-Content -LiteralPath $upgradeLog -Tail 100 | ForEach-Object { Write-Host $_ }
-        }
+        Write-NccAgentDiagnostics -SetupLog $upgradeLog
         throw "Tray smoke: version B upgrade failed: $($upgrade.ExitCode)"
     }
     Start-Sleep -Seconds 10

@@ -34,6 +34,14 @@ function Write-NccAgentDiagnostics {
             Get-Content -LiteralPath $file -Tail 30 | ForEach-Object { Write-Host $_ }
         }
     }
+    $attempt = Get-ChildItem -LiteralPath (Join-Path $env:ProgramData 'no0bz\NCC Agent Setup') -Directory -Filter 'failed-attempt-*' -ErrorAction SilentlyContinue |
+        Sort-Object Name | Select-Object -Last 1
+    if ($attempt) {
+        Get-ChildItem -LiteralPath $attempt.FullName -File -Recurse | ForEach-Object {
+            Write-Host "--- failed attempt: $($_.FullName) ($($_.LastWriteTimeUtc.ToString('o')))"
+            Get-Content -LiteralPath $_.FullName -Tail 80 | ForEach-Object { Write-Host $_ }
+        }
+    }
     foreach ($log in @((Join-Path $root 'logs\service-host.log'), $SetupLog)) {
         if ($log -and (Test-Path -LiteralPath $log)) {
             Write-Host "--- $log"

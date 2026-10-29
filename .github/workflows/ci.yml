@@ -166,7 +166,10 @@ jobs:
           }
           if ((Get-Content $data -Raw) -ne 'keep-me') { throw 'Agent data changed during reinstall' }
           $process = Start-NccInstallerAndWait -Path $nextSetup -Arguments $args
-          if ($process.ExitCode -ne 0) { throw "Version B upgrade failed: $($process.ExitCode)" }
+          if ($process.ExitCode -ne 0) {
+            Write-NccAgentDiagnostics -SetupLog $log
+            throw "Version B upgrade failed: $($process.ExitCode)"
+          }
           $stateFile = Join-Path $root 'core-state\state\core-state.json'
           $state = Get-Content $stateFile -Raw | ConvertFrom-Json
           if ($state.active_payload -ne '0.6.0-beta.8-ci.2' -or $state.health -ne 'healthy') {

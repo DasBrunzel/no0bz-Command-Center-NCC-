@@ -39,6 +39,12 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   startet weiterhin der vorhandene Tray-Helfer den Prozess in derselben Sitzung.
   Die Windows-CI wartet dabei nur auf das Ende von Setup und nicht auf dessen
   dauerhaft laufenden Tray-Kindprozess.
+- Scheitert das Installationsskript nach dem Kopieren der Dateien, endet ein
+  stilles Setup jetzt mit Exitcode 10 statt 0. Bisher meldete Setup trotz
+  zurückgerollter Installation Erfolg. Vor dem Zurückspielen der Sicherung
+  bewahrt das Skript Logs und Core-Zustand des Fehlversuchs unter
+  `NCC Agent Setup\failed-attempt-*` auf; die Windows-CI gibt sie bei einem
+  gescheiterten Upgrade aus.
 - Die Backend-Typprüfung verwendet für gespeicherte Warnungsstufen eine
   explizite Typangabe statt einer zwischen Python-Versionen instabilen
   `type: ignore`-Ausnahme.

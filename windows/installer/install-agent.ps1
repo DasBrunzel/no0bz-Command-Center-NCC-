@@ -38,6 +38,19 @@ trap {
     } catch { }
     if ($migrationCommitted) { throw $cause }
     Stop-Service -Name NccAgentCore -Force -ErrorAction SilentlyContinue
+    # Restoring the backup overwrites logs and Core state, so keep the failed
+    # attempt's copies first. Config stays out: it holds pairing secrets.
+    try {
+        $attempt = Join-Path $env:ProgramData ('no0bz\NCC Agent Setup\failed-attempt-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
+        foreach ($relative in @('logs', 'core-state\state')) {
+            $source = Join-Path $root $relative
+            if (Test-Path -LiteralPath $source -PathType Container) {
+                $destination = Join-Path $attempt $relative
+                New-Item -ItemType Directory -Force -Path (Split-Path -Parent $destination) | Out-Null
+                Copy-Item -LiteralPath $source -Destination $destination -Recurse -Force
+            }
+        }
+    } catch { }
     if (Test-Path -LiteralPath $handoffFile) {
         try {
             $handoff = Get-Content -LiteralPath $handoffFile -Raw | ConvertFrom-Json
