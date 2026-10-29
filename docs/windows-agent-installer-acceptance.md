@@ -84,5 +84,20 @@ Die VM hatte kein Visual C++ Redistributable installiert.
 | Normaler Neustart | Bestanden; Dienst (verzögert automatisch) und genau ein Tray kamen ohne Eingriff zurück, die Kopplung blieb erhalten. |
 | Manuelles stilles Upgrade `dev.1` → `dev.2` | Bestanden; Pairing-ID, Maschinen-ID und Agent-Zugang blieben gleich. Da Setup über SSH lief, startete der neue Tray in der SSH-Sitzung statt im Desktop. |
 | Deinstallation | Bestanden; Dienst, Tray, Autostart, Apps-&-Features-Eintrag, beide Agent-Verzeichnisse, Setup-Übergabeverzeichnis, Aufgabe und Firewall-Regel waren entfernt. |
-| Hybrid-Herunterfahren | Nicht geprüft. |
+| Hybrid-Herunterfahren | Auf der VM nicht geprüft; siehe HorstPC. |
 | Automatisches Update über die signierte HTTPS-Updatequelle | Bestanden am selben Tag mit dem Pre-Release `v0.6.0-beta.8-dev.2`: Ein frisch installiertes Setup `dev.2` lud 30 Sekunden nach dem Dienststart das signierte Setup `dev.3` aus dem Feed, installierte es ohne UAC und aktivierte den mitgelieferten Payload `0.6.0-beta.8-dev.2` gesund; `0.6.0-beta.7` blieb als Rückfallversion. Der Tray kehrte in der Desktop-Sitzung zurück. Ein manueller Dienstneustart während der Installation störte das Ergebnis nicht. Anschließend gelang das Browser-Pairing mit dem neuen Payload. |
+
+### 29.10.2026 – Migration auf HorstPC
+
+Signiertes Setup `0.6.0-beta.8-dev.4` (Commit `37807a8`) mit Payload
+`0.6.0-beta.8-dev.2` über eine bestehende Installation aus `NccCore` mit Payload
+`0.6.0-beta.7` und deaktiviertem `NccAgent`. Kein `NccServer` auf dem Gerät;
+Windows-Schnellstart aktiv, Dualboot über einen Bootloader.
+
+| Punkt | Ergebnis |
+| --- | --- |
+| Interaktives Setup ohne Server-URL | Bestanden; die Adresse wurde aus der alten Konfiguration übernommen. |
+| Übernahme von Identität und Zugang | Bestanden; das bestehende Gerät liefert im Dashboard weiter Daten, ohne neues Pairing. Tray und Status melden das Gerät als gekoppelt. |
+| Entfernen der Altinstallation | Bestanden; `NccCore`, `NccAgent`, alte Agent-Konfiguration und `venv` sind entfernt. `release-signer` blieb unverändert. |
+| Dienst, Payload und Tray | Bestanden; `NccAgentCore` läuft, Payload `0.6.0-beta.8-dev.2` ist gesund, ein Tray in der Konsolensitzung. |
+| Herunterfahren mit Schnellstart | Ausstehend. |
