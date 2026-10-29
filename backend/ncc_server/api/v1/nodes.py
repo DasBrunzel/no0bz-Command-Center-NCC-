@@ -62,7 +62,7 @@ async def heartbeat(
     session: Session = Depends(database_session),
 ) -> HeartbeatResponse:
     try:
-        node, now = record_heartbeat(session, token, payload)
+        node, now, update_check_requested = record_heartbeat(session, token, payload)
     except TokenNotEnrolledError as exc:
         raise HTTPException(status_code=409, detail="agent token is not enrolled") from exc
     except NodeNotApprovedError as exc:
@@ -73,6 +73,7 @@ async def heartbeat(
         node_id=node.id,
         server_time=now,
         next_heartbeat_seconds=settings.heartbeat_interval_seconds,
+        update_check_requested=update_check_requested,
     )
 
 

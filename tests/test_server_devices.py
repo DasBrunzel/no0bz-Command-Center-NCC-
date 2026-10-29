@@ -9,6 +9,7 @@ from ncc_server.app import create_app
 from ncc_server.config import ServerSettings
 from ncc_server.database import Database
 from ncc_server.models import AgentToken, Base, Node, TelemetryPoint, utc_now
+from pydantic import SecretStr
 from sqlalchemy import select
 
 
@@ -32,6 +33,35 @@ def enrollment_payload(machine_id: str = "machine-12345678") -> dict[str, object
         "agent_version": "0.5.0-alpha.2",
         "metadata": {"architecture": "amd64"},
     }
+
+
+def test_commander_update_check_request_is_delivered_with_one_heartbeat(tmp_path: Path) -> None:
+    path = tmp_path / "ncc-update-check.db"
+    database = make_database(path)
+    _, plaintext = issue(database)
+    settings = ServerSettings(
+        database_url=f"sqlite+pysqlite:///{path.as_posix()}",
+        dashboard_token=SecretStr("dashboard-secret"),
+    )
+    app = create_app(settings, database)
+    agent = {"Authorization": f"Bearer {plaintext}"}
+    dashboard = {"X-NCC-Dashboard-Token": "dashboard-secret"}
+    beat = {"agent_version": "0.6.0-beta.8", "metadata": {}}
+
+    with TestClient(app) as client:
+        node_id = client.post("/api/v1/nodes/enroll", json=enrollment_payload(), headers=agent).json()["node_id"]
+        assert client.post("/api/v1/nodes/heartbeat", json=beat, headers=agent).json()["update_check_requested"] is False
+
+        requested = client.post(f"/api/v1/fleet/nodes/{node_id}/update-check", headers=dashboard)
+        assert requested.status_code == 200
+        assert requested.json()["update_check_requested_at"] is not None
+        assert client.post("/api/v1/fleet/nodes/unknown/update-check", headers=dashboard).status_code == 404
+        assert client.post(f"/api/v1/fleet/nodes/{node_id}/update-check").status_code in {401, 403}
+
+        assert client.post("/api/v1/nodes/heartbeat", json=beat, headers=agent).json()["update_check_requested"] is True
+        assert client.post("/api/v1/nodes/heartbeat", json=beat, headers=agent).json()["update_check_requested"] is False
+        listed = client.get("/api/v1/fleet/nodes", headers=dashboard).json()
+        assert listed[0]["update_check_requested_at"] is None
 
 
 def test_token_enrollment_and_heartbeat_are_persistent(tmp_path: Path) -> None:

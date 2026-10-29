@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import Any
 
@@ -22,8 +23,16 @@ MAX_BACKOFF_SECONDS = 60.0
 
 
 class AgentRunner:
-    def __init__(self, settings: AgentSettings, *, agent_version: str | None = None) -> None:
+    def __init__(
+        self,
+        settings: AgentSettings,
+        *,
+        agent_version: str | None = None,
+        on_update_check: Callable[[], None] | None = None,
+    ) -> None:
         self.settings = settings
+        # Only a Core-managed payload can act on a dashboard update request.
+        self.on_update_check = on_update_check
         self.machine_id = load_or_create_machine_id(settings.data_dir)
         self.buffer = TelemetryBuffer(
             settings.data_dir / "telemetry-buffer.sqlite3",
@@ -94,7 +103,8 @@ class AgentRunner:
                     if not enrolled:
                         heartbeat_interval = float(self.client.enroll())
                         enrolled = True
-                    self.client.heartbeat()
+                    if self.client.heartbeat():
+                        self._request_update_check()
                     sent = self.client.flush()
                     if sent:
                         logger.info("Sent %d telemetry point(s); %d buffered", sent, self.buffer.count())
@@ -128,6 +138,16 @@ class AgentRunner:
 
     def stop(self) -> None:
         self.stop_event.set()
+
+    def _request_update_check(self) -> None:
+        if self.on_update_check is None:
+            logger.info("Update check requested by the dashboard; this agent has no NCC Core to run it")
+            return
+        try:
+            self.on_update_check()
+            logger.info("Update check requested by the dashboard; handed to NCC Core")
+        except OSError as exc:
+            logger.warning("Could not hand the dashboard update request to NCC Core: %s", exc)
 
 
 def _is_new_snapshot(generation: int, last_buffered_generation: int) -> bool:

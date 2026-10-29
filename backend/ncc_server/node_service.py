@@ -97,11 +97,14 @@ def record_heartbeat(
     session: Session,
     token: AgentToken,
     payload: NodeHeartbeatRequest,
-) -> tuple[Node, datetime]:
+) -> tuple[Node, datetime, bool]:
+    """Record a heartbeat; the third value hands out a pending update-check request once."""
     node = _bound_node(session, token)
     if not node.approved:
         raise NodeNotApprovedError
     now = utc_now()
+    update_check_requested = node.update_check_requested_at is not None
+    node.update_check_requested_at = None
     node.agent_version = payload.agent_version
     node.metadata_json = dict(payload.metadata)
     _sync_physical_device(session, node, payload.metadata)
@@ -110,7 +113,7 @@ def record_heartbeat(
     token.last_used_at = now
     session.commit()
     session.refresh(node)
-    return node, now
+    return node, now, update_check_requested
 
 
 def bound_node(session: Session, token: AgentToken) -> Node:

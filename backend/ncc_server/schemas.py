@@ -42,6 +42,8 @@ class HeartbeatResponse(BaseModel):
     node_id: str
     server_time: datetime
     next_heartbeat_seconds: int
+    # 0.5 agents ignore unknown fields; 0.6 payloads hand it to the service host.
+    update_check_requested: bool = False
 
 
 class TelemetryPointRequest(BaseModel):
@@ -117,6 +119,7 @@ class FleetNodeResponse(BaseModel):
     availability_started_at: datetime | None
     uptime_record_seconds: int
     gaming_mode_until: datetime | None
+    update_check_requested_at: datetime | None
     physical_device_id: str | None
     physical_device_name: str | None
     fleet_group_id: str

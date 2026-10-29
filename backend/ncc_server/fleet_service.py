@@ -208,6 +208,21 @@ def set_fleet_gaming_mode(session: Session, node_id: str, minutes: int) -> Node 
     return node
 
 
+def request_fleet_update_check(session: Session, node_id: str) -> Node | None:
+    node = session.get(Node, node_id)
+    if node is None:
+        return None
+    now = utc_now()
+    node.update_check_requested_at = now
+    node.updated_at = now
+    session.add(AuditEvent(
+        actor_type="dashboard", actor_id=node.id, action="node.update-check.requested",
+        details=json.dumps({"requested_at": now.isoformat()}),
+    ))
+    session.commit()
+    return node
+
+
 def node_telemetry(
     session: Session, node_id: str, limit: int, *, after: str | None = None
 ) -> list[FleetTelemetryPoint] | None:
@@ -552,6 +567,7 @@ def _node_response(
         availability_started_at=node.availability_started_at,
         uptime_record_seconds=round(node.availability_record_seconds),
         gaming_mode_until=node.gaming_mode_until,
+        update_check_requested_at=node.update_check_requested_at,
         physical_device_id=node.physical_device_id,
         physical_device_name=node.physical_device.display_name if node.physical_device else None,
         fleet_group_id=node.fleet_group_id or _default_group_for(node),

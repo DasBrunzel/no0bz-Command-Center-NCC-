@@ -14,6 +14,7 @@ from ncc_agent.client import AgentClient, AgentRejectedError
 from ncc_agent.config import AgentSettings
 from ncc_agent.identity import load_or_create_machine_id
 from ncc_agent.runner import _is_new_snapshot, _next_wake_seconds
+from ncc_payload.main import request_update_check
 from ncc_server.agent_tokens import issue_agent_token
 from ncc_server.app import create_app
 from ncc_server.config import ServerSettings
@@ -179,6 +180,33 @@ def test_failed_upload_stays_in_offline_buffer(tmp_path: Path) -> None:
     assert buffer.count() == 1
     client.close()
     buffer.close()
+
+
+@pytest.mark.parametrize(("body", "expected"), [
+    ({"accepted": True, "update_check_requested": True}, True),
+    ({"accepted": True, "update_check_requested": False}, False),
+    ({"accepted": True}, False),  # an older server omits the field
+])
+def test_heartbeat_reports_a_dashboard_update_request(
+    tmp_path: Path, body: dict[str, object], expected: bool,
+) -> None:
+    buffer = TelemetryBuffer(tmp_path / "queue.sqlite3", max_points=10)
+    client = AgentClient(
+        AgentSettings(server_url="https://ncc.example.test", token=SecretStr("agent-token"), data_dir=tmp_path),
+        "ncc-12345678-1234-4234-8234-123456789abc", buffer,
+        transport=httpx.MockTransport(lambda _: httpx.Response(200, json=body)),
+    )
+    assert client.heartbeat() is expected
+    client.close()
+    buffer.close()
+
+
+def test_payload_hands_an_update_request_to_the_service_host(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("NCC_CORE_STATE_DIR", str(tmp_path / "state"))
+    request_update_check()
+    assert (tmp_path / "state" / "update-check-requested").is_file()
 
 
 @pytest.mark.parametrize("status_code", [409, 410])

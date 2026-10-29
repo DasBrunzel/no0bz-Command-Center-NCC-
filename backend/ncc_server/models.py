@@ -63,6 +63,8 @@ class Node(Base):
     availability_current_streak_seconds: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
     availability_record_seconds: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
     gaming_mode_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Set by a commander, delivered once with the next heartbeat.
+    update_check_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     physical_device_id: Mapped[str | None] = mapped_column(
         ForeignKey("physical_devices.id", ondelete="SET NULL")
     )

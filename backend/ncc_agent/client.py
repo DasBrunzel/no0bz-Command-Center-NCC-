@@ -94,12 +94,17 @@ class AgentClient:
         )
         return int(response.json()["heartbeat_interval_seconds"])
 
-    def heartbeat(self) -> None:
-        self._request(
+    def heartbeat(self) -> bool:
+        """Send a heartbeat; return whether a commander asked for an update check."""
+        response = self._request(
             "POST",
             "/api/v1/nodes/heartbeat",
             json={"agent_version": self.agent_version, "metadata": self._host_metadata},
         )
+        try:
+            return response.json().get("update_check_requested") is True
+        except ValueError:
+            return False
 
     def flush(self, max_batches: int = 10) -> int:
         sent = 0

@@ -149,6 +149,19 @@ jobs:
           }
           .\scripts\test_ncc_agent_service_acl_ci.ps1
           $root = Join-Path $env:ProgramData 'no0bz\NCC Agent'
+          # A dashboard "update now" request reaches the service host as a file from the payload.
+          $updateRequest = Join-Path $root 'core-state\state\update-check-requested'
+          Set-Content -LiteralPath $updateRequest -Value 'requested' -NoNewline
+          $requestDeadline = (Get-Date).AddSeconds(20)
+          while ((Test-Path -LiteralPath $updateRequest) -and (Get-Date) -lt $requestDeadline) { Start-Sleep -Seconds 1 }
+          $hostLog = Join-Path $root 'logs\service-host.log'
+          if ((Test-Path -LiteralPath $updateRequest) -or -not (Select-String -LiteralPath $hostLog -Pattern 'Dashboard requested an immediate update check' -Quiet)) {
+            Write-NccAgentDiagnostics -SetupLog $log
+            throw 'Service host did not pick up the dashboard update request'
+          }
+          $serviceDeadline = (Get-Date).AddSeconds(60)
+          while ((Get-Service NccAgentCore).Status -ne 'Running' -and (Get-Date) -lt $serviceDeadline) { Start-Sleep -Seconds 2 }
+          if ((Get-Service NccAgentCore).Status -ne 'Running') { throw 'Agent service stopped after the update request' }
           $config = Join-Path $root 'config\core.env'
           if (-not (Test-Path $config)) { throw 'Agent config was not created' }
           $identity = (Get-Content $config | Where-Object { $_ -like 'NCC_AGENT_PAIRING_ID=*' })

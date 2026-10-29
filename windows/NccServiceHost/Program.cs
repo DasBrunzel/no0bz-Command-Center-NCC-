@@ -52,7 +52,7 @@ internal sealed class CoreService : ServiceBase
             _updateCancellation = new CancellationTokenSource();
             StartCore();
             IsRunning = true;
-            _statusTimer = new System.Threading.Timer(_ => PublishStatus(), null,
+            _statusTimer = new System.Threading.Timer(_ => { ConsumeUpdateRequest(); PublishStatus(); }, null,
                 TimeSpan.Zero, TimeSpan.FromSeconds(5));
             // Core verifies the approved signed release on every service start.
             // A controlled restart supplies the required periodic update check.
@@ -196,6 +196,22 @@ internal sealed class CoreService : ServiceBase
                 Environment.FailFast("NCC Core scheduled restart failed", error);
             }
         }
+    }
+
+    // The payload drops this file when a commander clicks "Jetzt aktualisieren".
+    // Firing the update timer now runs exactly the regular 6-hour check.
+    private void ConsumeUpdateRequest()
+    {
+        if (_stopping) return;
+        var request = Path.Combine(Root, "core-state", "state", "update-check-requested");
+        try
+        {
+            if (!File.Exists(request)) return;
+            File.Delete(request);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { return; }
+        Log("Dashboard requested an immediate update check");
+        _updateTimer?.Change(TimeSpan.Zero, TimeSpan.FromHours(6));
     }
 
     private void PublishStatus()

@@ -92,6 +92,13 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   Agenten migriert, ohne neues Pairing. Dort bestand auch der letzte offene
   Abnahmepunkt: Nach einem Herunterfahren mit Windows-Schnellstart kamen Dienst
   und Tray ohne Eingriff zurück, und gepufferte Telemetrie wurde nachgesendet.
+- Commander können ein Gerät zu einer sofortigen Update-Prüfung auffordern
+  (`POST /api/v1/fleet/nodes/{id}/update-check`). Der Server liefert die
+  Anforderung einmalig mit dem nächsten Heartbeat aus; ein 0.6-Payload legt
+  daraufhin eine Signaldatei an, und der Windows-Diensthost führt sofort die
+  reguläre signierte Prüfung von Payload-Release und Installer-Feed aus,
+  statt bis zu sechs Stunden zu warten. 0.5-Agenten ignorieren das neue Feld.
+  Die Migration `20261029_0019` ergänzt dafür eine Spalte an `nodes`.
 - Die Backend-Typprüfung verwendet für gespeicherte Warnungsstufen eine
   explizite Typangabe statt einer zwischen Python-Versionen instabilen
   `type: ignore`-Ausnahme.

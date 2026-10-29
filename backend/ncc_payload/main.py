@@ -30,9 +30,19 @@ def _write_health(status: str) -> None:
     temporary.replace(path)
 
 
+def request_update_check() -> None:
+    # The Windows service host polls for this file and then runs its regular
+    # signed update check immediately instead of waiting for the 6-hour timer.
+    path = _health_path().parent / "update-check-requested"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("requested", encoding="utf-8")
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    runner = AgentRunner(AgentSettings(), agent_version=__version__)
+    runner = AgentRunner(
+        AgentSettings(), agent_version=__version__, on_update_check=request_update_check
+    )
 
     def stop_payload(*_: object) -> None:
         _write_health("stopping")
