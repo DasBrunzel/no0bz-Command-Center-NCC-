@@ -76,6 +76,10 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   signierte HTTPS-Updatequelle stehen noch aus; das Protokoll steht in
   `docs/windows-agent-installer-acceptance.md`. Die Windows-CI war auf
   demselben Stand vollständig grün.
+- Entwicklungs-Pre-Release `v0.6.0-beta.8-dev.2`: signierter Windows-Payload
+  `0.6.0-beta.8-dev.2` und signiertes Agent-Setup `0.6.0-beta.8-dev.3`, das
+  diesen Payload als Start-Payload mitliefert. Der Installer-Update-Feed
+  `windows/installer/update-feed.json` bietet dieses Setup an.
 - Die Backend-Typprüfung verwendet für gespeicherte Warnungsstufen eine
   explizite Typangabe statt einer zwischen Python-Versionen instabilen
   `type: ignore`-Ausnahme.
