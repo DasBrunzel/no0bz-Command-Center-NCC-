@@ -63,8 +63,15 @@ New-Item -ItemType Directory -Force -Path $stage, $OutputDirectory | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'NCC Tray build failed.' }
 & $dotnet publish (Join-Path $project 'windows\NccServiceHost\NccServiceHost.csproj') -c Release -r win-x64 --self-contained true '-p:PublishSingleFile=true' '-p:PublishTrimmed=false' -o (Join-Path $stage 'service')
 if ($LASTEXITCODE -ne 0) { throw 'NCC Service Host build failed.' }
-& $cargo build --release --manifest-path (Join-Path $project 'core\ncc-core\Cargo.toml')
-if ($LASTEXITCODE -ne 0) { throw 'NCC Core build failed.' }
+# Cargo reads .cargo\config.toml relative to the working directory, not to
+# --manifest-path; the Core's stack size and static CRT live there.
+Push-Location (Join-Path $project 'core\ncc-core')
+try {
+    & $cargo build --release
+    if ($LASTEXITCODE -ne 0) { throw 'NCC Core build failed.' }
+} finally {
+    Pop-Location
+}
 
 Copy-Item -LiteralPath (Join-Path $stage 'tray\NccTray.exe') -Destination (Join-Path $stage 'NccTray.exe') -Force
 Copy-Item -LiteralPath (Join-Path $stage 'service\NccServiceHost.exe') -Destination (Join-Path $stage 'NccServiceHost.exe') -Force

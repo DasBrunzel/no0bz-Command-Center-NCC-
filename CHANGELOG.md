@@ -45,6 +45,13 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   bewahrt das Skript Logs und Core-Zustand des Fehlversuchs unter
   `NCC Agent Setup\failed-attempt-*` auf; die Windows-CI gibt sie bei einem
   gescheiterten Upgrade aus.
+- Der Windows-Core bindet die C-Laufzeit jetzt statisch ein. Auf einer
+  frischen Windows-11-Installation ohne Visual C++ Redistributable startete
+  `ncc-core.exe` bisher nicht (`VCRUNTIME140.dll` fehlte), und das Setup
+  meldete fälschlich einen abgelehnten signierten Start-Payload. Der
+  Setup-Build ruft Cargo außerdem im Core-Verzeichnis auf, damit die dort
+  hinterlegte Stackgröße von 8 MiB tatsächlich in das ausgelieferte Binary
+  gelangt.
 - Die Backend-Typprüfung verwendet für gespeicherte Warnungsstufen eine
   explizite Typangabe statt einer zwischen Python-Versionen instabilen
   `type: ignore`-Ausnahme.
