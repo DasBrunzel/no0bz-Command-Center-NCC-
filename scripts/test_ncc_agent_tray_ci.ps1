@@ -22,6 +22,15 @@ try {
     }
     $runEntry = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run' -Name NccTray).NccTray
     if ($runEntry -notlike "*$trayExe*") { throw 'Machine-wide tray autostart is missing.' }
+    # CI has no NCC server, so the agent never pairs; the tray must be told.
+    $statusFile = Join-Path $appDir 'agent-status.json'
+    $statusDeadline = (Get-Date).AddSeconds(60)
+    do {
+        Start-Sleep -Seconds 2
+        $status = try { Get-Content -LiteralPath $statusFile -Raw -ErrorAction Stop | ConvertFrom-Json } catch { $null }
+    } while (($null -eq $status -or $status.paired -ne $false) -and (Get-Date) -lt $statusDeadline)
+    if ($null -eq $status -or $status.paired -ne $false) { throw 'Agent status does not report the unpaired device.' }
+    if (-not (Test-Path -LiteralPath (Join-Path $appDir 'pairing-url.txt'))) { throw 'Pairing link file is missing.' }
 
     $trayDeadline = (Get-Date).AddSeconds(20)
     do {

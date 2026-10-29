@@ -59,6 +59,9 @@ Type: files; Name: "{app}\tray-upgrade.marker"
 var
   ServerPage: TInputQueryWizardPage;
   InstallScriptFailed: Boolean;
+  PairingUrl: String;
+  PairingCheck: TNewCheckBox;
+  PairingEdit: TNewEdit;
 
 function CanLaunchTray(): Boolean;
 begin
@@ -82,6 +85,61 @@ begin
     'Gib die HTTPS-Adresse oder die Tailscale-Adresse deines NCC-Servers ein. Vorhandene Agent-Konfigurationen bleiben erhalten.');
   ServerPage.Add('Server-URL:', False);
   ServerPage.Values[0] := ExpandConstant('{param:SERVERURL|}');
+
+  PairingCheck := TNewCheckBox.Create(WizardForm);
+  PairingCheck.Parent := WizardForm.FinishedPage;
+  PairingCheck.Caption := 'Gerät jetzt im Browser mit dem NCC-Dashboard koppeln';
+  PairingCheck.Checked := True;
+  PairingCheck.Visible := False;
+  PairingEdit := TNewEdit.Create(WizardForm);
+  PairingEdit.Parent := WizardForm.FinishedPage;
+  PairingEdit.ReadOnly := True;
+  PairingEdit.Visible := False;
+end;
+
+procedure ReadPairingUrl();
+var
+  Url: AnsiString;
+begin
+  { A device that already holds an agent credential keeps its pairing. }
+  PairingUrl := '';
+  if FileExists(ExpandConstant('{commonappdata}\no0bz\NCC Agent\data\agent-credential.json')) then
+    Exit;
+  if LoadStringFromFile(ExpandConstant('{app}\pairing-url.txt'), Url) then
+    PairingUrl := Trim(String(Url));
+  { Shell-open only a web address. }
+  if (Pos('https://', Lowercase(PairingUrl)) <> 1) and (Pos('http://', Lowercase(PairingUrl)) <> 1) then
+    PairingUrl := '';
+end;
+
+procedure OpenPairingUrl();
+var
+  ErrorCode: Integer;
+begin
+  if (PairingUrl <> '') and CanLaunchTray() then
+    ShellExecAsOriginalUser('open', PairingUrl, '', '', SW_SHOWNORMAL, ewNoWait, ErrorCode);
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if (CurPageID = wpFinished) and (PairingUrl <> '') and not InstallScriptFailed then
+  begin
+    WizardForm.FinishedLabel.Caption := WizardForm.FinishedLabel.Caption + #13#10#13#10 +
+      'Das Gerät ist noch nicht mit dem NCC-Server gekoppelt. Öffne diesen Link ' +
+      'und melde dich mit einem Admin-Code an; die Anfrage wird dabei freigegeben. ' +
+      'Der Link ist auch später über das Tray-Menü erreichbar.';
+    WizardForm.FinishedLabel.AdjustHeight();
+    PairingEdit.Text := PairingUrl;
+    PairingEdit.Left := WizardForm.FinishedLabel.Left;
+    PairingEdit.Width := WizardForm.FinishedLabel.Width;
+    PairingEdit.Top := WizardForm.FinishedLabel.Top + WizardForm.FinishedLabel.Height + ScaleY(12);
+    PairingEdit.Visible := True;
+    PairingCheck.Left := WizardForm.FinishedLabel.Left;
+    PairingCheck.Width := WizardForm.FinishedLabel.Width;
+    PairingCheck.Height := ScaleY(17);
+    PairingCheck.Top := PairingEdit.Top + PairingEdit.Height + ScaleY(12);
+    PairingCheck.Visible := True;
+  end;
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
@@ -107,6 +165,18 @@ begin
       Result := False;
     end;
   end;
+  if (CurPageID = wpFinished) and PairingCheck.Visible and PairingCheck.Checked then
+    OpenPairingUrl();
+end;
+
+function HasSwitch(Name: String): Boolean;
+var
+  I: Integer;
+begin
+  Result := False;
+  for I := 1 to ParamCount do
+    if CompareText(ParamStr(I), Name) = 0 then
+      Result := True;
 end;
 
 procedure RunRequiredScript(Filename, Parameters: String);
@@ -162,6 +232,11 @@ begin
       activates the new one. }
     if CanLaunchTray() then
       ExecAsOriginalUser(ExpandConstant('{app}\NccTray.exe'), '', '', SW_SHOWNORMAL, ewNoWait, TrayResult);
+    ReadPairingUrl();
+    { Silent installs open no browser unless asked; the wizard offers it on
+      its finished page instead. }
+    if WizardSilent and HasSwitch('/OPENPAIRING') then
+      OpenPairingUrl();
   end;
 end;
 

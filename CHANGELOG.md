@@ -62,6 +62,13 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   passenden Geheimnis erneut, öffnet der Server die Anfrage wieder; eine vor
   dem Ablauf erteilte Freigabe gilt dabei nicht weiter. Der Agent wertet eine
   abgelaufene Anfrage als weiteres Warten, statt den Payload zu beenden.
+- Der Windows-Pairing-Link ist jetzt sichtbar. Nach einer interaktiven
+  Erstinstallation zeigt die Abschlussseite des Setups den Link und öffnet ihn
+  auf Wunsch im Browser des angemeldeten Benutzers; ein stilles Setup tut das
+  nur mit `/OPENPAIRING`. Der Diensthost meldet in `agent-status.json`, ob
+  bereits ein Agent-Zugang vorliegt, ohne das Token zu lesen. Solange das
+  Gerät nicht gekoppelt ist, bietet der Tray „Gerät koppeln…“ an und nennt den
+  Zustand im Tooltip.
 - Die Backend-Typprüfung verwendet für gespeicherte Warnungsstufen eine
   explizite Typangabe statt einer zwischen Python-Versionen instabilen
   `type: ignore`-Ausnahme.

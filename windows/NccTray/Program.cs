@@ -10,7 +10,7 @@ using System.Windows.Forms;
 namespace NccTray;
 
 internal sealed record TraySettings(string ServerUrl, string Version);
-internal sealed record AgentStatus(string? Version, string? Health, DateTimeOffset? LastCheckUtc, string? UpdateStatus);
+internal sealed record AgentStatus(string? Version, string? Health, DateTimeOffset? LastCheckUtc, string? UpdateStatus, bool? Paired);
 
 internal static class Program
 {
@@ -96,6 +96,8 @@ internal static class Program
         private readonly NotifyIcon _icon;
         private readonly Icon _brandIcon;
         private readonly ToolStripMenuItem _dashboard;
+        private readonly ToolStripMenuItem _pair;
+        private readonly string _pairingUrlFile = Path.Combine(AppContext.BaseDirectory, "pairing-url.txt");
         private readonly System.Windows.Forms.Timer _timer;
         private readonly TraySettings _settings;
         private bool _stopping;
@@ -105,8 +107,10 @@ internal static class Program
         {
             _settings = settings;
             _dashboard = new ToolStripMenuItem("Dashboard öffnen", null, OpenDashboard);
+            _pair = new ToolStripMenuItem("Gerät koppeln…", null, OpenPairing) { Visible = false };
             var exit = new ToolStripMenuItem("Beenden", null, StopAndExit);
             var menu = new ContextMenuStrip();
+            menu.Items.Add(_pair);
             menu.Items.Add(_dashboard);
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(exit);
@@ -193,7 +197,10 @@ internal static class Program
             // The tooltip reports the version installed in Apps & Features.
             var version = _settings.Version;
             var checkedAt = state?.LastCheckUtc?.ToLocalTime().ToString("dd.MM HH:mm") ?? "nie";
-            var update = state?.UpdateStatus ?? "unbekannt";
+            // Older service hosts omit the flag; only an explicit false offers pairing.
+            var unpaired = state?.Paired == false && File.Exists(_pairingUrlFile);
+            _pair.Visible = unpaired;
+            var update = unpaired ? "nicht gekoppelt" : state?.UpdateStatus ?? "unbekannt";
             var summary = $"NCC {version} | {(running ? "läuft" : "gestoppt")} | {update} | {checkedAt}";
             _icon.Text = summary.Length <= 63 ? summary : summary[..63];
             // Opening the remote dashboard after the agent has been stopped
@@ -205,6 +212,17 @@ internal static class Program
         {
             if (!_dashboard.Enabled) return;
             Process.Start(new ProcessStartInfo(_settings.ServerUrl) { UseShellExecute = true });
+        }
+
+        private void OpenPairing(object? sender, EventArgs e)
+        {
+            string url;
+            try { url = File.ReadAllText(_pairingUrlFile).Trim(); }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException) { return; }
+            // Shell-open only a web address, never whatever the file might hold.
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)
+                || (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp)) return;
+            Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
         }
 
         private void StopAndExit(object? sender, EventArgs e)

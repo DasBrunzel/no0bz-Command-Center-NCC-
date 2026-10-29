@@ -216,6 +216,9 @@ internal sealed class CoreService : ServiceBase
                 health,
                 lastCheckUtc = _lastCheckUtc,
                 updateStatus = health == "rolled_back" ? "Rollback" : _updateStatus,
+                // Only the credential's presence is published; the tray runs
+                // as the user and must never read the token itself.
+                paired = File.Exists(Path.Combine(Root, "data", "agent-credential.json")),
             };
             var target = Path.Combine(AppContext.BaseDirectory, "agent-status.json");
             var temporary = target + ".tmp";
