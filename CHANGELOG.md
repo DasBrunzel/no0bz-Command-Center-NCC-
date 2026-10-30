@@ -195,6 +195,33 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   GPU-Hotspot, RAM-Temperatur und die Energie von CPU und GPU.
 - Diagrammfarben folgen einer festen, auf Farbsehschwäche geprüften
   Reihenfolge (CPU, GPU, SSD, RAM) in beiden Farbschemata.
+- Freunde-Konten: Commander erzeugen unter Einstellungen einen einmaligen,
+  sieben Tage gültigen Einladungscode. Damit registriert sich ein Freund auf
+  der Anmeldeseite selbst, auch direkt über den Pairing-Link des Installers;
+  sein Gerät wird dabei automatisch gekoppelt, gehört ihm und landet in der
+  Gruppe FRIENDS. Freunde sehen nur eigene Geräte, deren Warnungen und
+  Statistiken und verwalten sie selbst (umbenennen, Gaming Mode,
+  Spielerkennung, Sensor-Namen, sofortige Update-Prüfung). Ein Commander kann
+  einem Freund die Statistiken aller Geräte freigeben und Geräte einem Konto
+  zuordnen. Migration `20261030_0023`.
+- Sicherheit: Wer eine Pairing-Anfrage mit der Maschinen-ID eines
+  bestehenden Geräts registrierte und selbst bestätigte, konnte dieses Gerät
+  samt Zugang übernehmen; ein Freund kann nur noch eigene Geräte neu koppeln.
+  Ein gemeldeter Hardware-Fingerabdruck verbindet Profile verschiedener Konten
+  nicht mehr zu einem physischen Gerät. Gruppen, Layout und Grenzwerte
+  ändert nur noch ein Commander, Geräte benennt nur ihr Besitzer oder ein
+  Commander; bisher durften das alle angemeldeten Nutzer. Pairing-Anfragen,
+  Admin-Codes, Agent-Einladungen, Releases und Telegram-Einstellungen sind für
+  Freunde nicht sichtbar.
+- Das Agent-Setup kann mit `-DefaultServerUrl` für einen bestimmten Server
+  gebaut werden; eine Neuinstallation überspringt dann die Adressseite,
+  Updates behalten die bisherige Adresse. Ist PawnIO noch nicht installiert,
+  bietet der Assistent an, es über winget aus der offiziellen Quelle
+  mitzuinstallieren; still nur mit `/PAWNIO`, bei Dienst-Updates nie. Ein
+  Fehlschlag bricht die Installation nicht ab.
+- Nach dem Öffnen eines Pairing-Links meldet das Dashboard, ob die Kopplung
+  gelungen ist, abgelaufen ist oder das Gerät einem anderen Konto gehört.
+- Tests setzen den prozessweiten Rate-Limiter vor jedem Test zurück.
 - Die Backend-Typprüfung verwendet für gespeicherte Warnungsstufen eine
   explizite Typangabe statt einer zwischen Python-Versionen instabilen
   `type: ignore`-Ausnahme.

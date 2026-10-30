@@ -81,6 +81,11 @@ class RateLimiter:
                 raise HTTPException(status_code=429, detail="Rate limit exceeded")
             events.append(now)
 
+    def reset(self) -> None:
+        """Forget all events; tests share this process-wide limiter."""
+        with self._lock:
+            self._events.clear()
+
 
 rate_limiter = RateLimiter()
 

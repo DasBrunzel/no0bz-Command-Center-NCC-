@@ -7,7 +7,7 @@ from ncc_server.auth import (
     database_session,
     require_agent_token,
     require_commander_access,
-    require_dashboard_access,
+    require_staff_access,
 )
 from ncc_server.models import AgentToken
 from ncc_server.node_service import bound_node
@@ -29,7 +29,7 @@ from ncc_server.schemas import (
 router = APIRouter(prefix="/releases", tags=["releases"])
 
 
-@router.get("", response_model=list[AgentReleaseResponse], dependencies=[Depends(require_dashboard_access)])
+@router.get("", response_model=list[AgentReleaseResponse], dependencies=[Depends(require_staff_access)])
 async def releases(session: Session = Depends(database_session)) -> list[AgentReleaseResponse]:
     return list_releases(session)
 

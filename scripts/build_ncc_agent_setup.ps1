@@ -4,6 +4,9 @@ param(
     [string]$InitialManifest = '',
     [string]$InitialPayload = '',
     [string]$TrustedKeys = '',
+    # Bakes a server address into the setup; a new installation then skips
+    # the address page. Updates keep the address a device already uses.
+    [string]$DefaultServerUrl = '',
     [string]$UpdateFeedUrl = 'https://raw.githubusercontent.com/DasBrunzel/no0bz-Command-Center-NCC-/codex/ncc-v0.6-agent-foundation/windows/installer/update-feed.json',
     [string]$ArtifactUrl = '',
     [string]$PrivateKey = '',
@@ -94,7 +97,12 @@ Copy-Item -LiteralPath $TrustedKeys -Destination $verifyKeys -Force
 & (Join-Path $stage 'ncc-core.exe') --state-dir $verification stage --source (Join-Path $stage 'initial-payload.zip') --version $artifact.payload_version --sha256 $artifact.sha256 --size $artifact.size_bytes --key-id $manifest.signature.key_id --signature $manifest.signature.value
 if ($LASTEXITCODE -ne 0) { throw 'NCC Core rejected the initial payload signature.' }
 
-& $iscc "/DVersion=$Version" "/DStage=$stage" "/DOutput=$OutputDirectory" (Join-Path $installer 'NccAgent.iss')
+$isccArguments = @("/DVersion=$Version", "/DStage=$stage", "/DOutput=$OutputDirectory")
+if ($DefaultServerUrl) {
+    if ($DefaultServerUrl -notmatch '^https?://[A-Za-z0-9.:\[\]-]+(:\d+)?/?$') { throw "DefaultServerUrl must be an http(s) origin, e.g. http://100.92.199.35:8350" }
+    $isccArguments += "/DDefaultServerUrl=$($DefaultServerUrl.TrimEnd('/'))"
+}
+& $iscc @isccArguments (Join-Path $installer 'NccAgent.iss')
 if ($LASTEXITCODE -ne 0) { throw 'Inno Setup could not create NCC Agent setup.exe.' }
 $setup = Join-Path $OutputDirectory "ncc-agent-setup-$Version-windows-x86_64.exe"
 if (-not (Test-Path -LiteralPath $setup -PathType Leaf)) { throw 'NCC Agent setup.exe is missing after compilation.' }

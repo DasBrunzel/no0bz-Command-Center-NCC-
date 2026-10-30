@@ -14,12 +14,23 @@ from sqlalchemy.orm import Session
 from ncc_server.agent_tokens import find_valid_agent_token
 from ncc_server.models import AdminCode, AgentToken, DashboardSession, User, utc_now
 
+# Commanders manage everything; beta testers see every device; friends see
+# only the devices they own.
+DashboardRole = Literal["commander", "beta_tester", "friend"]
+DASHBOARD_ROLES = frozenset({"commander", "beta_tester", "friend"})
+
 
 @dataclass(frozen=True)
 class DashboardIdentity:
     user_id: str | None
     username: str
-    access_role: Literal["commander", "beta_tester"]
+    access_role: DashboardRole
+    # Commander-granted: a friend sees statistics of every device.
+    full_statistics: bool = False
+
+    @property
+    def is_friend(self) -> bool:
+        return self.access_role == "friend"
 
 
 def database_session(request: Request) -> Iterator[Session]:
@@ -59,12 +70,12 @@ def require_dashboard_identity(
             if browser_session is not None:
                 if browser_session.user_id:
                     user = session.get(User, browser_session.user_id)
-                    if user and user.active and user.role in {"commander", "beta_tester"}:
-                        return DashboardIdentity(user.id, user.username, cast(Literal["commander", "beta_tester"], user.role))
+                    if user and user.active and user.role in DASHBOARD_ROLES:
+                        return DashboardIdentity(user.id, user.username, cast(DashboardRole, user.role), user.full_statistics)
                 elif browser_session.code_id:
                     code = session.get(AdminCode, browser_session.code_id)
                     if code and code.revoked_at is None and code.access_role in {"commander", "beta_tester"}:
-                        return DashboardIdentity(None, code.access_role.replace("_", " ").title(), cast(Literal["commander", "beta_tester"], code.access_role))
+                        return DashboardIdentity(None, code.access_role.replace("_", " ").title(), cast(DashboardRole, code.access_role))
     settings = request.app.state.server_settings
     configured = settings.dashboard_token.get_secret_value()
     supplied = x_ncc_dashboard_token or _bearer_token(authorization) or ""
@@ -82,12 +93,21 @@ def require_dashboard_identity(
 
 def require_dashboard_access(
     identity: DashboardIdentity = Depends(require_dashboard_identity),
-) -> Literal["commander", "beta_tester"]:
+) -> DashboardRole:
     return identity.access_role
 
 
+def require_staff_access(
+    access_role: DashboardRole = Depends(require_dashboard_access),
+) -> DashboardRole:
+    """Everything about other people's devices and the server itself."""
+    if access_role == "friend":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="not available for friend accounts")
+    return access_role
+
+
 def require_commander_access(
-    access_role: Literal["commander", "beta_tester"] = Depends(require_dashboard_access),
+    access_role: DashboardRole = Depends(require_dashboard_access),
 ) -> Literal["commander"]:
     if access_role != "commander":
         raise HTTPException(

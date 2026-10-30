@@ -7,11 +7,18 @@ from ncc.security import limited
 from sqlalchemy import select
 from sqlalchemy.orm import Session, undefer
 
-from ncc_server.auth import database_session, require_commander_access, require_dashboard_access
+from ncc_server.access import can_see_node, manageable_node, visible_node_ids
+from ncc_server.auth import (
+    DashboardIdentity,
+    database_session,
+    require_commander_access,
+    require_dashboard_access,
+    require_dashboard_identity,
+)
 from ncc_server.fleet_service import fleet_node
 from ncc_server.game_service import correct_game_match, playtime_statistics, update_game_settings
 from ncc_server.hardware_stats import hardware_statistics
-from ncc_server.models import Game
+from ncc_server.models import Game, GameSession
 from ncc_server.schemas import (
     FleetGameSettingsRequest,
     FleetNodeResponse,
@@ -26,14 +33,15 @@ router = APIRouter(
 )
 
 
-@router.put(
-    "/nodes/{node_id}/game-settings",
-    response_model=FleetNodeResponse,
-    dependencies=[Depends(require_commander_access)],
-)
+@router.put("/nodes/{node_id}/game-settings", response_model=FleetNodeResponse)
 async def set_game_settings(
-    node_id: str, payload: FleetGameSettingsRequest, request: Request, session: Session = Depends(database_session)
+    node_id: str,
+    payload: FleetGameSettingsRequest,
+    request: Request,
+    identity: DashboardIdentity = Depends(require_dashboard_identity),
+    session: Session = Depends(database_session),
 ) -> FleetNodeResponse:
+    manageable_node(session, identity, node_id)
     node = update_game_settings(session, node_id, payload.game_tracking, payload.auto_gaming_mode)
     response = fleet_node(session, node.id, request.app.state.server_settings) if node else None
     if response is None:
@@ -46,9 +54,11 @@ async def game_statistics(
     days: int = Query(default=30, ge=0, le=3660),
     node_id: str | None = Query(default=None, max_length=36),
     utc_offset_minutes: int = Query(default=0, ge=-840, le=840),
+    identity: DashboardIdentity = Depends(require_dashboard_identity),
     session: Session = Depends(database_session),
 ) -> dict[str, Any]:
-    return playtime_statistics(session, days=days, node_id=node_id, utc_offset_minutes=utc_offset_minutes)
+    node_ids = _statistics_scope(session, identity, node_id)
+    return playtime_statistics(session, days=days, node_id=node_id, utc_offset_minutes=utc_offset_minutes, node_ids=node_ids)
 
 
 @router.get("/hardware/stats")
@@ -56,14 +66,30 @@ async def hardware_stats(
     days: int = Query(default=30, ge=0, le=3660),
     node_id: str | None = Query(default=None, max_length=36),
     utc_offset_minutes: int = Query(default=0, ge=-840, le=840),
+    identity: DashboardIdentity = Depends(require_dashboard_identity),
     session: Session = Depends(database_session),
 ) -> dict[str, Any]:
-    return hardware_statistics(session, days=days, node_id=node_id, utc_offset_minutes=utc_offset_minutes)
+    node_ids = _statistics_scope(session, identity, node_id)
+    return hardware_statistics(session, days=days, node_id=node_id, utc_offset_minutes=utc_offset_minutes, node_ids=node_ids)
 
 
 @router.get("/games", response_model=list[GameResponse])
-async def games(session: Session = Depends(database_session)) -> list[GameResponse]:
-    return [_game_response(game) for game in session.scalars(select(Game).order_by(Game.title)).all()]
+async def games(
+    identity: DashboardIdentity = Depends(require_dashboard_identity),
+    session: Session = Depends(database_session),
+) -> list[GameResponse]:
+    allowed = visible_node_ids(session, identity, statistics=True)
+    query = select(Game).order_by(Game.title)
+    if allowed is not None:
+        # Only games that were played on a device the identity may see.
+        query = query.where(Game.id.in_(select(GameSession.game_id).where(GameSession.node_id.in_(allowed))))
+    return [_game_response(game) for game in session.scalars(query).all()]
+
+
+def _statistics_scope(session: Session, identity: DashboardIdentity, node_id: str | None) -> set[str] | None:
+    if node_id is not None and not can_see_node(session, identity, node_id, statistics=True):
+        raise HTTPException(status_code=404, detail="node not found")
+    return visible_node_ids(session, identity, statistics=True)
 
 
 @router.patch("/games/{game_id}", response_model=GameResponse, dependencies=[Depends(require_commander_access)])

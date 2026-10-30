@@ -4,8 +4,16 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from ncc.security import limited
 from sqlalchemy.orm import Session
 
+from ncc_server.access import manageable_node, visible_node, visible_node_ids
 from ncc_server.alert_service import AlertNotification, get_alert_policy, update_alert_policy
-from ncc_server.auth import database_session, require_commander_access, require_dashboard_access
+from ncc_server.auth import (
+    DashboardIdentity,
+    database_session,
+    require_commander_access,
+    require_dashboard_access,
+    require_dashboard_identity,
+    require_staff_access,
+)
 from ncc_server.fleet_service import (
     attach_physical_device_node,
     clear_active_alerts,
@@ -26,6 +34,7 @@ from ncc_server.fleet_service import (
     request_fleet_update_check,
     reset_network_statistics,
     set_fleet_gaming_mode,
+    set_node_owner,
     update_fleet_layout,
     update_fleet_node_role,
     update_sensor_label,
@@ -48,6 +57,7 @@ from ncc_server.schemas import (
     FleetTelemetryPoint,
     NetworkHistorySample,
     NetworkUsageSummary,
+    NodeOwnerUpdateRequest,
     PhysicalDeviceCreateRequest,
     PhysicalDeviceResponse,
     SensorLabelUpdateRequest,
@@ -70,16 +80,20 @@ router = APIRouter(
 
 @router.get("/summary", response_model=FleetSummaryResponse)
 async def summary(
-    request: Request, session: Session = Depends(database_session)
+    request: Request,
+    identity: DashboardIdentity = Depends(require_dashboard_identity),
+    session: Session = Depends(database_session),
 ) -> FleetSummaryResponse:
-    return fleet_summary(session, request.app.state.server_settings)
+    return fleet_summary(session, request.app.state.server_settings, visible_node_ids(session, identity))
 
 
 @router.get("/nodes", response_model=list[FleetNodeResponse])
 async def nodes(
-    request: Request, session: Session = Depends(database_session)
+    request: Request,
+    identity: DashboardIdentity = Depends(require_dashboard_identity),
+    session: Session = Depends(database_session),
 ) -> list[FleetNodeResponse]:
-    return list_fleet_nodes(session, request.app.state.server_settings)
+    return list_fleet_nodes(session, request.app.state.server_settings, visible_node_ids(session, identity))
 
 
 @router.get("/groups", response_model=list[FleetGroupResponse])
@@ -87,15 +101,23 @@ async def groups(session: Session = Depends(database_session)) -> list[FleetGrou
     return list_fleet_groups(session)
 
 
-def _physical_device_response(device) -> PhysicalDeviceResponse:  # type: ignore[no-untyped-def]
+def _physical_device_response(device, node_ids: set[str] | None = None) -> PhysicalDeviceResponse:  # type: ignore[no-untyped-def]
     return PhysicalDeviceResponse(
-        device_id=device.id, display_name=device.display_name, node_ids=[node.id for node in device.nodes]
+        device_id=device.id, display_name=device.display_name,
+        node_ids=[node.id for node in device.nodes if node_ids is None or node.id in node_ids],
     )
 
 
 @router.get("/physical-devices", response_model=list[PhysicalDeviceResponse])
-async def physical_devices(session: Session = Depends(database_session)) -> list[PhysicalDeviceResponse]:
-    return [_physical_device_response(device) for device in list_physical_devices(session)]
+async def physical_devices(
+    identity: DashboardIdentity = Depends(require_dashboard_identity),
+    session: Session = Depends(database_session),
+) -> list[PhysicalDeviceResponse]:
+    allowed = visible_node_ids(session, identity)
+    return [
+        _physical_device_response(device, allowed) for device in list_physical_devices(session)
+        if allowed is None or any(node.id in allowed for node in device.nodes)
+    ]
 
 
 @router.post("/physical-devices", response_model=PhysicalDeviceResponse, status_code=201,
@@ -129,14 +151,14 @@ async def attach_device_node(device_id: str, node_id: str, session: Session = De
     return _physical_device_response(device)
 
 
-@router.post("/groups", response_model=FleetGroupResponse, status_code=201)
+@router.post("/groups", response_model=FleetGroupResponse, status_code=201, dependencies=[Depends(require_commander_access)])
 async def create_group(
     payload: FleetGroupCreateRequest, session: Session = Depends(database_session)
 ) -> FleetGroupResponse:
     return create_fleet_group(session, payload.name)
 
 
-@router.put("/layout", status_code=204)
+@router.put("/layout", status_code=204, dependencies=[Depends(require_commander_access)])
 async def set_layout(
     payload: FleetLayoutUpdateRequest, session: Session = Depends(database_session)
 ) -> None:
@@ -146,9 +168,11 @@ async def set_layout(
 
 @router.get("/alerts", response_model=list[FleetAlertResponse])
 async def alerts(
-    limit: int = Query(default=100, ge=1, le=500), session: Session = Depends(database_session)
+    limit: int = Query(default=100, ge=1, le=500),
+    identity: DashboardIdentity = Depends(require_dashboard_identity),
+    session: Session = Depends(database_session),
 ) -> list[FleetAlertResponse]:
-    return list_fleet_alerts(session, limit)
+    return list_fleet_alerts(session, limit, visible_node_ids(session, identity))
 
 
 @router.post("/alerts/clear", dependencies=[Depends(require_commander_access)])
@@ -162,7 +186,7 @@ async def alert_policy(session: Session = Depends(database_session)) -> AlertPol
     return AlertPolicyResponse.model_validate(policy, from_attributes=True)
 
 
-@router.put("/alert-policy", response_model=AlertPolicyResponse)
+@router.put("/alert-policy", response_model=AlertPolicyResponse, dependencies=[Depends(require_commander_access)])
 async def set_alert_policy(
     payload: AlertPolicyUpdateRequest, session: Session = Depends(database_session)
 ) -> AlertPolicyResponse:
@@ -181,7 +205,7 @@ def _telegram_response(settings, preferences) -> TelegramSettingsResponse:  # ty
     )
 
 
-@router.get("/telegram", response_model=TelegramSettingsResponse)
+@router.get("/telegram", response_model=TelegramSettingsResponse, dependencies=[Depends(require_staff_access)])
 async def telegram_settings(
     request: Request, session: Session = Depends(database_session)
 ) -> TelegramSettingsResponse:
@@ -223,14 +247,22 @@ async def test_telegram(
     return {"sent": True}
 
 
+def _node_or_404(session: Session, node_id: str, request: Request) -> FleetNodeResponse:
+    response = fleet_node(session, node_id, request.app.state.server_settings)
+    if response is None:  # pragma: no cover - callers load the node first
+        raise HTTPException(status_code=404, detail="node not found")
+    return response
+
+
 @router.get("/nodes/{node_id}", response_model=FleetNodeResponse)
 async def node(
-    node_id: str, request: Request, session: Session = Depends(database_session)
+    node_id: str,
+    request: Request,
+    identity: DashboardIdentity = Depends(require_dashboard_identity),
+    session: Session = Depends(database_session),
 ) -> FleetNodeResponse:
-    result = fleet_node(session, node_id, request.app.state.server_settings)
-    if result is None:
-        raise HTTPException(status_code=404, detail="node not found")
-    return result
+    visible_node(session, identity, node_id)
+    return _node_or_404(session, node_id, request)
 
 
 @router.delete("/nodes/{node_id}", status_code=204, dependencies=[Depends(require_commander_access)])
@@ -246,15 +278,13 @@ async def rename_node(
     node_id: str,
     payload: FleetNodeRenameRequest,
     request: Request,
+    identity: DashboardIdentity = Depends(require_dashboard_identity),
     session: Session = Depends(database_session),
 ) -> FleetNodeResponse:
-    result = rename_fleet_node(session, node_id, payload.display_name)
-    if result is None:
+    manageable_node(session, identity, node_id)
+    if rename_fleet_node(session, node_id, payload.display_name) is None:
         raise HTTPException(status_code=404, detail="node not found")
-    response = fleet_node(session, result.id, request.app.state.server_settings)
-    if response is None:  # pragma: no cover - result was loaded above
-        raise HTTPException(status_code=404, detail="node not found")
-    return response
+    return _node_or_404(session, node_id, request)
 
 
 @router.patch(
@@ -268,62 +298,60 @@ async def update_node_role(
     request: Request,
     session: Session = Depends(database_session),
 ) -> FleetNodeResponse:
-    result = update_fleet_node_role(session, node_id, payload.access_role)
+    if update_fleet_node_role(session, node_id, payload.access_role) is None:
+        raise HTTPException(status_code=404, detail="node not found")
+    return _node_or_404(session, node_id, request)
+
+
+@router.put("/nodes/{node_id}/owner", response_model=FleetNodeResponse, dependencies=[Depends(require_commander_access)])
+async def update_node_owner(
+    node_id: str, payload: NodeOwnerUpdateRequest, request: Request, session: Session = Depends(database_session)
+) -> FleetNodeResponse:
+    try:
+        result = set_node_owner(session, node_id, payload.user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     if result is None:
         raise HTTPException(status_code=404, detail="node not found")
-    response = fleet_node(session, result.id, request.app.state.server_settings)
-    if response is None:  # pragma: no cover - result was loaded above
-        raise HTTPException(status_code=404, detail="node not found")
-    return response
+    return _node_or_404(session, node_id, request)
 
 
-@router.put(
-    "/nodes/{node_id}/gaming-mode",
-    response_model=FleetNodeResponse,
-    dependencies=[Depends(require_commander_access)],
-)
+@router.put("/nodes/{node_id}/gaming-mode", response_model=FleetNodeResponse)
 async def set_gaming_mode(
-    node_id: str, payload: FleetGamingModeRequest, request: Request, session: Session = Depends(database_session)
+    node_id: str,
+    payload: FleetGamingModeRequest,
+    request: Request,
+    identity: DashboardIdentity = Depends(require_dashboard_identity),
+    session: Session = Depends(database_session),
 ) -> FleetNodeResponse:
-    result = set_fleet_gaming_mode(session, node_id, payload.minutes)
-    if result is None:
-        raise HTTPException(status_code=404, detail="node not found")
-    response = fleet_node(session, result.id, request.app.state.server_settings)
-    if response is None:  # pragma: no cover
-        raise HTTPException(status_code=404, detail="node not found")
-    return response
+    manageable_node(session, identity, node_id)
+    set_fleet_gaming_mode(session, node_id, payload.minutes)
+    return _node_or_404(session, node_id, request)
 
 
-@router.put(
-    "/nodes/{node_id}/sensor-labels",
-    response_model=FleetNodeResponse,
-    dependencies=[Depends(require_commander_access)],
-)
+@router.put("/nodes/{node_id}/sensor-labels", response_model=FleetNodeResponse)
 async def set_sensor_label(
-    node_id: str, payload: SensorLabelUpdateRequest, request: Request, session: Session = Depends(database_session)
+    node_id: str,
+    payload: SensorLabelUpdateRequest,
+    request: Request,
+    identity: DashboardIdentity = Depends(require_dashboard_identity),
+    session: Session = Depends(database_session),
 ) -> FleetNodeResponse:
-    result = update_sensor_label(session, node_id, payload.key, payload.name, payload.role)
-    response = fleet_node(session, result.id, request.app.state.server_settings) if result else None
-    if response is None:
-        raise HTTPException(status_code=404, detail="node not found")
-    return response
+    manageable_node(session, identity, node_id)
+    update_sensor_label(session, node_id, payload.key, payload.name, payload.role)
+    return _node_or_404(session, node_id, request)
 
 
-@router.post(
-    "/nodes/{node_id}/update-check",
-    response_model=FleetNodeResponse,
-    dependencies=[Depends(require_commander_access)],
-)
+@router.post("/nodes/{node_id}/update-check", response_model=FleetNodeResponse)
 async def request_update_check(
-    node_id: str, request: Request, session: Session = Depends(database_session)
+    node_id: str,
+    request: Request,
+    identity: DashboardIdentity = Depends(require_dashboard_identity),
+    session: Session = Depends(database_session),
 ) -> FleetNodeResponse:
-    result = request_fleet_update_check(session, node_id)
-    if result is None:
-        raise HTTPException(status_code=404, detail="node not found")
-    response = fleet_node(session, result.id, request.app.state.server_settings)
-    if response is None:  # pragma: no cover
-        raise HTTPException(status_code=404, detail="node not found")
-    return response
+    manageable_node(session, identity, node_id)
+    request_fleet_update_check(session, node_id)
+    return _node_or_404(session, node_id, request)
 
 
 @router.put("/nodes/{node_id}/release", status_code=204, dependencies=[Depends(require_commander_access)])
@@ -347,8 +375,10 @@ async def telemetry(
     node_id: str,
     limit: int = Query(default=120, ge=1, le=1000),
     after: str | None = None,
+    identity: DashboardIdentity = Depends(require_dashboard_identity),
     session: Session = Depends(database_session),
 ) -> list[FleetTelemetryPoint]:
+    visible_node(session, identity, node_id)
     try:
         result = node_telemetry(session, node_id, limit, after=after)
     except ValueError as exc:
@@ -362,8 +392,10 @@ async def telemetry(
 async def network_history(
     node_id: str,
     limit: int = Query(default=48, ge=1, le=1000),
+    identity: DashboardIdentity = Depends(require_dashboard_identity),
     session: Session = Depends(database_session),
 ) -> list[NetworkHistorySample]:
+    visible_node(session, identity, node_id)
     result = node_network_history(session, node_id, limit)
     if result is None:
         raise HTTPException(status_code=404, detail="node not found")
@@ -372,8 +404,11 @@ async def network_history(
 
 @router.get("/nodes/{node_id}/network/month", response_model=NetworkUsageSummary)
 async def monthly_network_usage(
-    node_id: str, session: Session = Depends(database_session)
+    node_id: str,
+    identity: DashboardIdentity = Depends(require_dashboard_identity),
+    session: Session = Depends(database_session),
 ) -> NetworkUsageSummary:
+    visible_node(session, identity, node_id)
     result = node_monthly_network_usage(session, node_id)
     if result is None:
         raise HTTPException(status_code=404, detail="node not found")

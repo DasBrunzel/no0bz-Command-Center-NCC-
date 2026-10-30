@@ -86,6 +86,8 @@ type Node = {
   game_tracking?: GameTracking;
   now_playing?: NowPlaying | null;
   sensor_labels?: SensorLabels;
+  owner_user_id?: string | null;
+  owner_name?: string | null;
   fleet_group_id: string;
   fleet_position: number;
   physical_device_id: string | null;
@@ -141,10 +143,11 @@ type Invitation = {
   revoked_at: string | null;
 };
 type IssuedInvitation = Invitation & { token: string };
-type AccessRole = "commander" | "beta_tester";
+type AccessRole = "commander" | "beta_tester" | "friend";
 type DashboardAccess = { access_role: AccessRole };
 type ServerVersion = { version: string; api: string };
-type DashboardUser = { user_id: string | null; username: string; role: AccessRole; active: boolean; managed: boolean; created_at?: string | null };
+type DashboardUser = { user_id: string | null; username: string; role: AccessRole; active: boolean; managed: boolean; created_at?: string | null; full_statistics?: boolean; device_count?: number };
+type AccountInvite = { invite_id: string; label: string; created_at: string; expires_at: string; status: "open" | "used" | "expired" | "revoked"; used_by: string | null; code?: string };
 type IssuedAdminCode = { code: string; expires_at: string; access_role: AccessRole };
 type AdminCode = {
   code_id: string;
@@ -524,6 +527,7 @@ function Fleet({
   onAttachProfile,
   onDetachProfile,
   canDelete,
+  userId = null,
   releases,
   token,
   dismissedAlerts,
@@ -544,6 +548,7 @@ function Fleet({
   onAttachProfile: (deviceId: string, nodeId: string) => Promise<void>;
   onDetachProfile: (deviceId: string, nodeId: string) => Promise<void>;
   canDelete: boolean;
+  userId?: string | null;
   releases: AgentRelease[];
   token: string;
   dismissedAlerts: Set<string>;
@@ -643,7 +648,7 @@ function Fleet({
     <div className="concept-fleet-actions"><button type="button" className="outline-button" onClick={() => setEditing((value) => !value)}>{editing ? "Gruppen schließen" : "Gruppen bearbeiten"}</button>{editing && <button type="button" className="outline-button" onClick={() => { const name = window.prompt("Name der neuen Gruppe"); if (name?.trim()) void onCreateGroup(name.trim()); }}>+ Gruppe</button>}</div>
     {editing && <div className="concept-group-editor">{grouped.map((group) => <div key={group.group_id} className="detail-card" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); void moveNode(group.group_id); }}><strong>{group.name}</strong>{group.nodes.map((node) => <button type="button" key={node.node_id} draggable onDragStart={() => setDraggedNodeId(node.node_id)} onDragEnd={() => setDraggedNodeId(null)} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); event.stopPropagation(); void moveNode(group.group_id, node.node_id); }}>{node.display_name}</button>)}</div>)}</div>}
     {selected && <div className="concept-selected-node">
-      <NodeOverview node={selected} points={points} monthlyNetwork={monthlyNetwork} canDelete={canDelete} releases={releases} token={token}/>
+      <NodeOverview node={selected} points={points} monthlyNetwork={monthlyNetwork} canDelete={canDelete} canManageDevice={canDelete || (!!userId && selected?.owner_user_id === userId)} releases={releases} token={token}/>
       {(selectedProfiles.length > 1 || canDelete) && <section className="concept-profile-link">
         <div><span className="eyebrow">OS-Profile</span><h3>Physisches Gerät</h3></div>
         {selectedProfiles.length > 1 && <div className="concept-profile-tabs">{selectedProfiles.map((profile) => <button type="button" className={profile.node_id === selected.node_id ? "active" : ""} key={profile.node_id} onClick={() => onSelect(profile.node_id)}>{profile.platform} · {profile.online ? "Online" : "Offline"}</button>)}</div>}
@@ -854,6 +859,8 @@ function NodeOverview({
   points,
   monthlyNetwork,
   canDelete,
+  userId = null,
+  canManageDevice = false,
   releases,
   token,
 }: {
@@ -861,10 +868,19 @@ function NodeOverview({
   points: Telemetry[];
   monthlyNetwork: NetworkUsageSummary | null;
   canDelete: boolean;
+  userId?: string | null;
+  canManageDevice?: boolean;
   releases: AgentRelease[];
   token: string;
 }) {
   const [actionOpen, setActionOpen] = useState(false);
+  const [owners, setOwners] = useState<DashboardUser[] | null>(null);
+  useEffect(() => {
+    if (!actionOpen || !canDelete || owners !== null) return;
+    getJson<DashboardUser[]>("/api/v1/users", token)
+      .then((users) => setOwners(users.filter((user) => user.role === "friend" && user.active)))
+      .catch(() => setOwners([]));
+  }, [actionOpen, canDelete, owners, token]);
   const [forgetting, setForgetting] = useState(false),
     [renaming, setRenaming] = useState(false),
     [updatingRole, setUpdatingRole] = useState(false),
@@ -887,6 +903,13 @@ function NodeOverview({
     isUnraid = node.metadata.source === "unraid-api";
   const gamingActive = !!activeGamingUntil(node);
   const sensorLabels: SensorLabels = node.sensor_labels || {};
+  const changeOwner = async (userId: string | null) => {
+    const response = await fetch(`/api/v1/fleet/nodes/${node.node_id}/owner`, {
+      method: "PUT", headers: { ...headers(token), "Content-Type": "application/json" }, body: JSON.stringify({ user_id: userId }),
+    });
+    if (response.ok) { window.location.reload(); return; }
+    window.alert("Der Besitzer konnte nicht geändert werden.");
+  };
   const saveSensorLabel = async (key: string, name: string, role: SensorRole | null) => {
     const response = await fetch(`/api/v1/fleet/nodes/${node.node_id}/sensor-labels`, {
       method: "PUT", headers: { ...headers(token), "Content-Type": "application/json" }, body: JSON.stringify({ key, name, role }),
@@ -1035,8 +1058,8 @@ function NodeOverview({
   const downSeries = points.map((point) => num(point.metrics.network?.download_mbps));
   return <section className="concept-node-page">
     <div className="node-header"><div className="node-header-left"><div className="node-large-icon">{isUnraid ? "▤" : "▣"}</div><div><div className="eyebrow">NODE / {node.machine_id}</div><h1>{node.display_name}</h1><div className="node-sub"><ConceptStatus node={{online:node.online,gaming_mode_until:activeGamingUntil(node)}}/><span>{operatingSystem}</span><span>Agent v{node.agent_version || "—"}</span><span>Kontakt {ago(node.last_seen_at)}</span></div></div></div><div className="node-actions">
-      {!isUnraid && canDelete && <button type="button" className="outline-button" disabled={updatingGaming} onClick={() => void updateGamingMode(gamingActive ? 0 : 120)}><ConceptIcon name="bolt" size={16}/>{gamingActive ? "Gaming Mode beenden" : "Gaming Mode"}</button>}
-      {canDelete && node.platform === "windows" && <button
+      {!isUnraid && canManageDevice && <button type="button" className="outline-button" disabled={updatingGaming} onClick={() => void updateGamingMode(gamingActive ? 0 : 120)}><ConceptIcon name="bolt" size={16}/>{gamingActive ? "Gaming Mode beenden" : "Gaming Mode"}</button>}
+      {canManageDevice && node.platform === "windows" && <button
         type="button"
         className="outline-button"
         disabled={updateCheckState !== "idle" || !node.online}
@@ -1047,10 +1070,10 @@ function NodeOverview({
         {updateCheckState === "requested" ? "Update-Prüfung angefordert" : "Jetzt aktualisieren"}
       </button>}
       <button type="button" className="outline-button" onClick={() => setActionOpen((open) => !open)}>Aktionen ⌄</button>
-      {actionOpen && <div className="action-menu"><button type="button" disabled={renaming} onClick={() => void rename()}>Gerät umbenennen</button>{canDelete && <button type="button" disabled={updatingRole} onClick={() => void toggleRole()}>{node.access_role === "beta_tester" ? "Zu Commander machen" : "Als Beta-Tester markieren"}</button>}{canDelete && !isUnraid && <><button type="button" disabled={updatingRelease} onClick={() => void changeUpdateChannel()}>Update-Kanal: {node.update_channel.toUpperCase()}</button><button type="button" disabled={updatingRelease} onClick={() => void assignRelease()}>{pendingRelease ? `Freigabe aufheben: ${pendingRelease.payload_version}` : "Update bewusst freigeben"}</button>{!pendingRelease && channelReleases.length > 1 && <select aria-label="Release auswählen" defaultValue="" onChange={(event) => { if(event.target.value) void setRelease(event.target.value); }}><option value="">Release auswählen …</option>{channelReleases.map((release) => <option key={release.release_id} value={release.release_id}>{release.payload_version}</option>)}</select>}</>}{canDelete && <button type="button" className="danger" disabled={forgetting} onClick={() => void forget()}>Gerät vergessen</button>}</div>}
+      {actionOpen && <div className="action-menu">{canManageDevice && <button type="button" disabled={renaming} onClick={() => void rename()}>Gerät umbenennen</button>}{canDelete && <label className="owner-select">Besitzer<select value={node.owner_user_id || ""} onChange={(event) => void changeOwner(event.target.value || null)}><option value="">Ich (Server-Besitzer)</option>{(owners || []).map((owner) => <option key={owner.user_id} value={owner.user_id || ""}>{owner.username}</option>)}{node.owner_user_id && !(owners || []).some((owner) => owner.user_id === node.owner_user_id) && <option value={node.owner_user_id}>{node.owner_name || "Freund"}</option>}</select></label>}{canDelete && <button type="button" disabled={updatingRole} onClick={() => void toggleRole()}>{node.access_role === "beta_tester" ? "Zu Commander machen" : "Als Beta-Tester markieren"}</button>}{canDelete && !isUnraid && <><button type="button" disabled={updatingRelease} onClick={() => void changeUpdateChannel()}>Update-Kanal: {node.update_channel.toUpperCase()}</button><button type="button" disabled={updatingRelease} onClick={() => void assignRelease()}>{pendingRelease ? `Freigabe aufheben: ${pendingRelease.payload_version}` : "Update bewusst freigeben"}</button>{!pendingRelease && channelReleases.length > 1 && <select aria-label="Release auswählen" defaultValue="" onChange={(event) => { if(event.target.value) void setRelease(event.target.value); }}><option value="">Release auswählen …</option>{channelReleases.map((release) => <option key={release.release_id} value={release.release_id}>{release.payload_version}</option>)}</select>}</>}{canDelete && <button type="button" className="danger" disabled={forgetting} onClick={() => void forget()}>Gerät vergessen</button>}</div>}
     </div></div>
-    <div className="node-meta"><span>Physisches Gerät <b>{node.physical_device_name || node.display_name}</b></span><span>Plattform <b>{node.platform}</b></span><span>Update <b>{pendingRelease?.payload_version || node.update_channel.toUpperCase()}</b></span><span>Datenfrische <b>{node.online ? "Live" : ago(node.last_seen_at)}</b></span></div>
-    <NowPlayingCard node={node} token={token} canManage={canDelete}/>
+    <div className="node-meta"><span>Physisches Gerät <b>{node.physical_device_name || node.display_name}</b></span><span>Plattform <b>{node.platform}</b></span><span>Update <b>{pendingRelease?.payload_version || node.update_channel.toUpperCase()}</b></span><span>Datenfrische <b>{node.online ? "Live" : ago(node.last_seen_at)}</b></span>{node.owner_name && <span>Besitzer <b>{node.owner_name}</b></span>}</div>
+    <NowPlayingCard node={node} token={token} canManage={canManageDevice}/>
     <div className="node-chart-card"><div className="card-head"><div><div className="eyebrow">Verlauf</div><h2>Ressourcen im Verlauf</h2></div><span className="muted-small">Letzte {points.length} Messpunkte</span></div><div className="chart-key"><span><i style={{background:"var(--accent)"}}/> CPU</span><span><i style={{background:"var(--purple)"}}/> GPU</span></div><div className="dual-chart"><ConceptSparkline values={cpuSeries} color="var(--accent)" height={190} fill/><ConceptSparkline values={gpuSeries} color="var(--purple)" height={190}/></div><div className="chart-axis"><span>Verlauf</span><span>Jetzt</span></div></div>
     <div className="metric-grid">
       <CpuCard metrics={m} series={cpuSeries} labels={sensorLabels}/>
@@ -1058,7 +1081,7 @@ function NodeOverview({
       {!isUnraid && <GpuCard metrics={m} series={gpuSeries}/>}
       <div className="metric-card"><div className="metric-title"><span>Netzwerk</span><ConceptIcon name="chart" size={17}/></div><div className="metric-value">{num(network.download_mbps).toFixed(1)} Mb/s</div><p>↓ Download · {network.interface || "Automatisch"}</p><ConceptSparkline values={downSeries} height={48}/><div className="metric-items"><div><span>Upload</span><b>{num(network.upload_mbps).toFixed(1)} Mb/s</b></div><div><span>Monat ↓ / ↑</span><b>{monthlyNetwork?.available ? `${trafficBytes(monthlyNetwork.received_bytes)} / ${trafficBytes(monthlyNetwork.sent_bytes)}` : "—"}</b></div></div></div>
     </div>
-    <div className="detail-bottom"><DrivesCard metrics={m}/>{!isUnraid ? <MainboardCard metrics={m} isWindows={node.platform === "windows"} labels={sensorLabels} canEdit={canDelete} onLabel={saveSensorLabel}/> : <div/>}</div>
+    <div className="detail-bottom"><DrivesCard metrics={m}/>{!isUnraid ? <MainboardCard metrics={m} isWindows={node.platform === "windows"} labels={sensorLabels} canEdit={canManageDevice} onLabel={saveSensorLabel}/> : <div/>}</div>
     {Array.isArray(cpu.per_core) && cpu.per_core.length > 0 && <div className="detail-card concept-core-load"><ConceptSectionHead eyebrow="CPU-Threads" title="Last pro Kern"/><div className="concept-core-bars">{cpu.per_core.map((value: unknown, index: number) => <div key={index} title={`Kern ${index + 1}: ${num(value).toFixed(1)}%`}><span>{index + 1}</span><ConceptMeter value={num(value)}/></div>)}</div></div>}
     {isUnraid && <div className="detail-bottom concept-unraid"><UnraidStorageCard metrics={m}/><div className="unraid-services-grid"><UnraidWorkloadCard title="Virtuelle Maschinen" icon={<MonitorCog size={16}/>} items={m.vms || []} kind="vm"/><UnraidWorkloadCard title="Docker-Container" icon={<Boxes size={16}/>} items={m.containers || []} kind="container"/></div></div>}
   </section>;
@@ -1696,9 +1719,28 @@ function DashboardUsers({ token, identity, canManage }: { token: string; identit
   const [newPassword, setNewPassword] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [invites, setInvites] = useState<AccountInvite[]>([]);
+  const [inviteLabel, setInviteLabel] = useState("");
+  const [issuedInvite, setIssuedInvite] = useState<AccountInvite | null>(null);
   const refresh = useCallback(async () => {
-    if (canManage) setUsers(await getJson<DashboardUser[]>("/api/v1/users", token));
+    if (!canManage) return;
+    setUsers(await getJson<DashboardUser[]>("/api/v1/users", token));
+    setInvites(await getJson<AccountInvite[]>("/api/v1/users/invites", token));
   }, [canManage, token]);
+  const createInvite = async (event: React.FormEvent) => {
+    event.preventDefault(); setBusy(true); setMessage("");
+    try {
+      setIssuedInvite(await postJson<AccountInvite>("/api/v1/users/invites", token, { label: inviteLabel.trim() || "Freund" }));
+      setInviteLabel(""); await refresh();
+    } catch { setMessage("Einladungscode konnte nicht erstellt werden."); }
+    finally { setBusy(false); }
+  };
+  const revokeInvite = async (invite: AccountInvite) => {
+    setBusy(true);
+    try { await postJson(`/api/v1/users/invites/${invite.invite_id}/revoke`, token); await refresh(); }
+    catch { setMessage("Einladung konnte nicht widerrufen werden."); }
+    finally { setBusy(false); }
+  };
   useEffect(() => { void refresh().catch(() => setMessage("Benutzer konnten nicht geladen werden.")); }, [refresh]);
   const create = async (event: React.FormEvent) => {
     event.preventDefault(); setBusy(true); setMessage("");
@@ -1708,7 +1750,7 @@ function DashboardUsers({ token, identity, canManage }: { token: string; identit
     } catch { setMessage("Benutzerkonto konnte nicht erstellt werden. Name prüfen oder anderen Namen wählen."); }
     finally { setBusy(false); }
   };
-  const change = async (user: DashboardUser, patch: { role?: AccessRole; active?: boolean }) => {
+  const change = async (user: DashboardUser, patch: { role?: AccessRole; active?: boolean; full_statistics?: boolean }) => {
     setBusy(true); setMessage("");
     try {
       const response = await fetch(`/api/v1/users/${user.user_id}`, { method: "PATCH", headers: { ...headers(token), "Content-Type": "application/json" }, body: JSON.stringify(patch) });
@@ -1737,16 +1779,32 @@ function DashboardUsers({ token, identity, canManage }: { token: string; identit
     </form>}
     {canManage && <>
       <div className="dashboard-user-list">{users.map((user) => <div key={user.user_id} className="dashboard-user-row">
-        <span><b>{user.username}</b><small>{user.active ? "Aktiv" : "Deaktiviert"}</small></span>
-        <select aria-label={`Rolle von ${user.username}`} value={user.role} disabled={busy} onChange={(event) => void change(user, { role: event.target.value as AccessRole })}><option value="commander">Commander</option><option value="beta_tester">Beta-Tester</option></select>
+        <span><b>{user.username}</b><small>{user.active ? "Aktiv" : "Deaktiviert"}{user.role === "friend" ? ` · ${user.device_count || 0} ${user.device_count === 1 ? "Gerät" : "Geräte"}` : ""}</small></span>
+        <select aria-label={`Rolle von ${user.username}`} value={user.role} disabled={busy} onChange={(event) => void change(user, { role: event.target.value as AccessRole })}><option value="commander">Commander</option><option value="beta_tester">Beta-Tester</option><option value="friend">Freund</option></select>
+        {user.role === "friend" && <label className="user-stats-toggle" title="Darf Statistiken aller Geräte sehen, nicht aber die Geräte selbst"><input type="checkbox" checked={!!user.full_statistics} disabled={busy} onChange={(event) => void change(user, { full_statistics: event.target.checked })} /> Alle Statistiken</label>}
         <button type="button" className="outline-button" disabled={busy || user.user_id === identity?.user_id} onClick={() => void change(user, { active: !user.active })}>{user.active ? "Deaktivieren" : "Aktivieren"}</button>
       </div>)}</div>
       <form className="dashboard-user-form" onSubmit={(event) => void create(event)}>
         <h3>Benutzer hinzufügen</h3>
         <input aria-label="Benutzername" placeholder="Benutzername" autoComplete="off" value={username} onChange={(event) => setUsername(event.target.value)} required />
         <input aria-label="Initiales Passwort" type="password" autoComplete="new-password" placeholder="Passwort (mindestens 12 Zeichen)" minLength={12} value={password} onChange={(event) => setPassword(event.target.value)} required />
-        <select aria-label="Neue Benutzerrolle" value={role} onChange={(event) => setRole(event.target.value as AccessRole)}><option value="beta_tester">Beta-Tester</option><option value="commander">Commander</option></select>
+        <select aria-label="Neue Benutzerrolle" value={role} onChange={(event) => setRole(event.target.value as AccessRole)}><option value="beta_tester">Beta-Tester</option><option value="friend">Freund</option><option value="commander">Commander</option></select>
         <button className="primary" type="submit" disabled={busy}>Benutzer erstellen</button>
+      </form>
+      <form className="dashboard-user-form invite-form" onSubmit={(event) => void createInvite(event)}>
+        <h3>Freund einladen</h3>
+        <p className="card-description">Der Einladungscode gilt 7 Tage und einmal. Dein Freund legt damit auf der Anmeldeseite unter „Registrieren“ selbst sein Konto an und sieht danach nur seine eigenen Geräte.</p>
+        <input aria-label="Name der Einladung" placeholder="Für wen? z. B. Max" maxLength={128} value={inviteLabel} onChange={(event) => setInviteLabel(event.target.value)} />
+        <button className="outline-button" type="submit" disabled={busy}>Einladungscode erstellen</button>
+        {issuedInvite?.code && <div className="invite-code" role="status">
+          <span>Code für <b>{issuedInvite.label}</b>, wird nur jetzt angezeigt:</span>
+          <code>{issuedInvite.code}</code>
+          <button type="button" className="link-button" onClick={() => void navigator.clipboard?.writeText(issuedInvite.code || "")}>Kopieren</button>
+        </div>}
+        {invites.length > 0 && <div className="invite-list">{invites.slice(0, 8).map((invite) => <div key={invite.invite_id}>
+          <span><b>{invite.label}</b><small>{invite.status === "used" ? `benutzt von ${invite.used_by || "—"}` : invite.status === "open" ? `offen bis ${new Date(invite.expires_at).toLocaleDateString("de-DE")}` : invite.status === "expired" ? "abgelaufen" : "widerrufen"}</small></span>
+          {invite.status === "open" && <button type="button" className="link-button" disabled={busy} onClick={() => void revokeInvite(invite)}>Widerrufen</button>}
+        </div>)}</div>}
       </form>
     </>}
     {message && <small className="traffic-reset-message" role="status">{message}</small>}
@@ -1880,7 +1938,7 @@ function SettingsPage({
         </form>
         <div className="settings-release-list">{releases.map((release) => <p key={release.release_id}><b>{release.payload_version}</b> · {release.platform}/{release.architecture} · {release.channel.toUpperCase()} · {release.assigned_nodes} freigegeben<br /><code title="Release-ID">{release.release_id}</code></p>)}{!releases.length && <p>Noch kein Release registriert.</p>}</div>
       </section>}
-      <section className="surface settings-card">
+      {canResetTraffic && <section className="surface settings-card">
         <header className="section-head">
           <div>
             <span className="eyebrow">WARNUNGEN</span>
@@ -1924,7 +1982,7 @@ function SettingsPage({
             </button>
           </form>
         )}
-      </section>
+      </section>}
       {canManageTelegram && telegramDraft && <section className="surface settings-card telegram-settings-card">
         <header className="section-head">
           <div>
@@ -2422,12 +2480,35 @@ function Login({
 }) {
   const [value, setValue] = useState(""),
     [localError, setLocalError] = useState(false),
-    [mode, setMode] = useState<"code" | "account">("code"),
+    // A pairing link from the installer usually reaches a friend, who has an
+    // account or an invite rather than an admin code.
+    pairing = new URLSearchParams(window.location.search).has("pair"),
+    [mode, setMode] = useState<"code" | "account" | "register">(pairing ? "account" : "code"),
     [username, setUsername] = useState(""),
-    [password, setPassword] = useState("");
+    [password, setPassword] = useState(""),
+    [inviteCode, setInviteCode] = useState(""),
+    [registerError, setRegisterError] = useState("");
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setLocalError(false);
+    setRegisterError("");
+    if (mode === "register") {
+      try {
+        const response = await fetch("/api/v1/users/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code: inviteCode.trim(), username: username.trim().toLowerCase(), password }),
+        });
+        if (!response.ok) {
+          setRegisterError(response.status === 409 ? "Dieser Benutzername ist schon vergeben." : response.status === 422 ? "Benutzername: 3–64 Zeichen aus a–z, 0–9, Punkt, Strich. Passwort: mindestens 12 Zeichen." : "Der Einladungscode ist ungültig, abgelaufen oder schon benutzt.");
+          return;
+        }
+        setPassword("");
+        localStorage.removeItem("ncc-dashboard-token");
+        onSave("");
+      } catch { setRegisterError("Der Server ist gerade nicht erreichbar."); }
+      return;
+    }
     if (mode === "account") {
       try {
         const response = await fetch("/api/v1/users/login", {
@@ -2469,9 +2550,10 @@ function Login({
           <KeyRound size={26} />
         </div>
         <span className="eyebrow">Geschützter Zugang</span>
-        <h1>Willkommen, Commander.</h1>
-        <p>{mode === "code" ? "Gib deinen achtstelligen Admin-Code ein. Er wird im Dashboard erzeugt und gewährt den vorgesehenen Zugang." : "Melde dich mit deinem persönlichen NCC-Konto an."}</p>
-        <div className="segmented login-methods"><button type="button" className={mode === "code" ? "selected" : ""} onClick={() => { setMode("code"); setLocalError(false); }}>Admin-Code</button><button type="button" className={mode === "account" ? "selected" : ""} onClick={() => { setMode("account"); setLocalError(false); }}>Benutzerkonto</button></div>
+        <h1>{pairing ? "Gerät koppeln." : mode === "register" ? "Willkommen bei NCC." : "Willkommen, Commander."}</h1>
+        {pairing && <p className="login-pairing">Melde dich an oder registriere dich mit deinem Einladungscode. Danach wird das Gerät automatisch mit deinem Konto gekoppelt.</p>}
+        <p>{mode === "code" ? "Gib deinen achtstelligen Admin-Code ein. Er wird im Dashboard erzeugt und gewährt den vorgesehenen Zugang." : mode === "register" ? "Lege mit dem Einladungscode, den du bekommen hast, dein eigenes Konto an." : "Melde dich mit deinem persönlichen NCC-Konto an."}</p>
+        <div className="segmented login-methods"><button type="button" className={mode === "code" ? "selected" : ""} onClick={() => { setMode("code"); setLocalError(false); }}>Admin-Code</button><button type="button" className={mode === "account" ? "selected" : ""} onClick={() => { setMode("account"); setLocalError(false); }}>Benutzerkonto</button><button type="button" className={mode === "register" ? "selected" : ""} onClick={() => { setMode("register"); setLocalError(false); }}>Registrieren</button></div>
         <form onSubmit={(event) => void submit(event)}>
           {mode === "code" ? <label>
             Admin-Code
@@ -2483,14 +2565,15 @@ function Login({
               autoComplete="one-time-code"
               placeholder="z. B. AB12CD34"
             />
-          </label> : <><label>Benutzername<input autoFocus autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} required /></label><label>Passwort<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></label></>}
-          {(error || localError) && (
+          </label> : <>{mode === "register" && <label>Einladungscode<input autoFocus autoCapitalize="characters" autoComplete="off" placeholder="z. B. K7QP-2MXD-9RTB" value={inviteCode} onChange={(event) => setInviteCode(event.target.value.toUpperCase())} required /></label>}<label>Benutzername<input autoFocus={mode !== "register"} autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} required /></label><label>Passwort<input type="password" autoComplete={mode === "register" ? "new-password" : "current-password"} minLength={mode === "register" ? 12 : undefined} placeholder={mode === "register" ? "mindestens 12 Zeichen" : undefined} value={password} onChange={(event) => setPassword(event.target.value)} required /></label></>}
+          {registerError && <small className="form-error">{registerError}</small>}
+          {((error && mode === "code") || localError) && (
             <small className="form-error">
               {mode === "code" ? "Der Code wurde nicht akzeptiert oder ist abgelaufen." : "Benutzername oder Passwort wurde nicht akzeptiert."}
             </small>
           )}
           <button className="primary" type="submit">
-            <ShieldCheck size={17} /> Verbindung herstellen
+            <ShieldCheck size={17} /> {mode === "register" ? "Konto anlegen" : "Verbindung herstellen"}
           </button>
         </form>
         <details>
@@ -2735,9 +2818,18 @@ function App() {
       `/api/v1/agent-pairings/${encodeURIComponent(pairingId)}/approve`,
       token,
     )
-      .then(() => window.history.replaceState({}, "", window.location.pathname))
-      .catch(() => undefined);
+      .then(() => setPairingNotice({ ok: true, text: "Gerät gekoppelt. Es erscheint in wenigen Sekunden unter „Geräte“." }))
+      .catch((error: Error & { status?: number }) => setPairingNotice({
+        ok: false,
+        text: error.status === 403
+          ? "Dieses Gerät gehört zu einem anderen Konto und kann nicht übernommen werden."
+          : error.status === 410
+            ? "Die Kopplungsanfrage ist abgelaufen. Öffne im NCC-Symbol im Infobereich „Gerät koppeln…“ für einen neuen Link."
+            : "Die Kopplungsanfrage wurde nicht gefunden oder ist bereits erledigt.",
+      }))
+      .finally(() => window.history.replaceState({}, "", window.location.pathname));
   }, [authenticated, token]);
+  const [pairingNotice, setPairingNotice] = useState<{ ok: boolean; text: string } | null>(null);
   const saveToken = (value: string) => {
     authEpochRef.current += 1;
     localStorage.setItem("ncc-dashboard-token", value);
@@ -2972,6 +3064,10 @@ function App() {
           </div>
         </header>
         <main className="content">
+          {pairingNotice && <div className={`pairing-notice ${pairingNotice.ok ? "ok" : "error"}`} role="status">
+            <span>{pairingNotice.text}</span>
+            <button type="button" className="icon-button" aria-label="Hinweis schließen" onClick={() => setPairingNotice(null)}>×</button>
+          </div>}
           {page === "fleet" ? (
             <CommandOverviewExact
               nodes={nodes}
@@ -3000,6 +3096,7 @@ function App() {
               onAttachProfile={attachProfile}
               onDetachProfile={detachProfile}
               canDelete={canManageAccess}
+              userId={identity?.user_id ?? null}
               releases={releases}
               token={token}
               dismissedAlerts={dismissedAlertIds}

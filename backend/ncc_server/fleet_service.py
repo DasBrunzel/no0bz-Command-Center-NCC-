@@ -22,6 +22,7 @@ from ncc_server.models import (
     PhysicalDevice,
     TelemetryPoint,
     TrafficStatisticsSettings,
+    User,
     utc_now,
 )
 from ncc_server.node_service import is_online
@@ -135,12 +136,12 @@ def _ensure_default_fleet_groups(session: Session) -> None:
         session.commit()
 
 
-def list_fleet_alerts(session: Session, limit: int) -> list[FleetAlertResponse]:
+def list_fleet_alerts(session: Session, limit: int, node_ids: set[str] | None = None) -> list[FleetAlertResponse]:
+    query = select(AlertState, Node.display_name).join(Node, Node.id == AlertState.node_id)
+    if node_ids is not None:
+        query = query.where(AlertState.node_id.in_(node_ids))
     rows = session.execute(
-        select(AlertState, Node.display_name)
-        .join(Node, Node.id == AlertState.node_id)
-        .order_by(AlertState.active.desc(), AlertState.updated_at.desc())
-        .limit(limit)
+        query.order_by(AlertState.active.desc(), AlertState.updated_at.desc()).limit(limit)
     ).all()
     return [
         FleetAlertResponse(
@@ -185,8 +186,11 @@ def clear_active_alerts(session: Session) -> int:
     return len(active)
 
 
-def list_fleet_nodes(session: Session, settings: ServerSettings) -> list[FleetNodeResponse]:
-    nodes = session.scalars(select(Node).order_by(Node.display_name, Node.id)).all()
+def list_fleet_nodes(session: Session, settings: ServerSettings, node_ids: set[str] | None = None) -> list[FleetNodeResponse]:
+    query = select(Node).order_by(Node.display_name, Node.id)
+    if node_ids is not None:
+        query = query.where(Node.id.in_(node_ids))
+    nodes = session.scalars(query).all()
     responses = [_node_response(session, node, settings) for node in nodes]
     return sorted(responses, key=lambda item: (not item.online, item.display_name.casefold()))
 
@@ -451,11 +455,15 @@ def _reported_rate_limit(payload: dict[str, object], field: str, elapsed_seconds
     return max(8 * 1024**2, rate_mbps * 1_000_000 / 8 * elapsed_seconds * 4)
 
 
-def fleet_summary(session: Session, settings: ServerSettings) -> FleetSummaryResponse:
-    nodes = _logical_nodes(session.scalars(select(Node)).all(), settings)
+def fleet_summary(session: Session, settings: ServerSettings, node_ids: set[str] | None = None) -> FleetSummaryResponse:
+    query = select(Node) if node_ids is None else select(Node).where(Node.id.in_(node_ids))
+    nodes = _logical_nodes(session.scalars(query).all(), settings)
     online = sum(is_online(node, settings.node_offline_after_seconds) for node in nodes)
     pending = sum(not node.approved for node in nodes)
-    points = session.scalar(select(func.count()).select_from(TelemetryPoint)) or 0
+    count = select(func.count()).select_from(TelemetryPoint)
+    if node_ids is not None:
+        count = count.where(TelemetryPoint.node_id.in_(node_ids))
+    points = session.scalar(count) or 0
     return FleetSummaryResponse(
         total_nodes=len(nodes),
         online_nodes=online,
@@ -582,6 +590,8 @@ def _node_response(
         auto_gaming_mode=node.auto_gaming_mode,
         now_playing=_now_playing_response(session, node),
         sensor_labels=_sensor_labels(node),
+        owner_user_id=node.owner_user_id,
+        owner_name=_owner_name(session, node),
         update_check_requested_at=node.update_check_requested_at,
         physical_device_id=node.physical_device_id,
         physical_device_name=node.physical_device.display_name if node.physical_device else None,
@@ -591,6 +601,36 @@ def _node_response(
         pending_release_id=node.pending_release_id,
         latest=_telemetry_response(latest) if latest is not None else None,
     )
+
+
+def _owner_name(session: Session, node: Node) -> str | None:
+    if node.owner_user_id is None:
+        return None
+    owner = session.get(User, node.owner_user_id)
+    return owner.username if owner is not None else None
+
+
+def set_node_owner(session: Session, node_id: str, user_id: str | None) -> Node | None:
+    """Assign a device to a friend account, or back to the server owner."""
+    node = session.get(Node, node_id)
+    if node is None:
+        return None
+    if user_id is not None:
+        owner = session.get(User, user_id)
+        if owner is None or owner.role != "friend":
+            raise ValueError("owner must be a friend account")
+        node.fleet_group_id = "default-friends"
+    elif node.fleet_group_id == "default-friends":
+        node.fleet_group_id = None
+    node.owner_user_id = user_id
+    node.updated_at = utc_now()
+    session.add(AuditEvent(
+        actor_type="dashboard", actor_id=node.id, action="node.owner.updated",
+        details=json.dumps({"owner_user_id": user_id}, separators=(",", ":")),
+    ))
+    session.commit()
+    session.refresh(node)
+    return node
 
 
 def _sensor_labels(node: Node) -> dict[str, SensorLabel]:

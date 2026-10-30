@@ -70,6 +70,7 @@ def backfill_hardware_rollups(database: Database) -> int:
 
 def hardware_statistics(
     session: Session, *, days: int, node_id: str | None, utc_offset_minutes: int, now: datetime | None = None,
+    node_ids: set[str] | None = None,
 ) -> dict[str, Any]:
     current = now or utc_now()
     query = select(HardwareHourly)
@@ -77,6 +78,8 @@ def hardware_statistics(
         query = query.where(HardwareHourly.hour >= current - timedelta(days=days))
     if node_id:
         query = query.where(HardwareHourly.node_id == node_id)
+    if node_ids is not None:
+        query = query.where(HardwareHourly.node_id.in_(node_ids))
     rows = session.scalars(query.order_by(HardwareHourly.hour)).all()
     names = {node.id: node.display_name for node in session.scalars(select(Node)).all()}
     offset = timedelta(minutes=utc_offset_minutes)

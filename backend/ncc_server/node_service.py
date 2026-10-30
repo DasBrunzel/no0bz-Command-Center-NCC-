@@ -56,6 +56,9 @@ def enroll_node(
             platform=payload.platform,
             approved=True,
             access_role=token.access_role,
+            owner_user_id=token.owner_user_id,
+            # A friend's device starts in their own group.
+            fleet_group_id="default-friends" if token.owner_user_id else None,
         )
         session.add(node)
         try:
@@ -259,6 +262,9 @@ def _sync_physical_device(session: Session, node: Node, metadata: Mapping[str, o
     if not isinstance(fingerprint, str) or len(fingerprint) != 64:
         return
     device = session.scalar(select(PhysicalDevice).where(PhysicalDevice.hardware_fingerprint == fingerprint))
+    if device is not None and any(other.owner_user_id != node.owner_user_id for other in device.nodes if other.id != node.id):
+        # A reported fingerprint is not proof; never join another account's device.
+        return
     if device is None:
         device = PhysicalDevice(display_name=node.display_name, hardware_fingerprint=fingerprint)
         session.add(device)

@@ -188,6 +188,7 @@ def playtime_statistics(
     node_id: str | None,
     utc_offset_minutes: int,
     now: datetime | None = None,
+    node_ids: set[str] | None = None,
 ) -> dict[str, Any]:
     """Summarise play sessions; ``days == 0`` covers all recorded history."""
     current = now or utc_now()
@@ -197,6 +198,8 @@ def playtime_statistics(
         query = query.where(GameSession.ended_at >= window_start)
     if node_id:
         query = query.where(GameSession.node_id == node_id)
+    if node_ids is not None:
+        query = query.where(GameSession.node_id.in_(node_ids))
     sessions = session.scalars(query.order_by(GameSession.started_at)).all()
     offset = timedelta(minutes=utc_offset_minutes)
     nodes = {node.id: node.display_name for node in session.scalars(select(Node)).all()}

@@ -12,7 +12,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ncc_server.agent_tokens import issue_agent_token
-from ncc_server.auth import database_session, require_dashboard_access
+from ncc_server.auth import (
+    DashboardIdentity,
+    database_session,
+    require_dashboard_identity,
+    require_staff_access,
+)
 from ncc_server.models import AgentPairing, AgentToken, AuditEvent, Node, utc_now
 from ncc_server.schemas import (
     AgentPairingClaimRequest,
@@ -86,7 +91,7 @@ async def register(
     return _response(record)
 
 
-@router.get("", response_model=list[AgentPairingResponse], dependencies=[Depends(require_dashboard_access)])
+@router.get("", response_model=list[AgentPairingResponse], dependencies=[Depends(require_staff_access)])
 async def list_pairings(session: Session = Depends(database_session)) -> list[AgentPairingResponse]:
     records = session.scalars(select(AgentPairing).order_by(AgentPairing.created_at.desc())).all()
     return [_response(record) for record in records]
@@ -99,7 +104,7 @@ async def list_pairings(session: Session = Depends(database_session)) -> list[Ag
 )
 async def approve(
     pairing_id: str,
-    access_role: Literal["commander", "beta_tester"] = Depends(require_dashboard_access),
+    identity: DashboardIdentity = Depends(require_dashboard_identity),
     session: Session = Depends(database_session),
 ) -> AgentPairingResponse:
     record = session.get(AgentPairing, pairing_id)
@@ -107,10 +112,20 @@ async def approve(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="pairing request not found")
     if _as_utc(record.expires_at) <= utc_now():
         raise HTTPException(status_code=status.HTTP_410_GONE, detail="pairing request expired")
+    existing_node = session.scalar(select(Node).where(Node.machine_id == record.machine_id))
+    if identity.is_friend and existing_node is not None and (
+        identity.user_id is None or existing_node.owner_user_id != identity.user_id
+    ):
+        # Anyone may register a pairing request with any machine id. A friend
+        # approving it would take over that existing device and its token.
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="device belongs to another account")
+    # Agent tokens only know commander and beta tester; a friend's device is
+    # a beta tester node that additionally carries its owner.
+    access_role = "beta_tester" if identity.is_friend else identity.access_role
     if record.approved_at is None:
         record.approved_at = utc_now()
         record.access_role = access_role
-        existing_node = session.scalar(select(Node).where(Node.machine_id == record.machine_id))
+        record.owner_user_id = identity.user_id if identity.is_friend else None
         if existing_node is not None:
             existing_node.access_role = access_role
         session.add(
@@ -151,6 +166,7 @@ async def claim(
     record.claimed_at = utc_now()
     issued = issue_agent_token(session, record.display_name, None, actor_type="agent-pairing")
     issued.record.access_role = record.access_role
+    issued.record.owner_user_id = record.owner_user_id
     existing_node = session.scalar(select(Node).where(Node.machine_id == record.machine_id))
     if existing_node is not None:
         issued.record.node_id = existing_node.id

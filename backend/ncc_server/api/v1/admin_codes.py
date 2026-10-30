@@ -10,7 +10,12 @@ from ncc.security import limited
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from ncc_server.auth import database_session, require_commander_access, require_dashboard_access
+from ncc_server.auth import (
+    database_session,
+    require_commander_access,
+    require_dashboard_access,
+    require_staff_access,
+)
 from ncc_server.models import AdminCode, AuditEvent, DashboardSession, utc_now
 from ncc_server.schemas import (
     AdminCodeCreatedResponse,
@@ -65,7 +70,7 @@ async def access(
     return DashboardAccessResponse(access_role=access_role)  # type: ignore[arg-type]
 
 
-@router.get("", response_model=list[AdminCodeResponse], dependencies=[Depends(require_dashboard_access)])
+@router.get("", response_model=list[AdminCodeResponse], dependencies=[Depends(require_staff_access)])
 async def list_codes(
     session: Session = Depends(database_session),
 ) -> list[AdminCodeResponse]:

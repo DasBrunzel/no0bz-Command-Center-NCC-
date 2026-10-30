@@ -9,7 +9,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ncc_server.agent_tokens import agent_token_is_expired, issue_agent_token, revoke_agent_token
-from ncc_server.auth import database_session, require_commander_access, require_dashboard_access
+from ncc_server.auth import (
+    database_session,
+    require_commander_access,
+    require_staff_access,
+)
 from ncc_server.models import AgentToken, Node, utc_now
 from ncc_server.schemas import (
     AgentInvitationCreatedResponse,
@@ -20,7 +24,7 @@ from ncc_server.schemas import (
 router = APIRouter(
     prefix="/agent-invitations",
     tags=["agent invitations"],
-    dependencies=[Depends(require_dashboard_access)],
+    dependencies=[Depends(require_staff_access)],
 )
 
 

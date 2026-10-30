@@ -149,6 +149,8 @@ class FleetNodeResponse(BaseModel):
     auto_gaming_mode: bool = True
     now_playing: NowPlayingResponse | None = None
     sensor_labels: dict[str, SensorLabel] = Field(default_factory=dict)
+    owner_user_id: str | None = None
+    owner_name: str | None = None
     update_check_requested_at: datetime | None
     physical_device_id: str | None
     physical_device_name: str | None
@@ -367,7 +369,7 @@ class FleetChatMessageResponse(BaseModel):
 class FleetChatParticipantResponse(BaseModel):
     user_id: str | None
     display_name: str
-    role: Literal["commander", "beta_tester"]
+    role: Literal["commander", "beta_tester", "friend"]
 
 
 class AgentInvitationCreateRequest(BaseModel):
@@ -437,27 +439,59 @@ class DashboardAccessResponse(BaseModel):
 class DashboardUserResponse(BaseModel):
     user_id: str | None
     username: str
-    role: Literal["commander", "beta_tester"]
+    role: Literal["commander", "beta_tester", "friend"]
     active: bool
     managed: bool
     created_at: datetime | None = None
+    full_statistics: bool = False
+    device_count: int = 0
 
 
 class DashboardUserCreateRequest(BaseModel):
     username: str = Field(min_length=3, max_length=64, pattern=r"^[a-z0-9_.-]+$")
     password: str = Field(min_length=12, max_length=256)
-    role: Literal["commander", "beta_tester"] = "beta_tester"
+    role: Literal["commander", "beta_tester", "friend"] = "beta_tester"
 
 
 class DashboardUserUpdateRequest(BaseModel):
-    role: Literal["commander", "beta_tester"] | None = None
+    role: Literal["commander", "beta_tester", "friend"] | None = None
     active: bool | None = None
+    full_statistics: bool | None = None
 
     @model_validator(mode="after")
     def require_change(self) -> DashboardUserUpdateRequest:
-        if self.role is None and self.active is None:
-            raise ValueError("role or active must be supplied")
+        if self.role is None and self.active is None and self.full_statistics is None:
+            raise ValueError("role, active or full_statistics must be supplied")
         return self
+
+
+class AccountInviteCreateRequest(BaseModel):
+    label: str = Field(min_length=1, max_length=128)
+    expires_days: int = Field(default=7, ge=1, le=60)
+
+
+class AccountInviteResponse(BaseModel):
+    invite_id: str
+    label: str
+    created_at: datetime
+    expires_at: datetime
+    status: Literal["open", "used", "expired", "revoked"]
+    used_by: str | None = None
+
+
+class AccountInviteCreatedResponse(AccountInviteResponse):
+    # Shown exactly once; only its hash is stored.
+    code: str
+
+
+class AccountRegisterRequest(BaseModel):
+    code: str = Field(min_length=8, max_length=64)
+    username: str = Field(min_length=3, max_length=64, pattern=r"^[a-z0-9_.-]+$")
+    password: str = Field(min_length=12, max_length=256)
+
+
+class NodeOwnerUpdateRequest(BaseModel):
+    user_id: str | None = Field(default=None, max_length=36)
 
 
 class DashboardUserLoginRequest(BaseModel):

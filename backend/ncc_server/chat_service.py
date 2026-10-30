@@ -65,9 +65,9 @@ def list_chat_participants(
         FleetChatParticipantResponse(
             user_id=user.id,
             display_name=user.username,
-            role=cast(Literal["commander", "beta_tester"], user.role),
+            role=cast(Literal["commander", "beta_tester", "friend"], user.role),
         )
-        for user in users if user.role in {"commander", "beta_tester"}
+        for user in users if user.role in {"commander", "beta_tester", "friend"}
     ]
     if identity.user_id is None:
         participants.append(FleetChatParticipantResponse(user_id=None, display_name=identity.username, role=identity.access_role))

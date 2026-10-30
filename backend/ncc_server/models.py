@@ -79,6 +79,8 @@ class Node(Base):
     rollup_live_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     rollup_backfilled_before: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     rollup_backfill_done: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # The friend account a device belongs to; None for the server owner's devices.
+    owner_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     physical_device_id: Mapped[str | None] = mapped_column(
         ForeignKey("physical_devices.id", ondelete="SET NULL")
     )
@@ -220,6 +222,8 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(String(32), nullable=False, default="viewer")
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Granted by a commander: a friend may see statistics of every device.
+    full_statistics: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
     )
@@ -239,6 +243,8 @@ class AgentToken(Base):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Carries the approving friend from the pairing to the node it enrolls.
+    owner_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     node: Mapped[Node | None] = relationship(back_populates="tokens")
 
 
@@ -268,6 +274,22 @@ class AdminCode(Base):
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class AccountInvite(Base):
+    """A single-use code a commander hands a friend to create an account."""
+
+    __tablename__ = "account_invites"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    label: Mapped[str] = mapped_column(String(128), nullable=False)
+    code_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    created_by: Mapped[str | None] = mapped_column(String(36))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    used_by: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class DashboardSession(Base):
     __tablename__ = "dashboard_sessions"
 
@@ -288,6 +310,8 @@ class AgentPairing(Base):
     machine_id: Mapped[str] = mapped_column(String(128), nullable=False)
     platform: Mapped[str] = mapped_column(String(32), nullable=False)
     access_role: Mapped[str] = mapped_column(String(32), nullable=False, default="commander")
+    # Set when a friend approves; the enrolled node then belongs to them.
+    owner_user_id: Mapped[str | None] = mapped_column(String(36))
     agent_version: Mapped[str] = mapped_column(String(32), nullable=False)
     metadata_json: Mapped[dict[str, object]] = mapped_column("metadata", JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
