@@ -137,8 +137,8 @@ def test_lhm_snapshot_groups_drive_memory_and_board_sensors() -> None:
     hardware = metrics["hardware"]
     assert metrics["cpu"]["temperature_c"] == 65.25
     assert hardware["storage"] == [
-        {"name": "CT2000P3SSD8", "temperature_c": 36.0},
-        {"name": "Samsung SSD 860 EVO 500GB", "temperature_c": 41.0},
+        {"name": "CT2000P3SSD8", "temperature_c": 36.0, "disk_number": 3},
+        {"name": "Samsung SSD 860 EVO 500GB", "temperature_c": 41.0, "disk_number": 0},
     ]
     assert hardware["memory_modules"] == [{"name": "G Skill (#2)", "slot": "DIMM #2", "temperature_c": 38.75}]
     assert hardware["board"] == {
@@ -188,3 +188,23 @@ def test_lhm_helper_stays_running_and_restarts_after_exit(tmp_path: Any, monkeyp
         assert provider.collect()["cpu"]["temperature_c"] == 51
     finally:
         provider._stop_helper()
+
+
+def test_lhm_reports_component_names_and_drive_numbers() -> None:
+    from ncc.collectors.system import _is_volume_root
+
+    metrics = lhm_snapshot_metrics(
+        [_sensor("Storage", "CT2000P3SSD8", "/nvme/3", "Temperature", "Composite Temperature", 36)],
+        [
+            {"type": "Motherboard", "name": "ASUS PRIME B550-PLUS", "id": "/motherboard"},
+            {"type": "Cpu", "name": "AMD Ryzen 7 5700X", "id": "/amdcpu/0"},
+            {"type": "GpuNvidia", "name": "NVIDIA GeForce RTX 3060 Ti", "id": "/gpu-nvidia/0"},
+            {"type": "Memory", "name": "Total Memory", "id": "/ram"},
+        ],
+    )
+    assert metrics["hardware"]["components"] == {
+        "board": "ASUS PRIME B550-PLUS", "cpu": "AMD Ryzen 7 5700X", "gpus": ["NVIDIA GeForce RTX 3060 Ti"],
+    }
+    assert metrics["hardware"]["storage"] == [{"name": "CT2000P3SSD8", "temperature_c": 36.0, "disk_number": 3}]
+    assert _is_volume_root("C:\\") and _is_volume_root("D:")
+    assert not _is_volume_root("D:\GoogleDrive\\")

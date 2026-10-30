@@ -10,8 +10,17 @@ from sqlalchemy.orm import Session
 
 from ncc_server import __version__
 from ncc_server.config import ServerSettings
+from ncc_server.fleet_service import default_group_for
 from ncc_server.game_service import gaming_mode_active
-from ncc_server.models import AlertPolicy, AlertState, AuditEvent, Node, TelemetryPoint, utc_now
+from ncc_server.models import (
+    AlertPolicy,
+    AlertState,
+    AuditEvent,
+    FleetGroup,
+    Node,
+    TelemetryPoint,
+    utc_now,
+)
 from ncc_server.node_service import is_online
 
 
@@ -150,6 +159,9 @@ def _active_alerts(
     name = node.display_name
     alerts: list[tuple[str, str, str]] = []
     if not is_online(node, settings.node_offline_after_seconds):
+        if not _alerts_when_offline(session, node):
+            # PCs, laptops and phones are switched off as a matter of course.
+            return []
         if _physical_device_online(session, node, settings):
             # A dualboot OS profile is dormant while its sibling is active.
             # Its last telemetry values must not keep triggering alerts.
@@ -170,6 +182,15 @@ def _active_alerts(
     _unraid_alerts(node, metrics, alerts)
     _agent_health_alerts(session, node, latest, settings, alerts)
     return alerts
+
+
+def _alerts_when_offline(session: Session, node: Node) -> bool:
+    """Only devices in a server category are expected to stay online."""
+    group_id = node.fleet_group_id or default_group_for(node)
+    if group_id == "default-servers":
+        return True
+    group = session.get(FleetGroup, group_id)
+    return group is not None and "server" in group.name.casefold()
 
 
 def _physical_device_online(session: Session, node: Node, settings: ServerSettings) -> bool:

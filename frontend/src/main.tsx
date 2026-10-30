@@ -50,7 +50,7 @@ import "./device-lifecycle.css";
 import "./concept/styles.css";
 import "./design.css";
 import { Icon as ConceptIcon, Meter as ConceptMeter, SectionHead as ConceptSectionHead, Sparkline as ConceptSparkline, Status as ConceptStatus } from "./concept/components";
-import { HardwareSensorsCard } from "./HardwareSensors";
+import { CpuCard, DrivesCard, GpuCard, MainboardCard, MemoryCard, type SensorLabels, type SensorRole } from "./HardwareSensors";
 import { activeGamingUntil, NowPlayingCard, NowPlayingStrip, PlaytimeStatistics, type GameTracking, type NowPlaying } from "./Games";
 import dashboardPackage from "../package.json";
 
@@ -84,6 +84,7 @@ type Node = {
   auto_gaming_mode?: boolean;
   game_tracking?: GameTracking;
   now_playing?: NowPlaying | null;
+  sensor_labels?: SensorLabels;
   fleet_group_id: string;
   fleet_position: number;
   physical_device_id: string | null;
@@ -198,6 +199,21 @@ type ChatAttachment = { name: string; content_type: string; size: number; url: s
 type ChatMessage = { message_id: string; sender_node_id: string | null; sender_user_id: string | null; sender_name: string; body: string; body_format: "plain" | "markdown"; attachment: ChatAttachment | null; created_at: string };
 type ChatParticipant = { user_id: string | null; display_name: string; role: AccessRole };
 type Page = "fleet" | "explorer" | "statistics" | "alerts" | "chat" | "onboarding" | "settings";
+const PAGES: Page[] = ["fleet", "explorer", "statistics", "alerts", "chat", "onboarding", "settings"];
+// Device actions reload the page. Keep the page and device per browser tab so
+// a reload returns to the same view instead of the overview.
+const VIEW_KEY = "ncc-view";
+function savedView(): { page: Page; node: string } {
+  try {
+    const value = JSON.parse(sessionStorage.getItem(VIEW_KEY) || "{}");
+    return {
+      page: PAGES.includes(value.page) ? value.page : "fleet",
+      node: typeof value.node === "string" ? value.node : "",
+    };
+  } catch {
+    return { page: "fleet", node: "" };
+  }
+}
 
 const THEMES: { id: Theme; name: string }[] = [
   { id: "system", name: "Wie das System" },
@@ -865,12 +881,17 @@ function NodeOverview({
     );
   const m = node.latest?.metrics || {},
     cpu = m.cpu || {},
-    memory = m.memory || {},
-    gpu = m.gpus?.[0] || {},
-    lhmGpu = m.lhm_gpus?.[0] || {},
     network = m.network || {},
     isUnraid = node.metadata.source === "unraid-api";
   const gamingActive = !!activeGamingUntil(node);
+  const sensorLabels: SensorLabels = node.sensor_labels || {};
+  const saveSensorLabel = async (key: string, name: string, role: SensorRole | null) => {
+    const response = await fetch(`/api/v1/fleet/nodes/${node.node_id}/sensor-labels`, {
+      method: "PUT", headers: { ...headers(token), "Content-Type": "application/json" }, body: JSON.stringify({ key, name, role }),
+    });
+    if (response.ok) { window.location.reload(); return; }
+    window.alert("Der Name konnte nicht gespeichert werden.");
+  };
   const updateGamingMode = async (minutes: number) => {
     setUpdatingGaming(true);
     const dashboardToken = localStorage.getItem("ncc-dashboard-token") || "";
@@ -1004,28 +1025,12 @@ function NodeOverview({
     typeof cpu.temperature_c === "number"
       ? `${num(cpu.temperature_c).toFixed(0)} °C CPU-Temperatur`
       : undefined;
-  const cpuModel = String(cpu.model || "CPU nicht erkannt");
-  const gpuModel = String(gpu.name || gpu.model || "Keine GPU erkannt");
-  const cpuLogo = (() => {
-    const model = cpuModel.toLowerCase();
-    if (model.includes("intel")) return "/assets/hardware/intel.svg";
-    const ryzen = model.match(/ryzen\s*([3579])/i)?.[1];
-    return ryzen ? `/assets/hardware/ryzen${ryzen}.jpg` : null;
-  })();
-  const gpuLogo = (() => {
-    const model = gpuModel.toLowerCase();
-    if (model.includes("nvidia") || model.includes("geforce"))
-      return model.includes("rtx") ? "/assets/hardware/nvidia-rtx.jpg" : "/assets/hardware/nvidia-gtx.png";
-    if (model.includes("amd") || model.includes("radeon")) return "/assets/hardware/amd-radeon.png";
-    return null;
-  })();
   const operatingSystem = isUnraid
     ? `Unraid ${m.unraid?.version || node.agent_version || ""}`.trim()
     : String(m.system?.platform || node.platform || "Betriebssystem unbekannt");
   const cpuSeries = points.map((point) => num(point.metrics.cpu?.percent));
   const gpuSeries = points.map((point) => num(point.metrics.gpus?.[0]?.percent));
   const downSeries = points.map((point) => num(point.metrics.network?.download_mbps));
-  const storage = Array.isArray(m.disks) ? m.disks : [];
   return <section className="concept-node-page">
     <div className="node-header"><div className="node-header-left"><div className="node-large-icon">{isUnraid ? "▤" : "▣"}</div><div><div className="eyebrow">NODE / {node.machine_id}</div><h1>{node.display_name}</h1><div className="node-sub"><ConceptStatus node={{online:node.online,gaming_mode_until:activeGamingUntil(node)}}/><span>{operatingSystem}</span><span>Agent v{node.agent_version || "—"}</span><span>Kontakt {ago(node.last_seen_at)}</span></div></div></div><div className="node-actions">
       {!isUnraid && canDelete && <button type="button" className="outline-button" disabled={updatingGaming} onClick={() => void updateGamingMode(gamingActive ? 0 : 120)}><ConceptIcon name="bolt" size={16}/>{gamingActive ? "Gaming Mode beenden" : "Gaming Mode"}</button>}
@@ -1046,12 +1051,12 @@ function NodeOverview({
     <NowPlayingCard node={node} token={token} canManage={canDelete}/>
     <div className="node-chart-card"><div className="card-head"><div><div className="eyebrow">Verlauf</div><h2>Ressourcen im Verlauf</h2></div><span className="muted-small">Letzte {points.length} Messpunkte</span></div><div className="chart-key"><span><i style={{background:"var(--accent)"}}/> CPU</span><span><i style={{background:"var(--purple)"}}/> GPU</span></div><div className="dual-chart"><ConceptSparkline values={cpuSeries} color="var(--accent)" height={190} fill/><ConceptSparkline values={gpuSeries} color="var(--purple)" height={190}/></div><div className="chart-axis"><span>Verlauf</span><span>Jetzt</span></div></div>
     <div className="metric-grid">
-      <div className="metric-card"><div className="metric-title"><span>CPU</span><ConceptIcon name="activity" size={17}/></div><div className="metric-value">{num(cpu.percent).toFixed(1)}%</div><p>{cpuModel}</p><ConceptSparkline values={cpuSeries} height={48}/><div className="metric-items"><div><span>Temperatur</span><b>{typeof cpu.temperature_c === "number" ? `${num(cpu.temperature_c).toFixed(0)} °C` : "—"}</b></div><div><span>Takt</span><b>{typeof cpu.frequency_mhz === "number" ? `${num(cpu.frequency_mhz).toFixed(0)} MHz` : "—"}</b></div></div></div>
-      <div className="metric-card"><div className="metric-title"><span>Arbeitsspeicher</span><ConceptIcon name="grid" size={17}/></div><div className="metric-value">{num(memory.used_gb).toFixed(1)} GB</div><p>von {num(memory.total_gb).toFixed(1)} GB belegt</p><div className="metric-meter"><ConceptMeter value={num(memory.percent)}/></div><div className="metric-items"><div><span>Auslastung</span><b>{num(memory.percent).toFixed(1)}%</b></div></div></div>
-      {!isUnraid && <div className="metric-card"><div className="metric-title"><span>Grafikprozessor</span><ConceptIcon name="bolt" size={17}/></div><div className="metric-value">{m.gpus?.length ? `${num(gpu.percent).toFixed(1)}%` : "—"}</div><p>{gpuModel}</p><ConceptSparkline values={gpuSeries} color="var(--blue)" height={48}/><div className="metric-items"><div><span>Temperatur</span><b>{typeof (lhmGpu.temperature_c ?? gpu.temperature_c) === "number" ? `${num(lhmGpu.temperature_c ?? gpu.temperature_c).toFixed(0)} °C` : "—"}</b></div><div><span>Leistung</span><b>{typeof (lhmGpu.power_w ?? gpu.power_w) === "number" ? `${num(lhmGpu.power_w ?? gpu.power_w).toFixed(1)} W` : "—"}</b></div></div></div>}
+      <CpuCard metrics={m} series={cpuSeries} labels={sensorLabels}/>
+      <MemoryCard metrics={m}/>
+      {!isUnraid && <GpuCard metrics={m} series={gpuSeries}/>}
       <div className="metric-card"><div className="metric-title"><span>Netzwerk</span><ConceptIcon name="chart" size={17}/></div><div className="metric-value">{num(network.download_mbps).toFixed(1)} Mb/s</div><p>↓ Download · {network.interface || "Automatisch"}</p><ConceptSparkline values={downSeries} height={48}/><div className="metric-items"><div><span>Upload</span><b>{num(network.upload_mbps).toFixed(1)} Mb/s</b></div><div><span>Monat ↓ / ↑</span><b>{monthlyNetwork?.available ? `${trafficBytes(monthlyNetwork.received_bytes)} / ${trafficBytes(monthlyNetwork.sent_bytes)}` : "—"}</b></div></div></div>
     </div>
-    <div className="detail-bottom"><div className="detail-card"><ConceptSectionHead eyebrow="Speicher" title="Laufwerke"/>{storage.map((disk: Metrics, index: number) => <div className="disk-row" key={`${disk.mount || disk.name}-${index}`}><div><b>{disk.mount || disk.name || `Disk ${index + 1}`}</b><span>{num(disk.used_gb).toFixed(1)} / {num(disk.total_gb).toFixed(1)} GB</span></div><ConceptMeter value={num(disk.percent)}/><small>Lesen {num(disk.read_mbps).toFixed(1)} · Schreiben {num(disk.write_mbps).toFixed(1)} MiB/s</small></div>)}{!storage.length && <div className="empty">Keine Laufwerksdaten vorhanden.</div>}</div><HardwareSensorsCard metrics={m} isWindows={node.platform === "windows" && !isUnraid}/></div>
+    <div className="detail-bottom"><DrivesCard metrics={m}/>{!isUnraid ? <MainboardCard metrics={m} isWindows={node.platform === "windows"} labels={sensorLabels} canEdit={canDelete} onLabel={saveSensorLabel}/> : <div/>}</div>
     {Array.isArray(cpu.per_core) && cpu.per_core.length > 0 && <div className="detail-card concept-core-load"><ConceptSectionHead eyebrow="CPU-Threads" title="Last pro Kern"/><div className="concept-core-bars">{cpu.per_core.map((value: unknown, index: number) => <div key={index} title={`Kern ${index + 1}: ${num(value).toFixed(1)}%`}><span>{index + 1}</span><ConceptMeter value={num(value)}/></div>)}</div></div>}
     {isUnraid && <div className="detail-bottom concept-unraid"><UnraidStorageCard metrics={m}/><div className="unraid-services-grid"><UnraidWorkloadCard title="Virtuelle Maschinen" icon={<MonitorCog size={16}/>} items={m.vms || []} kind="vm"/><UnraidWorkloadCard title="Docker-Container" icon={<Boxes size={16}/>} items={m.containers || []} kind="container"/></div></div>}
   </section>;
@@ -1878,7 +1883,7 @@ function SettingsPage({
           </div>
           <Bell size={19} />
         </header>
-        <p>Telegram und Dashboard warnen ab dem gewählten Wert.</p>
+        <p>Telegram und Dashboard warnen ab dem gewählten Wert. Offline-Warnungen gibt es nur für Geräte in der Kategorie „Server“.</p>
         {draft && (
           <form
             className="alert-policy"
@@ -2514,7 +2519,7 @@ function App() {
     [releases, setReleases] = useState<AgentRelease[]>([]),
     [policy, setPolicy] = useState<AlertPolicy | null>(null),
     [telegram, setTelegram] = useState<TelegramSettings | null>(null),
-    [selectedId, setSelectedId] = useState(""),
+    [selectedId, setSelectedId] = useState(() => savedView().node),
     [points, setPoints] = useState<Telemetry[]>([]),
     [monthlyNetwork, setMonthlyNetwork] = useState<NetworkUsageSummary | null>(null);
   const [dismissedAlertIds, setDismissedAlertIds] = useState<Set<string>>(
@@ -2524,13 +2529,16 @@ function App() {
   const [identity, setIdentity] = useState<DashboardUser | null>(null);
   const [serverVersion, setServerVersion] = useState<string | null>(null);
   const [trafficResetRevision, setTrafficResetRevision] = useState(0);
-  const [page, setPage] = useState<Page>("fleet"),
+  const [page, setPage] = useState<Page>(() => savedView().page),
     [query, setQuery] = useState(""),
     [loading, setLoading] = useState(true),
     [sidebar, setSidebar] = useState(false),
     [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem("ncc-sidebar-collapsed") === "true");
   const selected =
     nodes.find((node) => node.node_id === selectedId) || nodes[0] || null;
+  useEffect(() => {
+    try { sessionStorage.setItem(VIEW_KEY, JSON.stringify({ page, node: selectedId })); } catch { /* Only a convenience. */ }
+  }, [page, selectedId]);
   const activeLoadsRef = useRef(0);
   const configLoadRef = useRef<{ token: string; authEpoch: number } | null>(null);
   const authEpochRef = useRef(0);

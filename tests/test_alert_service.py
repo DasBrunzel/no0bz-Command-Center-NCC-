@@ -15,6 +15,7 @@ from ncc_server.models import (
     AlertState,
     AuditEvent,
     Base,
+    FleetGroup,
     Node,
     PhysicalDevice,
     TelemetryPoint,
@@ -110,8 +111,9 @@ def test_inactive_dualboot_profile_does_not_alert_on_stale_metrics(tmp_path: Pat
         device = PhysicalDevice(display_name="HorstPC")
         session.add(device)
         session.flush()
-        windows = Node(machine_id="dualboot-windows", display_name="HorstPC", platform="windows", approved=True, physical_device_id=device.id, last_seen_at=utc_now())
-        linux = Node(machine_id="dualboot-linux", display_name="CachyOS", platform="linux", approved=True, physical_device_id=device.id, last_seen_at=utc_now() - timedelta(minutes=5))
+        # Offline alerts only apply to servers, so both profiles sit in that category.
+        windows = Node(machine_id="dualboot-windows", display_name="HorstPC", platform="windows", approved=True, physical_device_id=device.id, last_seen_at=utc_now(), fleet_group_id="default-servers")
+        linux = Node(machine_id="dualboot-linux", display_name="CachyOS", platform="linux", approved=True, physical_device_id=device.id, last_seen_at=utc_now() - timedelta(minutes=5), fleet_group_id="default-servers")
         session.add_all([windows, linux])
         session.flush()
         session.add(TelemetryPoint(node_id=linux.id, recorded_at=utc_now() - timedelta(minutes=5), payload={"cpu": {"percent": 99.0}}))
@@ -261,3 +263,28 @@ def test_agent_health_alerts_detect_repeated_network_counter_outliers(tmp_path: 
         evaluate_alerts(session, settings)
         kinds = {alert.kind for alert in session.query(AlertState).filter_by(active=True)}
     assert "agent-network-outlier" in kinds
+
+
+def test_offline_alerts_only_for_server_devices(tmp_path: Path) -> None:
+    database = Database(f"sqlite+pysqlite:///{(tmp_path / 'offline-alerts.db').as_posix()}")
+    Base.metadata.create_all(database.engine)
+    settings = ServerSettings(database_url="sqlite+pysqlite://")
+    stale = utc_now() - timedelta(minutes=5)
+    with database.session() as session:
+        session.add(FleetGroup(id="custom-servers", name="Homelab Server", position=5))
+        nodes = {
+            "pc": Node(machine_id="offline-pc", display_name="HorstPC", platform="windows", approved=True, last_seen_at=stale),
+            "named": Node(machine_id="offline-tower", display_name="Tower", platform="linux", approved=True, last_seen_at=stale),
+            "moved": Node(machine_id="offline-moved", display_name="Media Server", platform="linux", approved=True, last_seen_at=stale, fleet_group_id="default-pcs-laptops"),
+            "custom": Node(machine_id="offline-custom", display_name="Pi", platform="linux", approved=True, last_seen_at=stale, fleet_group_id="custom-servers"),
+        }
+        session.add_all(nodes.values())
+        session.commit()
+        ids = {key: node.id for key, node in nodes.items()}
+
+    with database.session() as session:
+        evaluate_alerts(session, settings)
+        alerting = {key for key, node_id in ids.items() if session.query(AlertState).filter_by(node_id=node_id, kind="offline", active=True).count()}
+    # "Tower" falls into the server category by name; a device moved to
+    # PCs & Laptops stays quiet; a custom group named "Server" alerts.
+    assert alerting == {"named", "custom"}

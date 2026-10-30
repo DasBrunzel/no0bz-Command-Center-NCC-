@@ -43,7 +43,11 @@ static string Snapshot(Computer computer) {
     computer.Accept(new UpdateVisitor());
     var sensors = new List<SensorRecord>();
     foreach (var hardware in computer.Hardware) Collect(hardware, sensors);
-    return JsonSerializer.Serialize(new { schema_version = 1, sensors });
+    // Names without sensors of their own, such as the mainboard model.
+    var hardwareList = computer.Hardware
+        .Select(item => new HardwareRecord(item.HardwareType.ToString(), item.Name, item.Identifier.ToString()))
+        .ToList();
+    return JsonSerializer.Serialize(new { schema_version = 1, sensors, hardware = hardwareList });
 }
 
 static void Collect(IHardware hardware, List<SensorRecord> output) {
@@ -68,6 +72,8 @@ static string UnitFor(SensorType type) => type switch {
     SensorType.Factor => "%",
     _ => "",
 };
+
+sealed record HardwareRecord(string type, string name, string id);
 
 sealed record SensorRecord(string hardware_type, string hardware_name, string hardware_id, string type, string name, double value, string unit);
 

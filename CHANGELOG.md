@@ -153,6 +153,34 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   Treiberspeicher kopiertes PawnIO genügt LHM nicht.
 - Die Sensorkarte der Geräteansicht gruppiert CPU/GPU, Laufwerke,
   Arbeitsspeicher und Mainboard; die bisher doppelte LHM-Sensorleiste entfällt.
+- Entwicklungs-Pre-Release `v0.6.0-beta.8-dev.5`: signierter Windows-Payload
+  `0.6.0-beta.8-dev.5` mit dem dauerhaft laufenden LHM-Helper. Auf HorstPC
+  wurde er gesund aktiviert.
+- Offline-Warnungen in Dashboard und Telegram gibt es nur noch für Geräte der
+  Kategorie „Server“ oder einer eigenen Gruppe mit „Server“ im Namen. PCs,
+  Laptops und Handys werden regelmäßig ausgeschaltet und warnen nicht mehr.
+- Nach einer Änderung an einem Gerät bleibt das Dashboard auf derselben Seite
+  und beim selben Gerät, statt zur Übersicht zu springen.
+- Auswahllisten, etwa für Releases, sind in beiden Farbschemata lesbar.
+- Die Sensoren stecken jetzt in den passenden Kacheln der Geräteansicht: CPU
+  mit Temperatur, Leistung, Takt und CPU-Lüfter, Grafikprozessor mit
+  Temperatur, Hotspot, Leistung und Lüfter, Arbeitsspeicher mit dem wärmsten
+  Modul und Laufwerke mit Modell und Temperatur. Laufwerke ohne
+  Windows-Buchstaben, etwa die Linux-Platte eines Dualboots, erscheinen
+  gesondert. Die reine Sensorkachel weicht einer Mainboard-Kachel mit Modell,
+  Lüftern und Temperaturen.
+- Lüfter und Temperaturfühler des Mainboards lassen sich pro Gerät benennen
+  und mit einer Rolle versehen (CPU-Lüfter, Gehäuse, Radiator, Pumpe,
+  Grafikkarte). Der CPU-Lüfter erscheint in der CPU-Kachel. Migration
+  `20261030_0021`.
+- CPU, Grafikkarte, Mainboard, Arbeitsspeicher und Laufwerke zeigen das Logo
+  ihres Herstellers. Die Logos stammen aus Simple Icons (CC0) und werden mit
+  dem Dashboard ausgeliefert; die Marken gehören ihren Inhabern. Für Hersteller
+  ohne Logo steht ein Kürzel. Der Sensor-Helper meldet dafür zusätzlich das
+  Mainboard-Modell.
+- Laufwerksraten werden je nach Größe in KB/s oder MB/s angezeigt statt als
+  „0.0“. In Ordner eingebundene Laufwerke, etwa Google Drive unter `D:\`,
+  erscheinen nicht mehr doppelt.
 - Die Backend-Typprüfung verwendet für gespeicherte Warnungsstufen eine
   explizite Typangabe statt einer zwischen Python-Versionen instabilen
   `type: ignore`-Ausnahme.

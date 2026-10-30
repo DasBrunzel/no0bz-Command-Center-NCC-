@@ -246,3 +246,26 @@ def test_token_cannot_claim_an_existing_machine(tmp_path: Path) -> None:
             headers={"Authorization": f"Bearer {second}"},
         )
         assert unbound_heartbeat.status_code == 409
+
+
+def test_commander_names_sensors_and_each_role_is_unique(tmp_path: Path) -> None:
+    path = tmp_path / "ncc-sensor-labels.db"
+    database = make_database(path)
+    _, plaintext = issue(database)
+    settings = ServerSettings(database_url=f"sqlite+pysqlite:///{path.as_posix()}", dashboard_token=SecretStr("dashboard-secret"))
+    agent = {"Authorization": f"Bearer {plaintext}"}
+    dashboard = {"X-NCC-Dashboard-Token": "dashboard-secret"}
+    with TestClient(create_app(settings, database)) as client:
+        node_id = client.post("/api/v1/nodes/enroll", json=enrollment_payload(), headers=agent).json()["node_id"]
+        url = f"/api/v1/fleet/nodes/{node_id}/sensor-labels"
+        assert client.put(url, json={"key": "fan:Fan #2", "name": "CPU-Lüfter", "role": "cpu"}).status_code in {401, 403}
+        assert client.put(url, json={"key": "fan:Fan #2", "name": "CPU-Lüfter", "role": "cpu"}, headers=dashboard).status_code == 200
+        labels = client.put(url, json={"key": "fan:Fan #3", "name": "Gehäuse", "role": "case"}, headers=dashboard).json()["sensor_labels"]
+        assert labels == {"fan:Fan #2": {"name": "CPU-Lüfter", "role": "cpu"}, "fan:Fan #3": {"name": "Gehäuse", "role": "case"}}
+        # Moving the CPU role to another fan clears it on the previous one.
+        labels = client.put(url, json={"key": "fan:Fan #3", "name": "Gehäuse", "role": "cpu"}, headers=dashboard).json()["sensor_labels"]
+        assert labels["fan:Fan #2"]["role"] is None and labels["fan:Fan #3"]["role"] == "cpu"
+        labels = client.put(url, json={"key": "fan:Fan #2", "name": "", "role": None}, headers=dashboard).json()["sensor_labels"]
+        assert "fan:Fan #2" not in labels
+        assert client.put(url, json={"key": "disk:C", "name": "x"}, headers=dashboard).status_code == 422
+        assert client.put("/api/v1/fleet/nodes/unknown/sensor-labels", json={"key": "fan:Fan #1", "name": "x"}, headers=dashboard).status_code == 404

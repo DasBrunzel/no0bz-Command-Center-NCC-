@@ -499,14 +499,45 @@ button.selected {
   .node-actions { flex-wrap: wrap; }
 }
 
-/* ---------- Hardware sensor card ---------- */
-.hardware-sensors .sensor-group + .sensor-group { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
-.hardware-sensors .sensor-group h3 { margin: 0 0 6px; font-size: 13px; font-weight: 600; color: var(--muted); }
-.hardware-sensors .sensor-group h3 small { font-weight: 400; color: var(--subtle); margin-left: 6px; }
-.hardware-sensors .sensor-row span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hardware-sensors .sensor-row b { white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* ---------- Hardware tiles ---------- */
+.vendor-logo { flex: none; display: block; }
+.vendor-badge { flex: none; display: inline-grid; place-items: center; padding: 0 4px; border-radius: 4px; background: var(--panel2); border: 1px solid var(--line); color: var(--muted); font-weight: 700; letter-spacing: .02em; line-height: 1; }
+.metric-title { align-items: center; }
+.drives-card .disk-head { display: flex; align-items: center; gap: 8px; font-size: 12px; min-width: 0; }
+.drives-card .disk-head b { white-space: nowrap; }
+/* The model name takes the free space, pushing temperature and size right. */
+.drives-card .disk-model { flex: 1 1 auto; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.drives-card .disk-head b + .disk-size { margin-left: auto; }
+.drives-card .disk-temp { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.drives-card .disk-size { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.drives-card .other-drive .disk-head { opacity: .85; }
+.mainboard-card .section-head { align-items: center; }
+.board-model { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; min-width: 0; }
+.board-model span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-group + .board-group { margin-top: 14px; }
+.board-group h3 { margin: 0 0 4px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.board-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(60px, 120px) auto 28px; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.board-row:not(:has(.meter)) { grid-template-columns: minmax(0, 1fr) auto 28px; }
+.board-row strong { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.board-name { display: flex; align-items: baseline; gap: 8px; min-width: 0; flex-wrap: wrap; }
+.board-name em { font-style: normal; font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+.board-name small { color: var(--subtle); font-size: 11px; }
+.icon-edit { background: none; border: 0; color: var(--muted); font-size: 14px; padding: 2px 6px; border-radius: 4px; }
+.icon-edit:hover { color: var(--text); background: var(--panel2); }
+.board-row.editing { display: block; }
+.board-default { display: block; color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+.sensor-editor { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.sensor-editor input, .sensor-editor select { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font-size: 13px; }
+.sensor-editor input { flex: 1 1 160px; min-width: 0; }
+.sensor-editor .link-button { background: none; border: 0; color: var(--muted); font-size: 12px; }
 .sensor-note { margin: 8px 0 0; font-size: 12px; color: var(--subtle); }
 .sensor-hint { margin-bottom: 14px; padding: 12px 14px; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--amber) 45%, var(--line)); background: color-mix(in srgb, var(--amber) 8%, var(--panel)); font-size: 13px; }
 .sensor-hint b { display: block; margin-bottom: 4px; }
 .sensor-hint p { margin: 0 0 8px; color: var(--muted); }
 .sensor-hint code { display: block; padding: 6px 8px; border-radius: 6px; background: var(--panel2); font-family: var(--font-mono); font-size: 12px; overflow-x: auto; user-select: all; }
+
+/* Native select popups: option text otherwise inherits the light text colour
+   while the browser draws its own light list background. */
+select option,
+select optgroup { background-color: var(--panel); color: var(--text); }
+.concept-node-page .action-menu select { background: var(--panel2); border: 1px solid var(--line); margin-top: 2px; }

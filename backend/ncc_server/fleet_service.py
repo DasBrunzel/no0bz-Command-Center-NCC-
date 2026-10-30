@@ -34,6 +34,7 @@ from ncc_server.schemas import (
     NetworkHistorySample,
     NetworkUsageSummary,
     NowPlayingResponse,
+    SensorLabel,
 )
 
 DEFAULT_FLEET_GROUPS = (
@@ -578,15 +579,54 @@ def _node_response(
         game_tracking=node.game_tracking,  # type: ignore[arg-type]
         auto_gaming_mode=node.auto_gaming_mode,
         now_playing=_now_playing_response(session, node),
+        sensor_labels=_sensor_labels(node),
         update_check_requested_at=node.update_check_requested_at,
         physical_device_id=node.physical_device_id,
         physical_device_name=node.physical_device.display_name if node.physical_device else None,
-        fleet_group_id=node.fleet_group_id or _default_group_for(node),
+        fleet_group_id=node.fleet_group_id or default_group_for(node),
         fleet_position=node.fleet_position,
         update_channel=node.update_channel,  # type: ignore[arg-type]
         pending_release_id=node.pending_release_id,
         latest=_telemetry_response(latest) if latest is not None else None,
     )
+
+
+def _sensor_labels(node: Node) -> dict[str, SensorLabel]:
+    labels = node.sensor_labels if isinstance(node.sensor_labels, dict) else {}
+    result: dict[str, SensorLabel] = {}
+    for key, value in labels.items():
+        if isinstance(value, dict):
+            try:
+                result[key] = SensorLabel.model_validate(value)
+            except ValueError:
+                continue
+    return result
+
+
+def update_sensor_label(session: Session, node_id: str, key: str, name: str | None, role: str | None) -> Node | None:
+    node = session.get(Node, node_id)
+    if node is None:
+        return None
+    labels = dict(node.sensor_labels or {})
+    clean = (name or "").strip() or None
+    if clean is None and role is None:
+        labels.pop(key, None)
+    else:
+        if role is not None:
+            # One sensor per role, so the CPU tile shows exactly one CPU fan.
+            for other, value in list(labels.items()):
+                if other != key and isinstance(value, dict) and value.get("role") == role:
+                    labels[other] = {**value, "role": None}
+        labels[key] = {"name": clean, "role": role}
+    node.sensor_labels = labels
+    node.updated_at = utc_now()
+    session.add(AuditEvent(
+        actor_type="dashboard", actor_id=node.id, action="node.sensor-label.updated",
+        details=json.dumps({"key": key, "name": clean, "role": role}, separators=(",", ":")),
+    ))
+    session.commit()
+    session.refresh(node)
+    return node
 
 
 def _now_playing_response(session: Session, node: Node) -> NowPlayingResponse | None:
@@ -610,7 +650,7 @@ def _availability_percent(node: Node, now: datetime | None = None) -> float:
     return round(min(100.0, max(0.0, node.availability_online_seconds / elapsed * 100)), 1)
 
 
-def _default_group_for(node: Node) -> str:
+def default_group_for(node: Node) -> str:
     identity = f"{node.display_name} {node.machine_id}".lower()
     if node.metadata_json.get("source") == "unraid-api" or "server" in identity or "tower" in identity:
         return "default-servers"

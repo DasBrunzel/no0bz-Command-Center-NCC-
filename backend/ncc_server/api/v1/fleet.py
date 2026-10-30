@@ -28,6 +28,7 @@ from ncc_server.fleet_service import (
     set_fleet_gaming_mode,
     update_fleet_layout,
     update_fleet_node_role,
+    update_sensor_label,
 )
 from ncc_server.release_service import assign_release, update_node_channel
 from ncc_server.schemas import (
@@ -49,6 +50,7 @@ from ncc_server.schemas import (
     NetworkUsageSummary,
     PhysicalDeviceCreateRequest,
     PhysicalDeviceResponse,
+    SensorLabelUpdateRequest,
     TelegramSettingsResponse,
     TelegramSettingsUpdateRequest,
 )
@@ -288,6 +290,21 @@ async def set_gaming_mode(
         raise HTTPException(status_code=404, detail="node not found")
     response = fleet_node(session, result.id, request.app.state.server_settings)
     if response is None:  # pragma: no cover
+        raise HTTPException(status_code=404, detail="node not found")
+    return response
+
+
+@router.put(
+    "/nodes/{node_id}/sensor-labels",
+    response_model=FleetNodeResponse,
+    dependencies=[Depends(require_commander_access)],
+)
+async def set_sensor_label(
+    node_id: str, payload: SensorLabelUpdateRequest, request: Request, session: Session = Depends(database_session)
+) -> FleetNodeResponse:
+    result = update_sensor_label(session, node_id, payload.key, payload.name, payload.role)
+    response = fleet_node(session, result.id, request.app.state.server_settings) if result else None
+    if response is None:
         raise HTTPException(status_code=404, detail="node not found")
     return response
 

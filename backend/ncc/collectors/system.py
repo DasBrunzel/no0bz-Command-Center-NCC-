@@ -95,7 +95,12 @@ class PsutilProvider(SensorProvider):
         self._network_interface = interface
         self._network_rate = (download, upload)
         disks = []
+        windows = platform.system() == "Windows"
         for partition in psutil.disk_partitions(all=False):
+            if windows and not _is_volume_root(partition.mountpoint):
+                # Folder mounts repeat the volume they live on, e.g. a cloud
+                # drive mounted at D:\GoogleDrive next to D:\ itself.
+                continue
             try:
                 usage = psutil.disk_usage(partition.mountpoint)
             except (PermissionError, OSError):
@@ -111,7 +116,12 @@ class PsutilProvider(SensorProvider):
                 )
                 self._disk[counter_key] = (counter.read_bytes, counter.write_bytes)
                 self._disk_rates[counter_key] = (read_rate, write_rate)
-            disks.append({"name": partition.device, "mount": partition.mountpoint, "filesystem": partition.fstype, "percent": usage.percent, "used_gb": round(usage.used / 1024**3, 2), "total_gb": round(usage.total / 1024**3, 2), "read_mbps": read_rate, "write_mbps": write_rate})
+            entry: dict[str, Any] = {"name": partition.device, "mount": partition.mountpoint, "filesystem": partition.fstype, "percent": usage.percent, "used_gb": round(usage.used / 1024**3, 2), "total_gb": round(usage.total / 1024**3, 2), "read_mbps": read_rate, "write_mbps": write_rate}
+            if windows:
+                physical = self._windows_disk_mapping().get(partition.mountpoint[:1].upper())
+                if physical:
+                    entry["disk_number"] = int(physical.removeprefix("PhysicalDrive"))
+            disks.append(entry)
         self._sample_time = now
         battery = psutil.sensors_battery()
         processes: list[dict[str, Any]] = []
@@ -201,6 +211,11 @@ class PsutilProvider(SensorProvider):
             if number is not None:
                 self._windows_disk_map[drive] = f"PhysicalDrive{number}"
         return self._windows_disk_map
+
+
+def _is_volume_root(mountpoint: str) -> bool:
+    """Return whether a Windows mount point is a drive root such as ``C:\``."""
+    return len(mountpoint.rstrip("\\/")) <= 2
 
 
 def _windows_volume_disk_number(drive: str) -> int | None:
@@ -653,14 +668,14 @@ class LibreHardwareMonitorProvider(SensorProvider):
     def collect(self) -> dict[str, Any]:
         command = self._helper_command()
         if command is not None:
-            metrics = lhm_snapshot_metrics(self._helper_snapshot(command))
+            metrics = lhm_snapshot_metrics(*self._helper_snapshot(command))
             metrics["hardware"]["pawnio"] = self._pawnio_status()
             return metrics
         with urllib.request.urlopen(self.url, timeout=3) as response:
             tree = json.loads(response.read().decode("utf-8"))
         return {"lhm_sensors": parse_lhm_tree(tree), "lhm_source": self.name}
 
-    def _helper_snapshot(self, command: list[str]) -> list[dict[str, Any]]:
+    def _helper_snapshot(self, command: list[str]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         with self._lock:
             process = self._running_helper(command)
             try:
@@ -681,7 +696,11 @@ class LibreHardwareMonitorProvider(SensorProvider):
         sensors = snapshot.get("sensors", []) if isinstance(snapshot, dict) else []
         if not isinstance(sensors, list):
             raise RuntimeError("LibreHardwareMonitor helper returned invalid sensors")
-        return [sensor for sensor in sensors if isinstance(sensor, dict)]
+        hardware = snapshot.get("hardware", []) if isinstance(snapshot, dict) else []
+        return (
+            [sensor for sensor in sensors if isinstance(sensor, dict)],
+            [item for item in hardware if isinstance(item, dict)] if isinstance(hardware, list) else [],
+        )
 
     def _running_helper(self, command: list[str]) -> subprocess.Popen[str]:
         if self._process is not None and self._process.poll() is None:
@@ -790,6 +809,10 @@ def _lhm_component_sensors(sensors: list[dict[str, Any]]) -> dict[str, Any]:
             # NVMe drives report several sensors; "Composite" is the drive's own summary.
             if identifier not in storage or "composite" in label.lower():
                 storage[identifier] = {"name": name, "temperature_c": value}
+                number = re.search(r"/(\d+)$", identifier)
+                if number:
+                    # LHM numbers drives like Windows' PhysicalDrive index.
+                    storage[identifier]["disk_number"] = int(number.group(1))
         elif hardware_type == "Memory" and kind == "Temperature" and label.lower().startswith("dimm") and 0 < value < 120:
             memory[identifier] = {"name": name, "slot": label, "temperature_c": value}
         elif hardware_type == "SuperIO":
@@ -813,7 +836,24 @@ def _lhm_component_sensors(sensors: list[dict[str, Any]]) -> dict[str, Any]:
     return result
 
 
-def lhm_snapshot_metrics(sensors: list[dict[str, Any]]) -> dict[str, Any]:
+def lhm_components(hardware: list[dict[str, Any]]) -> dict[str, Any]:
+    """Name the main components so the dashboard can show their maker."""
+    components: dict[str, Any] = {}
+    for item in hardware:
+        kind = str(item.get("type", ""))
+        name = str(item.get("name", "")).strip()
+        if not name:
+            continue
+        if kind == "Motherboard":
+            components["board"] = name[:128]
+        elif kind == "Cpu":
+            components.setdefault("cpu", name[:128])
+        elif kind.startswith("Gpu"):
+            components.setdefault("gpus", []).append(name[:128])
+    return components
+
+
+def lhm_snapshot_metrics(sensors: list[dict[str, Any]], hardware: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     """Convert the bundled LHM helper's flat records into NCC metric fields."""
     categories: dict[str, list[dict[str, Any]]] = {"temperatures": [], "fans": [], "powers": [], "voltages": [], "clocks": []}
     counts = {category: 0 for category in categories}
@@ -841,6 +881,9 @@ def lhm_snapshot_metrics(sensors: list[dict[str, Any]]) -> dict[str, Any]:
         "provider": "librehardwaremonitor", "sensor_counts": counts, **categories,
         **_lhm_component_sensors(sensors),
     }}
+    components = lhm_components(hardware or [])
+    if components:
+        payload["hardware"]["components"] = components
     cpu_temperature = _positive_sensor_value(_prefer_sensor([x for x in cpu_sensors if x.get("type") == "Temperature"], "package", "tctl", "t die"))
     cpu_power = _positive_sensor_value(_prefer_sensor([x for x in cpu_sensors if x.get("type") == "Power"], "package", "ppt"))
     cpu_clock = _positive_sensor_value(_prefer_sensor([x for x in cpu_sensors if x.get("type") == "Clock"], "core average", "average", "core"))

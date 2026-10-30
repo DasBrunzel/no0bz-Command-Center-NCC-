@@ -103,6 +103,21 @@ class NetworkHistorySample(BaseModel):
     network: dict[str, object] | None
 
 
+SensorRole = Literal["cpu", "case", "gpu", "pump", "radiator"]
+
+
+class SensorLabel(BaseModel):
+    name: str | None = Field(default=None, max_length=48)
+    role: SensorRole | None = None
+
+
+class SensorLabelUpdateRequest(BaseModel):
+    key: str = Field(min_length=3, max_length=96, pattern=r"^(fan|temp):[^\x00-\x1f]+$")
+    # An empty name and no role remove the label again.
+    name: str | None = Field(default=None, max_length=48)
+    role: SensorRole | None = None
+
+
 class NowPlayingResponse(BaseModel):
     session_id: str
     game_id: str | None
@@ -133,6 +148,7 @@ class FleetNodeResponse(BaseModel):
     game_tracking: Literal["off", "presence", "titles"] = "titles"
     auto_gaming_mode: bool = True
     now_playing: NowPlayingResponse | None = None
+    sensor_labels: dict[str, SensorLabel] = Field(default_factory=dict)
     update_check_requested_at: datetime | None
     physical_device_id: str | None
     physical_device_name: str | None

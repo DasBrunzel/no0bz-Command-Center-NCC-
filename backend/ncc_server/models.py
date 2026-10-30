@@ -72,6 +72,8 @@ class Node(Base):
     auto_gaming_mode: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     # Extended by telemetry while a game runs; a manual gaming_mode_until wins.
     auto_gaming_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # User-chosen names and roles for unlabeled sensors, keyed like "fan:Fan #2".
+    sensor_labels: Mapped[dict[str, dict[str, str | None]]] = mapped_column(JSON, default=dict, nullable=False)
     physical_device_id: Mapped[str | None] = mapped_column(
         ForeignKey("physical_devices.id", ondelete="SET NULL")
     )
