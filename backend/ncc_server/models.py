@@ -87,9 +87,12 @@ class Node(Base):
     fleet_group_id: Mapped[str | None] = mapped_column(ForeignKey("fleet_groups.id", ondelete="SET NULL"))
     fleet_position: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     update_channel: Mapped[str] = mapped_column(String(16), default="beta", nullable=False)
+    # None follows the newest registered release of the channel; a pinned
+    # release never installs an older version unless downgrades are allowed.
     pending_release_id: Mapped[str | None] = mapped_column(
         ForeignKey("agent_releases.id", ondelete="SET NULL")
     )
+    release_allow_downgrade: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     fleet_group: Mapped[FleetGroup | None] = relationship(back_populates="nodes")
     physical_device: Mapped[PhysicalDevice | None] = relationship(back_populates="nodes")
     telemetry: Mapped[list[TelemetryPoint]] = relationship(

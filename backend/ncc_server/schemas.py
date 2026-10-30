@@ -158,6 +158,11 @@ class FleetNodeResponse(BaseModel):
     fleet_position: int
     update_channel: Literal["beta", "stable"]
     pending_release_id: str | None
+    release_allow_downgrade: bool = False
+    # The payload the server offers this node right now, if any.
+    release_target_version: str | None = None
+    # A pinned release older than the running payload, held back.
+    release_pin_held_back: bool = False
     latest: FleetTelemetryPoint | None
 
 
@@ -360,6 +365,15 @@ class AgentReleaseResponse(BaseModel):
 
 class FleetNodeReleaseAssignmentRequest(BaseModel):
     release_id: str | None = Field(default=None, min_length=1, max_length=36)
+    allow_downgrade: bool = False
+
+
+class ReleaseFeedStatusResponse(BaseModel):
+    enabled: bool
+    repository: str
+    checked_at: datetime | None = None
+    error: str | None = None
+    registered: list[str] = Field(default_factory=list)
 
 
 class FleetNodeUpdateChannelRequest(BaseModel):

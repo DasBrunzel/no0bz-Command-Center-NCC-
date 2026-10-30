@@ -2,6 +2,20 @@
 
 Alle wesentlichen Änderungen werden hier dokumentiert.
 
+## [Unveröffentlicht]
+
+- Geräte folgen automatisch dem neuesten registrierten Payload ihres Kanals
+  und gehen dabei nie zurück. Eine feste Zuweisung bleibt möglich; ist sie
+  älter als die laufende Version, hält der Server sie zurück, außer der
+  Rückschritt wurde ausdrücklich bestätigt. Migration `20261030_0025` stellt
+  alle bisherigen Zuweisungen einmalig auf „Automatisch“.
+- Der Server registriert Payload-Manifeste aus den GitHub-Releases selbst
+  (alle 15 Minuten), aber nur, wenn ein vertrauenswürdiger Release-Schlüssel
+  sie signiert hat und der Payload im selben Repository liegt. Ed25519 wird
+  dafür ohne zusätzliche Abhängigkeit geprüft.
+- `released_at` mit sieben Nachkommastellen (aus .NET) wird auch unter
+  Python 3.10 angenommen.
+
 ## [0.6.1] – 2026-10-30
 
 - Der Windows-Payload wird als Ordner (PyInstaller `--onedir`) statt als

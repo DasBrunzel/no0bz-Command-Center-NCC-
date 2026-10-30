@@ -95,8 +95,18 @@ type Node = {
   physical_device_name: string | null;
   update_channel: "beta" | "stable";
   pending_release_id: string | null;
+  release_allow_downgrade?: boolean;
+  release_target_version?: string | null;
+  release_pin_held_back?: boolean;
   update_check_requested_at?: string | null;
   latest: Telemetry | null;
+};
+type ReleaseFeedStatus = {
+  enabled: boolean;
+  repository: string;
+  checked_at: string | null;
+  error: string | null;
+  registered: string[];
 };
 type AgentRelease = {
   release_id: string;
@@ -255,6 +265,21 @@ const ago = (value: string | null) => {
   if (seconds < 3600) return `Vor ${Math.floor(seconds / 60)} Min.`;
   if (seconds < 86400) return `Vor ${Math.floor(seconds / 3600)} Std.`;
   return new Date(value).toLocaleDateString("de-DE");
+};
+// Same order as the server and InstallerUpdater: alpha < beta < rc < final,
+// and a -dev.N build before the pre-release it leads up to.
+const versionKey = (value: string): number[] | null => {
+  const match = /^(\d+)\.(\d+)\.(\d+)(?:-(alpha|beta|rc)\.(\d+)(?:-dev\.(\d+))?)?$/.exec(value.trim());
+  if (!match) return null;
+  const phase = { alpha: 0, beta: 1, rc: 2 }[match[4] as "alpha" | "beta" | "rc"] ?? 3;
+  return [Number(match[1]), Number(match[2]), Number(match[3]), phase, Number(match[5] || 0), match[6] ? -1 : 0, Number(match[6] || 0)];
+};
+const compareVersions = (left: string, right: string) => {
+  const a = versionKey(left);
+  const b = versionKey(right);
+  if (!a || !b) return 0;
+  for (let index = 0; index < a.length; index += 1) if (a[index] !== b[index]) return a[index] - b[index];
+  return 0;
 };
 const duration = (value: number) => {
   const seconds = Math.max(0, Math.floor(value));
@@ -1003,26 +1028,28 @@ function NodeOverview({
   const compatibleReleases = releases.filter((release) => release.platform === node.platform);
   const channelReleases = compatibleReleases.filter((release) => release.channel === node.update_channel);
   const pendingRelease = releases.find((release) => release.release_id === node.pending_release_id) || null;
-  const setRelease = async (releaseId: string | null) => {
+  const setRelease = async (releaseId: string | null, allowDowngrade = false) => {
     setUpdatingRelease(true);
     const response = await fetch(`/api/v1/fleet/nodes/${node.node_id}/release`, {
-      method: "PUT", headers: { ...headers(token), "Content-Type": "application/json" }, body: JSON.stringify({ release_id: releaseId }),
+      method: "PUT", headers: { ...headers(token), "Content-Type": "application/json" },
+      body: JSON.stringify({ release_id: releaseId, allow_downgrade: allowDowngrade }),
     });
     if (response.ok) { window.location.reload(); return; }
     setUpdatingRelease(false);
-    window.alert("Update-Freigabe konnte nicht geändert werden.");
+    window.alert("Update-Zuweisung konnte nicht geändert werden.");
   };
-  const assignRelease = () => {
-    if (!channelReleases.length && !pendingRelease) {
-      window.alert(`Für ${node.platform} im ${node.update_channel.toUpperCase()}-Kanal ist noch kein Release registriert.`);
-      return;
-    }
-    if (pendingRelease) {
-      if (window.confirm(`Freigabe für ${pendingRelease.payload_version} zurücknehmen?`)) void setRelease(null);
-      return;
-    }
-    if (channelReleases.length === 1) void setRelease(channelReleases[0].release_id);
+  const chooseRelease = (value: string) => {
+    if (value === "auto") { void setRelease(null); return; }
+    const release = channelReleases.find((item) => item.release_id === value);
+    if (!release) return;
+    // A pin below the running payload is held back unless a downgrade is meant.
+    const older = node.agent_version ? compareVersions(release.payload_version, node.agent_version) < 0 : false;
+    if (older && !window.confirm(`${release.payload_version} ist älter als die laufende Version ${node.agent_version}. Bewusst auf diese ältere Version zurückgehen?`)) return;
+    void setRelease(release.release_id, older);
   };
+  const releaseStatus = pendingRelease
+    ? `Fest: ${pendingRelease.payload_version}${node.release_pin_held_back ? " (älter, zurückgehalten)" : ""}`
+    : `Automatisch${node.release_target_version ? ` → ${node.release_target_version}` : ""}`;
   const [updateCheckState, setUpdateCheckState] = useState<"idle" | "sending" | "requested">(
     node.update_check_requested_at ? "requested" : "idle",
   );
@@ -1074,7 +1101,7 @@ function NodeOverview({
         {updateCheckState === "requested" ? "Update-Prüfung angefordert" : "Jetzt aktualisieren"}
       </button>}
       <button type="button" className="outline-button" onClick={() => setActionOpen((open) => !open)}>Aktionen ⌄</button>
-      {actionOpen && <div className="action-menu">{canManageDevice && <button type="button" disabled={renaming} onClick={() => void rename()}>Gerät umbenennen</button>}{canDelete && <label className="owner-select">Besitzer<select value={node.owner_user_id || ""} onChange={(event) => void changeOwner(event.target.value || null)}><option value="">Ich (Server-Besitzer)</option>{(owners || []).map((owner) => <option key={owner.user_id} value={owner.user_id || ""}>{owner.username}</option>)}{node.owner_user_id && !(owners || []).some((owner) => owner.user_id === node.owner_user_id) && <option value={node.owner_user_id}>{node.owner_name || "Freund"}</option>}</select></label>}{canDelete && <button type="button" disabled={updatingRole} onClick={() => void toggleRole()}>{node.access_role === "beta_tester" ? "Zu Commander machen" : "Als Beta-Tester markieren"}</button>}{canDelete && !isUnraid && <><button type="button" disabled={updatingRelease} onClick={() => void changeUpdateChannel()}>Update-Kanal: {node.update_channel.toUpperCase()}</button><button type="button" disabled={updatingRelease} onClick={() => void assignRelease()}>{pendingRelease ? `Freigabe aufheben: ${pendingRelease.payload_version}` : "Update bewusst freigeben"}</button>{!pendingRelease && channelReleases.length > 1 && <select aria-label="Release auswählen" defaultValue="" onChange={(event) => { if(event.target.value) void setRelease(event.target.value); }}><option value="">Release auswählen …</option>{channelReleases.map((release) => <option key={release.release_id} value={release.release_id}>{release.payload_version}</option>)}</select>}</>}{canDelete && <button type="button" className="danger" disabled={forgetting} onClick={() => void forget()}>Gerät vergessen</button>}</div>}
+      {actionOpen && <div className="action-menu">{canManageDevice && <button type="button" disabled={renaming} onClick={() => void rename()}>Gerät umbenennen</button>}{canDelete && <label className="owner-select">Besitzer<select value={node.owner_user_id || ""} onChange={(event) => void changeOwner(event.target.value || null)}><option value="">Ich (Server-Besitzer)</option>{(owners || []).map((owner) => <option key={owner.user_id} value={owner.user_id || ""}>{owner.username}</option>)}{node.owner_user_id && !(owners || []).some((owner) => owner.user_id === node.owner_user_id) && <option value={node.owner_user_id}>{node.owner_name || "Freund"}</option>}</select></label>}{canDelete && <button type="button" disabled={updatingRole} onClick={() => void toggleRole()}>{node.access_role === "beta_tester" ? "Zu Commander machen" : "Als Beta-Tester markieren"}</button>}{canDelete && !isUnraid && <><button type="button" disabled={updatingRelease} onClick={() => void changeUpdateChannel()}>Update-Kanal: {node.update_channel.toUpperCase()}</button><label className="owner-select">Payload · {releaseStatus}<select aria-label="Payload-Version" disabled={updatingRelease} value={pendingRelease ? pendingRelease.release_id : "auto"} onChange={(event) => chooseRelease(event.target.value)}><option value="auto">Automatisch (neueste)</option>{channelReleases.map((release) => <option key={release.release_id} value={release.release_id}>Fest: {release.payload_version}</option>)}</select></label></>}{canDelete && <button type="button" className="danger" disabled={forgetting} onClick={() => void forget()}>Gerät vergessen</button>}</div>}
     </div></div>
     <div className="node-meta"><span>Physisches Gerät <b>{node.physical_device_name || node.display_name}</b></span><span>Plattform <b>{node.platform}</b></span><span>Update <b>{pendingRelease?.payload_version || node.update_channel.toUpperCase()}</b></span><span>Datenfrische <b>{node.online ? "Live" : ago(node.last_seen_at)}</b></span>{node.owner_name && <span>Besitzer <b>{node.owner_name}</b></span>}</div>
     <NowPlayingCard node={node} token={token} canManage={canManageDevice}/>
@@ -1862,6 +1889,11 @@ function SettingsPage({
   const [trafficResetMessage, setTrafficResetMessage] = useState("");
   const [releaseManifest, setReleaseManifest] = useState("");
   const [releaseMessage, setReleaseMessage] = useState("");
+  const [feed, setFeed] = useState<ReleaseFeedStatus | null>(null);
+  useEffect(() => {
+    if (!canManageReleases) return;
+    getJson<ReleaseFeedStatus>("/api/v1/releases/feed", token).then(setFeed).catch(() => setFeed(null));
+  }, [canManageReleases, token, releases]);
   useEffect(() => setDraft(policy), [policy]);
   useEffect(() => setTelegramDraft(telegram), [telegram]);
   const agentVersions = Array.from(nodes.reduce((counts, node) => {
@@ -1935,13 +1967,14 @@ function SettingsPage({
       </section>}
       {canManageReleases && <section className="surface settings-card">
         <header className="section-head"><div><span className="eyebrow">0.6 UPDATE-VERTEILUNG</span><h2>Signierte Payload-Releases</h2></div><Download size={19} /></header>
-        <p>Füge ausschließlich das vom Payload-Build erzeugte Manifest ein. Ein Release wird nie automatisch verteilt: Erst die bewusste Freigabe am einzelnen Node stellt es für dessen Core bereit.</p>
+        <p>Geräte folgen automatisch dem neuesten Release ihres Kanals und gehen dabei nie zurück. Wer eine Version erst testen will, legt sie am Gerät fest. Neue Releases von GitHub registriert der Server selbst, sofern dein Release-Schlüssel sie signiert hat.</p>
+        {feed && <p className="settings-feed-status">{feed.enabled ? <>GitHub <code>{feed.repository}</code> · {feed.checked_at ? `zuletzt geprüft: ${ago(feed.checked_at)}` : "noch nicht geprüft"}{feed.error ? ` · Fehler: ${feed.error}` : ""}{feed.registered.length ? ` · neu: ${feed.registered.slice(0, 3).join(", ")}${feed.registered.length > 3 ? ` und ${feed.registered.length - 3} weitere` : ""}` : ""}</> : "Automatische Registrierung ist ausgeschaltet."}</p>}
         <form className="telegram-settings" onSubmit={(event) => { event.preventDefault(); setReleaseMessage(""); try { const manifest = JSON.parse(releaseManifest) as Record<string, unknown>; void onRegisterRelease(manifest).then(() => { setReleaseManifest(""); setReleaseMessage("Signiertes Release registriert."); }).catch(() => setReleaseMessage("Manifest konnte nicht registriert werden.")); } catch { setReleaseMessage("Das Manifest ist kein gültiges JSON."); } }}>
           <label>Release-Manifest<textarea value={releaseManifest} onChange={(event) => setReleaseManifest(event.target.value)} placeholder='{"schema_version":1,…}' rows={5} /></label>
           {releaseMessage && <small className="traffic-reset-message">{releaseMessage}</small>}
           <button className="primary" type="submit" disabled={!releaseManifest.trim()}>Signiertes Release registrieren</button>
         </form>
-        <div className="settings-release-list">{releases.map((release) => <p key={release.release_id}><b>{release.payload_version}</b> · {release.platform}/{release.architecture} · {release.channel.toUpperCase()} · {release.assigned_nodes} freigegeben<br /><code title="Release-ID">{release.release_id}</code></p>)}{!releases.length && <p>Noch kein Release registriert.</p>}</div>
+        <div className="settings-release-list">{releases.map((release) => <p key={release.release_id}><b>{release.payload_version}</b> · {release.platform}/{release.architecture} · {release.channel.toUpperCase()} · {release.assigned_nodes} fest zugewiesen<br /><code title="Release-ID">{release.release_id}</code></p>)}{!releases.length && <p>Noch kein Release registriert.</p>}</div>
       </section>}
       {canResetTraffic && <section className="surface settings-card">
         <header className="section-head">

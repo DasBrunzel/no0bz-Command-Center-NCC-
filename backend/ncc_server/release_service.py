@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 from typing import Any
 
@@ -12,6 +13,23 @@ from ncc_server.schemas import AgentReleaseResponse
 
 class ReleaseManifestError(ValueError):
     pass
+
+
+# The same order InstallerUpdater uses: alpha < beta < rc < final, and a
+# -dev.N build comes before the pre-release it leads up to.
+_VERSION = re.compile(r"(\d+)\.(\d+)\.(\d+)(?:-(alpha|beta|rc)\.(\d+)(?:-dev\.(\d+))?)?")
+_PHASES = {"alpha": 0, "beta": 1, "rc": 2, None: 3}
+
+
+def version_key(value: str | None) -> tuple[int, ...] | None:
+    match = _VERSION.fullmatch((value or "").strip())
+    if match is None:
+        return None
+    major, minor, patch, phase, number, dev = match.groups()
+    return (
+        int(major), int(minor), int(patch), _PHASES[phase], int(number or 0),
+        -1 if dev is not None else 0, int(dev or 0),
+    )
 
 
 def _text(value: object, name: str, maximum: int) -> str:
@@ -73,7 +91,9 @@ def register_release(session: Session, manifest: dict[str, object]) -> AgentRele
     signature_value = _text(signature.get("value"), "signature value", 512)
     published = manifest.get("released_at")
     try:
-        released_at = datetime.fromisoformat(_text(published, "released_at", 64).replace("Z", "+00:00"))
+        # .NET writes seven fraction digits, which Python 3.10 cannot parse.
+        stamp = re.sub(r"(\.\d{6})\d+", r"\1", _text(published, "released_at", 64))
+        released_at = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
     except ValueError as exc:
         raise ReleaseManifestError("released_at must be ISO-8601") from exc
     if released_at.tzinfo is None:
@@ -107,17 +127,22 @@ def list_releases(session: Session) -> list[AgentReleaseResponse]:
     return [_response(session, release) for release in releases]
 
 
-def assign_release(session: Session, node_id: str, release_id: str | None) -> bool:
+def assign_release(
+    session: Session, node_id: str, release_id: str | None, allow_downgrade: bool = False
+) -> bool:
+    """Pin a node to one release, or with None let it follow the newest one."""
     node = session.get(Node, node_id)
     if node is None:
         return False
     if release_id is None:
         node.pending_release_id = None
+        node.release_allow_downgrade = False
     else:
         release = session.get(AgentRelease, release_id)
         if release is None or release.platform != node.platform:
             return False
         node.pending_release_id = release.id
+        node.release_allow_downgrade = allow_downgrade
     session.commit()
     return True
 
@@ -131,11 +156,39 @@ def update_node_channel(session: Session, node_id: str, channel: str) -> bool:
     return True
 
 
+def newest_release(session: Session, platform: str, channel: str) -> AgentRelease | None:
+    releases = session.scalars(
+        select(AgentRelease).where(AgentRelease.platform == platform, AgentRelease.channel == channel)
+    ).all()
+    ranked = [(key, release) for release in releases if (key := version_key(release.payload_version))]
+    return max(ranked, key=lambda item: item[0])[1] if ranked else None
+
+
+def release_plan(session: Session, node: Node) -> tuple[AgentRelease | None, bool]:
+    """The release to offer a node now, and whether an older pin is held back."""
+    running = version_key(node.agent_version)
+    if node.pending_release_id:
+        release = session.get(AgentRelease, node.pending_release_id)
+        if release is None or release.platform != node.platform or release.channel != node.update_channel:
+            return None, False
+        target = version_key(release.payload_version)
+        if not node.release_allow_downgrade and running and target and target < running:
+            return None, True
+        return release, False
+    release = newest_release(session, node.platform, node.update_channel)
+    if release is None:
+        return None, False
+    target = version_key(release.payload_version)
+    # Only ever move forward on its own; an unparseable running version (a
+    # local build) still gets the newest release.
+    if target is None or (running is not None and target <= running):
+        return None, False
+    return release, False
+
+
 def pending_release(session: Session, node_id: str) -> AgentReleaseResponse | None:
     node = session.get(Node, node_id)
-    if node is None or not node.pending_release_id:
+    if node is None:
         return None
-    release = session.get(AgentRelease, node.pending_release_id)
-    if release is None or release.platform != node.platform or release.channel != node.update_channel:
-        return None
-    return _response(session, release)
+    release, _ = release_plan(session, node)
+    return _response(session, release) if release is not None else None

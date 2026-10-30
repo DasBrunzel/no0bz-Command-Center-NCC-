@@ -358,7 +358,7 @@ async def request_update_check(
 async def set_release_for_node(
     node_id: str, payload: FleetNodeReleaseAssignmentRequest, session: Session = Depends(database_session)
 ) -> None:
-    if not assign_release(session, node_id, payload.release_id):
+    if not assign_release(session, node_id, payload.release_id, payload.allow_downgrade):
         raise HTTPException(status_code=404, detail="node or compatible release not found")
 
 

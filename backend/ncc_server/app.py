@@ -18,6 +18,7 @@ from ncc_server.config import ServerSettings, get_server_settings
 from ncc_server.database import Database
 from ncc_server.game_metadata import refresh_game_metadata
 from ncc_server.hardware_stats import backfill_hardware_rollups
+from ncc_server.release_feed import sync_release_feed
 from ncc_server.telegram import get_telegram_settings, send_telegram_alert, telegram_bot_available
 from ncc_server.telegram_bot import alert_recipients, poll_updates, send_weekly_recaps
 from ncc_server.unraid_service import collect_unraid
@@ -42,9 +43,13 @@ def create_app(
         game_task = asyncio.create_task(_game_metadata_loop(active_database, active_settings))
         rollup_task = asyncio.create_task(_rollup_backfill_loop(active_database))
         bot_task = asyncio.create_task(_telegram_bot_loop(active_database, active_settings))
+        feed_task = asyncio.create_task(_release_feed_loop(active_database, active_settings))
         try:
             yield
         finally:
+            feed_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await feed_task
             alert_task.cancel()
             unraid_task.cancel()
             game_task.cancel()
@@ -156,6 +161,20 @@ async def _rollup_backfill_loop(database: Database) -> None:
             added = 0
         if not added:
             await asyncio.sleep(285)
+
+
+async def _release_feed_loop(database: Database, settings: ServerSettings) -> None:
+    """Pick up signed payload releases from GitHub, so nobody registers them."""
+    if not settings.release_feed_enabled:
+        return
+    # Start late so a short-lived process, such as a test, never goes online.
+    await asyncio.sleep(30)
+    while True:
+        try:
+            await sync_release_feed(database, settings)
+        except Exception as exc:
+            logger.warning("Release feed check failed: %s", exc)
+        await asyncio.sleep(settings.release_feed_interval_seconds)
 
 
 async def _telegram_bot_loop(database: Database, settings: ServerSettings) -> None:

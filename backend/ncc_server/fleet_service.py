@@ -26,6 +26,7 @@ from ncc_server.models import (
     utc_now,
 )
 from ncc_server.node_service import is_online
+from ncc_server.release_service import release_plan
 from ncc_server.schemas import (
     FleetAlertResponse,
     FleetGroupResponse,
@@ -569,6 +570,7 @@ def _node_response(
         .order_by(TelemetryPoint.recorded_at.desc())
         .limit(1)
     )
+    target, held_back = release_plan(session, node)
     return FleetNodeResponse(
         node_id=node.id,
         machine_id=node.machine_id,
@@ -599,6 +601,9 @@ def _node_response(
         fleet_position=node.fleet_position,
         update_channel=node.update_channel,  # type: ignore[arg-type]
         pending_release_id=node.pending_release_id,
+        release_allow_downgrade=node.release_allow_downgrade,
+        release_target_version=target.payload_version if target is not None else None,
+        release_pin_held_back=held_back,
         latest=_telemetry_response(latest) if latest is not None else None,
     )
 

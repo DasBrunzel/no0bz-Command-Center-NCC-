@@ -39,6 +39,10 @@ class ServerSettings(BaseSettings):
     )
     # Fetch game artwork and details from the Steam store.
     game_metadata_enabled: bool = True
+    # Register signed payload manifests from these GitHub releases on their own.
+    release_feed_enabled: bool = True
+    release_feed_repository: str = "DasBrunzel/no0bz-Command-Center-NCC-"
+    release_feed_interval_seconds: int = Field(default=900, ge=60, le=86400)
     chat_upload_dir: Path = Field(default_factory=lambda: ROOT / "ncc_chat_uploads")
 
 

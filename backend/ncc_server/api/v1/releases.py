@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from ncc_server.auth import (
@@ -11,6 +11,7 @@ from ncc_server.auth import (
 )
 from ncc_server.models import AgentToken
 from ncc_server.node_service import bound_node
+from ncc_server.release_feed import feed_status
 from ncc_server.release_service import (
     ReleaseManifestError,
     assign_release,
@@ -24,6 +25,7 @@ from ncc_server.schemas import (
     AgentReleaseResponse,
     FleetNodeReleaseAssignmentRequest,
     FleetNodeUpdateChannelRequest,
+    ReleaseFeedStatusResponse,
 )
 
 router = APIRouter(prefix="/releases", tags=["releases"])
@@ -32,6 +34,11 @@ router = APIRouter(prefix="/releases", tags=["releases"])
 @router.get("", response_model=list[AgentReleaseResponse], dependencies=[Depends(require_staff_access)])
 async def releases(session: Session = Depends(database_session)) -> list[AgentReleaseResponse]:
     return list_releases(session)
+
+
+@router.get("/feed", response_model=ReleaseFeedStatusResponse, dependencies=[Depends(require_staff_access)])
+async def release_feed(request: Request) -> ReleaseFeedStatusResponse:
+    return feed_status(request.app.state.server_settings)
 
 
 @router.post("", response_model=AgentReleaseResponse, status_code=201, dependencies=[Depends(require_commander_access)])
@@ -44,7 +51,7 @@ async def create_release(payload: AgentReleaseManifestCreateRequest, session: Se
 
 @router.put("/nodes/{node_id}", status_code=204, dependencies=[Depends(require_commander_access)])
 async def set_node_release(node_id: str, payload: FleetNodeReleaseAssignmentRequest, session: Session = Depends(database_session)) -> None:
-    if not assign_release(session, node_id, payload.release_id):
+    if not assign_release(session, node_id, payload.release_id, payload.allow_downgrade):
         raise HTTPException(status_code=404, detail="node or compatible release not found")
 
 
