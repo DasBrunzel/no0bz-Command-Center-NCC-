@@ -8,9 +8,20 @@ eine Aufgabe „NCC“, wähle „Bei Anmeldung“ und verwende das Startskript 
 Setze „Starten in“ auf das Repository. Verwende kein Administratorkonto, außer ein
 Hardware-Provider benötigt es ausdrücklich.
 
-LibreHardwareMonitor ist optional. Für zusätzliche Board-, Lüfter-, Spannungs- und
-Power-Sensoren kann sein Remote Web Server auf Port 8085 aktiviert werden. Die
-Grundfunktionen und GPU-Erkennung benötigen LHM nicht.
+Der Windows-Agent bringt einen rein lesenden LibreHardwareMonitor-Helper mit.
+GPU-, Laufwerks- und Arbeitsspeichertemperaturen liefert er ohne weitere
+Installation. CPU-Temperatur, CPU-Leistung sowie Lüfter, Temperaturen und
+Spannungen des Mainboards benötigen zusätzlich den signierten Treiber PawnIO,
+der mit aktivierter Speicherintegrität (HVCI) funktioniert. Einmalig in einer
+PowerShell als Administrator installieren:
+
+```powershell
+winget install --id namazso.PawnIO -e
+```
+
+Die Geräteansicht im Dashboard zeigt einen Hinweis, solange PawnIO fehlt. Ohne
+den Agenten bleibt der Remote Web Server von LibreHardwareMonitor auf Port 8085
+als optionale Quelle nutzbar.
 
 ## Linux / Raspberry Pi OS
 

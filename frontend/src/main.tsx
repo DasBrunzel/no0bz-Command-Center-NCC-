@@ -50,6 +50,7 @@ import "./device-lifecycle.css";
 import "./concept/styles.css";
 import "./design.css";
 import { Icon as ConceptIcon, Meter as ConceptMeter, SectionHead as ConceptSectionHead, Sparkline as ConceptSparkline, Status as ConceptStatus } from "./concept/components";
+import { HardwareSensorsCard } from "./HardwareSensors";
 import { activeGamingUntil, NowPlayingCard, NowPlayingStrip, PlaytimeStatistics, type GameTracking, type NowPlaying } from "./Games";
 import dashboardPackage from "../package.json";
 
@@ -867,9 +868,7 @@ function NodeOverview({
     memory = m.memory || {},
     gpu = m.gpus?.[0] || {},
     lhmGpu = m.lhm_gpus?.[0] || {},
-    hardware = m.hardware || {},
     network = m.network || {},
-    processes = m.processes || [],
     isUnraid = node.metadata.source === "unraid-api";
   const gamingActive = !!activeGamingUntil(node);
   const updateGamingMode = async (minutes: number) => {
@@ -1052,16 +1051,10 @@ function NodeOverview({
       {!isUnraid && <div className="metric-card"><div className="metric-title"><span>Grafikprozessor</span><ConceptIcon name="bolt" size={17}/></div><div className="metric-value">{m.gpus?.length ? `${num(gpu.percent).toFixed(1)}%` : "—"}</div><p>{gpuModel}</p><ConceptSparkline values={gpuSeries} color="var(--blue)" height={48}/><div className="metric-items"><div><span>Temperatur</span><b>{typeof (lhmGpu.temperature_c ?? gpu.temperature_c) === "number" ? `${num(lhmGpu.temperature_c ?? gpu.temperature_c).toFixed(0)} °C` : "—"}</b></div><div><span>Leistung</span><b>{typeof (lhmGpu.power_w ?? gpu.power_w) === "number" ? `${num(lhmGpu.power_w ?? gpu.power_w).toFixed(1)} W` : "—"}</b></div></div></div>}
       <div className="metric-card"><div className="metric-title"><span>Netzwerk</span><ConceptIcon name="chart" size={17}/></div><div className="metric-value">{num(network.download_mbps).toFixed(1)} Mb/s</div><p>↓ Download · {network.interface || "Automatisch"}</p><ConceptSparkline values={downSeries} height={48}/><div className="metric-items"><div><span>Upload</span><b>{num(network.upload_mbps).toFixed(1)} Mb/s</b></div><div><span>Monat ↓ / ↑</span><b>{monthlyNetwork?.available ? `${trafficBytes(monthlyNetwork.received_bytes)} / ${trafficBytes(monthlyNetwork.sent_bytes)}` : "—"}</b></div></div></div>
     </div>
-    <div className="detail-bottom"><div className="detail-card"><ConceptSectionHead eyebrow="Speicher" title="Laufwerke"/>{storage.map((disk: Metrics, index: number) => <div className="disk-row" key={`${disk.mount || disk.name}-${index}`}><div><b>{disk.mount || disk.name || `Disk ${index + 1}`}</b><span>{num(disk.used_gb).toFixed(1)} / {num(disk.total_gb).toFixed(1)} GB</span></div><ConceptMeter value={num(disk.percent)}/><small>Lesen {num(disk.read_mbps).toFixed(1)} · Schreiben {num(disk.write_mbps).toFixed(1)} MiB/s</small></div>)}{!storage.length && <div className="empty">Keine Laufwerksdaten vorhanden.</div>}</div><div className="detail-card"><ConceptSectionHead eyebrow="Hardware" title="Sensoren"/><div className="sensor-row"><span>CPU Temperatur</span><b>{typeof cpu.temperature_c === "number" ? `${num(cpu.temperature_c).toFixed(1)} °C` : "—"}</b></div><div className="sensor-row"><span>GPU Temperatur</span><b>{typeof (lhmGpu.temperature_c ?? gpu.temperature_c) === "number" ? `${num(lhmGpu.temperature_c ?? gpu.temperature_c).toFixed(1)} °C` : "—"}</b></div><div className="sensor-row"><span>CPU Leistung</span><b>{typeof cpu.power_w === "number" ? `${num(cpu.power_w).toFixed(1)} W` : "—"}</b></div><div className="sensor-row"><span>GPU Lüfter</span><b>{typeof lhmGpu.fan_rpm === "number" ? `${num(lhmGpu.fan_rpm).toFixed(0)} RPM` : "—"}</b></div><div className="process-note">{processes.length ? `Top-Prozesse: ${processes.slice(0, 4).map((process: Metrics) => `${process.name} ${num(process.cpu).toFixed(0)}%`).join(" · ")}` : "Keine Prozessdaten verfügbar."}</div></div></div>
+    <div className="detail-bottom"><div className="detail-card"><ConceptSectionHead eyebrow="Speicher" title="Laufwerke"/>{storage.map((disk: Metrics, index: number) => <div className="disk-row" key={`${disk.mount || disk.name}-${index}`}><div><b>{disk.mount || disk.name || `Disk ${index + 1}`}</b><span>{num(disk.used_gb).toFixed(1)} / {num(disk.total_gb).toFixed(1)} GB</span></div><ConceptMeter value={num(disk.percent)}/><small>Lesen {num(disk.read_mbps).toFixed(1)} · Schreiben {num(disk.write_mbps).toFixed(1)} MiB/s</small></div>)}{!storage.length && <div className="empty">Keine Laufwerksdaten vorhanden.</div>}</div><HardwareSensorsCard metrics={m} isWindows={node.platform === "windows" && !isUnraid}/></div>
     {Array.isArray(cpu.per_core) && cpu.per_core.length > 0 && <div className="detail-card concept-core-load"><ConceptSectionHead eyebrow="CPU-Threads" title="Last pro Kern"/><div className="concept-core-bars">{cpu.per_core.map((value: unknown, index: number) => <div key={index} title={`Kern ${index + 1}: ${num(value).toFixed(1)}%`}><span>{index + 1}</span><ConceptMeter value={num(value)}/></div>)}</div></div>}
-    {hardware.provider === "librehardwaremonitor" && <div className="detail-card concept-hardware"><ConceptSectionHead eyebrow="LibreHardwareMonitor" title="Live-Hardware-Sensoren"/><div className="hardware-sensor-grid"><SensorValue label="CPU-Temperatur" value={cpu.temperature_c} unit="°C"/><SensorValue label="CPU-Leistung" value={cpu.power_w} unit="W"/><SensorValue label="CPU-Takt" value={cpu.frequency_mhz} unit="MHz"/><SensorValue label="GPU-Hotspot" value={lhmGpu.hotspot_temperature_c} unit="°C"/><SensorValue label="GPU-Leistung" value={lhmGpu.power_w ?? gpu.power_w} unit="W"/><SensorValue label="GPU-Lüfter" value={lhmGpu.fan_rpm} unit="RPM"/></div></div>}
     {isUnraid && <div className="detail-bottom concept-unraid"><UnraidStorageCard metrics={m}/><div className="unraid-services-grid"><UnraidWorkloadCard title="Virtuelle Maschinen" icon={<MonitorCog size={16}/>} items={m.vms || []} kind="vm"/><UnraidWorkloadCard title="Docker-Container" icon={<Boxes size={16}/>} items={m.containers || []} kind="container"/></div></div>}
   </section>;
-}
-
-function SensorValue({ label, value, unit }: { label: string; value: unknown; unit: string }) {
-  const available = typeof value === "number" && Number.isFinite(value);
-  return <div className="hardware-sensor-value"><span>{label}</span><strong>{available ? metric(value as number, unit === "MHz" || unit === "RPM" ? 0 : 1) : "—"}<small>{available ? ` ${unit}` : ""}</small></strong></div>;
 }
 
 function StatisticsPage({

@@ -3,11 +3,13 @@ from __future__ import annotations
 import json
 import os
 import platform
+import queue
 import re
 import shutil
 import socket
 import subprocess
 import sys
+import threading
 import time
 import urllib.request
 from functools import lru_cache
@@ -601,9 +603,16 @@ class LibreHardwareMonitorProvider(SensorProvider):
     name = "librehardwaremonitor"
     platforms = {"windows"}
     priority = 80
+    # Opening LHM with PawnIO takes about two seconds; a running helper answers
+    # each later sample in a fraction of that.
+    HELPER_TIMEOUT_SECONDS = 7.0
 
     def __init__(self, url: str) -> None:
         self.url = url
+        self._process: subprocess.Popen[str] | None = None
+        self._lines: queue.Queue[str | None] = queue.Queue()
+        self._lock = threading.Lock()
+        self._pawnio: tuple[float, str] | None = None
 
     @staticmethod
     def _helper_path() -> Path | None:
@@ -616,10 +625,14 @@ class LibreHardwareMonitorProvider(SensorProvider):
                 return candidate
         return None
 
+    def _helper_command(self) -> list[str] | None:
+        helper = self._helper_path()
+        return [str(helper), "--serve"] if helper is not None else None
+
     def is_available(self) -> bool:
         if platform.system() != "Windows":
             return False
-        if self._helper_path() is not None:
+        if self._helper_command() is not None:
             return True
         try:
             with urllib.request.urlopen(self.url, timeout=1) as response:
@@ -634,37 +647,109 @@ class LibreHardwareMonitorProvider(SensorProvider):
             available,
             ["temperatures", "fans", "voltages", "power", "gpu"] if available else [],
             None if available else "LibreHardwareMonitor-Sensorhelper nicht verfügbar",
-            "Im Windows-0.6-Payload enthalten; der optionale lokale LHM-Webserver bleibt kompatibel",
+            "Im Windows-0.6-Payload enthalten; CPU- und Mainboard-Sensoren benötigen den Treiber PawnIO",
         )
 
     def collect(self) -> dict[str, Any]:
-        helper = self._helper_path()
-        if helper is not None:
-            result = subprocess.run(
-                [str(helper)], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=7, check=False
-            )
-            if result.returncode != 0:
-                raise RuntimeError(result.stderr.strip() or "LibreHardwareMonitor helper failed")
-            try:
-                snapshot = json.loads(result.stdout)
-            except json.JSONDecodeError as error:
-                raise RuntimeError("LibreHardwareMonitor helper returned invalid JSON") from error
-            sensors = snapshot.get("sensors", []) if isinstance(snapshot, dict) else []
-            if not isinstance(sensors, list):
-                raise RuntimeError("LibreHardwareMonitor helper returned invalid sensors")
-            return lhm_snapshot_metrics([sensor for sensor in sensors if isinstance(sensor, dict)])
+        command = self._helper_command()
+        if command is not None:
+            metrics = lhm_snapshot_metrics(self._helper_snapshot(command))
+            metrics["hardware"]["pawnio"] = self._pawnio_status()
+            return metrics
         with urllib.request.urlopen(self.url, timeout=3) as response:
             tree = json.loads(response.read().decode("utf-8"))
         return {"lhm_sensors": parse_lhm_tree(tree), "lhm_source": self.name}
 
+    def _helper_snapshot(self, command: list[str]) -> list[dict[str, Any]]:
+        with self._lock:
+            process = self._running_helper(command)
+            try:
+                assert process.stdin is not None
+                process.stdin.write("\n")
+                process.stdin.flush()
+                line = self._lines.get(timeout=self.HELPER_TIMEOUT_SECONDS)
+            except (OSError, queue.Empty) as error:
+                self._stop_helper()
+                raise RuntimeError("LibreHardwareMonitor helper did not answer") from error
+            if line is None:
+                self._stop_helper()
+                raise RuntimeError("LibreHardwareMonitor helper exited")
+        try:
+            snapshot = json.loads(line)
+        except json.JSONDecodeError as error:
+            raise RuntimeError("LibreHardwareMonitor helper returned invalid JSON") from error
+        sensors = snapshot.get("sensors", []) if isinstance(snapshot, dict) else []
+        if not isinstance(sensors, list):
+            raise RuntimeError("LibreHardwareMonitor helper returned invalid sensors")
+        return [sensor for sensor in sensors if isinstance(sensor, dict)]
 
-def _prefer_sensor(sensors: list[dict[str, Any]], *needles: str) -> dict[str, Any] | None:
+    def _running_helper(self, command: list[str]) -> subprocess.Popen[str]:
+        if self._process is not None and self._process.poll() is None:
+            return self._process
+        lines: queue.Queue[str | None] = queue.Queue()
+        process = subprocess.Popen(
+            command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            text=True, encoding="utf-8", errors="replace",
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+
+        def read() -> None:
+            assert process.stdout is not None
+            for output in process.stdout:
+                lines.put(output)
+            lines.put(None)
+
+        threading.Thread(target=read, name="ncc-lhm-reader", daemon=True).start()
+        self._lines = lines
+        self._process = process
+        return process
+
+    def _stop_helper(self) -> None:
+        process, self._process = self._process, None
+        if process is not None and process.poll() is None:
+            process.kill()
+
+    def _pawnio_status(self) -> str:
+        """Report whether LHM can reach CPU and mainboard sensors via PawnIO."""
+        now = time.monotonic()
+        if self._pawnio is not None and now - self._pawnio[0] < 60:
+            return self._pawnio[1]
+        status = pawnio_status()
+        self._pawnio = (now, status)
+        return status
+
+
+def pawnio_status() -> str:
+    """Return "running", "stopped" or "missing" for the PawnIO driver.
+
+    LHM only uses PawnIO when its regular setup registered it; a driver that
+    another program merely copied into the driver store does not count.
+    """
+    try:
+        import winreg
+
+        with winreg.OpenKey(  # type: ignore[attr-defined,unused-ignore]
+            winreg.HKEY_LOCAL_MACHINE,  # type: ignore[attr-defined,unused-ignore]
+            r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\PawnIO",
+        ):
+            pass
+    except (ImportError, OSError):
+        return "missing"
+    try:
+        service = psutil.win_service_get("PawnIO")  # type: ignore[attr-defined,unused-ignore]
+        return "running" if service.status() == "running" else "stopped"
+    except Exception:
+        return "stopped"
+
+
+def _prefer_sensor(sensors: list[dict[str, Any]], *needles: str, fallback: bool = True) -> dict[str, Any] | None:
     lowered = tuple(needle.lower() for needle in needles)
     for sensor in sensors:
         name = str(sensor.get("name", "")).lower()
         if any(needle in name for needle in lowered):
             return sensor
-    return sensors[0] if sensors else None
+    # A specific reading such as a hotspot must not borrow another sensor's value.
+    return sensors[0] if sensors and fallback else None
 
 
 def _sensor_value(sensor: dict[str, Any] | None) -> float | None:
@@ -680,6 +765,54 @@ def _positive_sensor_value(sensor: dict[str, Any] | None) -> float | None:
     return value if value is not None and value > 0 else None
 
 
+# Thresholds and sensor properties that LHM reports as if they were readings.
+_LHM_LIMIT_PATTERN = re.compile(r"warning|critical|limit|resolution", re.IGNORECASE)
+
+
+def _lhm_component_sensors(sensors: list[dict[str, Any]]) -> dict[str, Any]:
+    """Group drive, memory and mainboard readings per component."""
+    storage: dict[str, dict[str, Any]] = {}
+    memory: dict[str, dict[str, Any]] = {}
+    board_fans: list[dict[str, Any]] = []
+    board_temperatures: list[dict[str, Any]] = []
+    board_chip: str | None = None
+    controls: dict[str, float] = {}
+    for sensor in sensors:
+        hardware_type = str(sensor.get("hardware_type", ""))
+        kind = str(sensor.get("type", ""))
+        label = str(sensor.get("name", "sensor"))
+        name = str(sensor.get("hardware_name", "")).strip()
+        identifier = str(sensor.get("hardware_id", name))
+        value = _sensor_value(sensor)
+        if value is None or _LHM_LIMIT_PATTERN.search(label):
+            continue
+        if hardware_type == "Storage" and kind == "Temperature" and 0 < value < 120:
+            # NVMe drives report several sensors; "Composite" is the drive's own summary.
+            if identifier not in storage or "composite" in label.lower():
+                storage[identifier] = {"name": name, "temperature_c": value}
+        elif hardware_type == "Memory" and kind == "Temperature" and label.lower().startswith("dimm") and 0 < value < 120:
+            memory[identifier] = {"name": name, "slot": label, "temperature_c": value}
+        elif hardware_type == "SuperIO":
+            board_chip = name or board_chip
+            if kind == "Fan" and value > 0:
+                board_fans.append({"label": label, "rpm": round(value)})
+            elif kind == "Control":
+                controls[label] = value
+            elif kind == "Temperature" and 0 < value < 120:
+                board_temperatures.append({"label": label, "value": value})
+    for fan in board_fans:
+        if fan["label"] in controls:
+            fan["control_percent"] = round(controls[fan["label"]])
+    result: dict[str, Any] = {}
+    if storage:
+        result["storage"] = list(storage.values())[:12]
+    if memory:
+        result["memory_modules"] = list(memory.values())[:8]
+    if board_chip:
+        result["board"] = {"chip": board_chip, "fans": board_fans[:10], "temperatures": board_temperatures[:10]}
+    return result
+
+
 def lhm_snapshot_metrics(sensors: list[dict[str, Any]]) -> dict[str, Any]:
     """Convert the bundled LHM helper's flat records into NCC metric fields."""
     categories: dict[str, list[dict[str, Any]]] = {"temperatures": [], "fans": [], "powers": [], "voltages": [], "clocks": []}
@@ -689,7 +822,7 @@ def lhm_snapshot_metrics(sensors: list[dict[str, Any]]) -> dict[str, Any]:
     for sensor in sensors:
         kind = str(sensor.get("type", ""))
         category = {"Temperature": "temperatures", "Fan": "fans", "Power": "powers", "Voltage": "voltages", "Clock": "clocks"}.get(kind)
-        if category:
+        if category and not _LHM_LIMIT_PATTERN.search(str(sensor.get("name", ""))):
             counts[category] += 1
             # Keep telemetry compact: the dashboard needs a representative live
             # view, not hundreds of mostly per-core duplicate records every cycle.
@@ -704,7 +837,10 @@ def lhm_snapshot_metrics(sensors: list[dict[str, Any]]) -> dict[str, Any]:
         if hardware_type.startswith("gpu"):
             gpu_by_id.setdefault(str(sensor.get("hardware_id", sensor.get("hardware_name", "gpu"))), []).append(sensor)
 
-    payload: dict[str, Any] = {"hardware": {"provider": "librehardwaremonitor", "sensor_counts": counts, **categories}}
+    payload: dict[str, Any] = {"hardware": {
+        "provider": "librehardwaremonitor", "sensor_counts": counts, **categories,
+        **_lhm_component_sensors(sensors),
+    }}
     cpu_temperature = _positive_sensor_value(_prefer_sensor([x for x in cpu_sensors if x.get("type") == "Temperature"], "package", "tctl", "t die"))
     cpu_power = _positive_sensor_value(_prefer_sensor([x for x in cpu_sensors if x.get("type") == "Power"], "package", "ppt"))
     cpu_clock = _positive_sensor_value(_prefer_sensor([x for x in cpu_sensors if x.get("type") == "Clock"], "core average", "average", "core"))
@@ -723,8 +859,8 @@ def lhm_snapshot_metrics(sensors: list[dict[str, Any]]) -> dict[str, Any]:
         gpu: dict[str, Any] = {"index": index, "name": str(group[0].get("hardware_name", f"GPU {index + 1}")), "source": "librehardwaremonitor"}
         values = {
             "temperature_c": _positive_sensor_value(_prefer_sensor(temperatures, "gpu core", "core", "temperature")),
-            "hotspot_temperature_c": _positive_sensor_value(_prefer_sensor(temperatures, "hot spot", "hotspot")),
-            "memory_temperature_c": _positive_sensor_value(_prefer_sensor(temperatures, "memory")),
+            "hotspot_temperature_c": _positive_sensor_value(_prefer_sensor(temperatures, "hot spot", "hotspot", fallback=False)),
+            "memory_temperature_c": _positive_sensor_value(_prefer_sensor(temperatures, "memory", fallback=False)),
             "power_w": _positive_sensor_value(_prefer_sensor([x for x in group if x.get("type") == "Power"], "power")),
             "fan_rpm": _sensor_value(_prefer_sensor([x for x in group if x.get("type") == "Fan"], "fan")),
             "frequency_mhz": _positive_sensor_value(_prefer_sensor([x for x in group if x.get("type") == "Clock"], "core", "gpu clock")),

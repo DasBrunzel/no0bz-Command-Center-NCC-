@@ -137,6 +137,22 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
   `0.6.0-beta.8-dev.4` mit der Spielerkennung. Das Agent-Setup bleibt
   `0.6.0-beta.8-dev.5`; der Update-Feed ist unverändert. Auf HorstPC wurde ein
   laufendes Steam-Spiel erkannt und im Dashboard angezeigt.
+- Der LibreHardwareMonitor-Helper bleibt zwischen zwei Messungen geöffnet.
+  Statt LHM alle fünf Sekunden neu einzurichten (rund zwei Sekunden mit
+  PawnIO), beantwortet er jede weitere Messung in etwa 0,1 Sekunden. Beendet
+  sich der Helper, startet die nächste Messung ihn neu.
+- Die Sensoren werden jetzt pro Bauteil ausgewertet: Temperatur jedes
+  Laufwerks, der Arbeitsspeichermodule sowie Lüfter und Temperaturen des
+  Mainboard-Sensorchips. Grenz- und Schwellwerte zählen nicht mehr als
+  Messwerte, und eine GPU ohne eigenen Hotspot- oder Speichersensor übernimmt
+  nicht mehr die Kerntemperatur.
+- CPU-Temperatur, CPU-Leistung und Mainboard-Sensoren benötigen den signierten
+  Treiber PawnIO. Der Agent meldet, ob er installiert ist und läuft; fehlt er,
+  nennt die Geräteansicht den Installationsbefehl
+  `winget install --id namazso.PawnIO -e`. Ein nur von anderer Software in den
+  Treiberspeicher kopiertes PawnIO genügt LHM nicht.
+- Die Sensorkarte der Geräteansicht gruppiert CPU/GPU, Laufwerke,
+  Arbeitsspeicher und Mainboard; die bisher doppelte LHM-Sensorleiste entfällt.
 - Die Backend-Typprüfung verwendet für gespeicherte Warnungsstufen eine
   explizite Typangabe statt einer zwischen Python-Versionen instabilen
   `type: ignore`-Ausnahme.

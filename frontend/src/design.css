@@ -498,3 +498,15 @@ button.selected {
   .stats-view-switch { align-self: flex-start; }
   .node-actions { flex-wrap: wrap; }
 }
+
+/* ---------- Hardware sensor card ---------- */
+.hardware-sensors .sensor-group + .sensor-group { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.hardware-sensors .sensor-group h3 { margin: 0 0 6px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.hardware-sensors .sensor-group h3 small { font-weight: 400; color: var(--subtle); margin-left: 6px; }
+.hardware-sensors .sensor-row span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hardware-sensors .sensor-row b { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.sensor-note { margin: 8px 0 0; font-size: 12px; color: var(--subtle); }
+.sensor-hint { margin-bottom: 14px; padding: 12px 14px; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--amber) 45%, var(--line)); background: color-mix(in srgb, var(--amber) 8%, var(--panel)); font-size: 13px; }
+.sensor-hint b { display: block; margin-bottom: 4px; }
+.sensor-hint p { margin: 0 0 8px; color: var(--muted); }
+.sensor-hint code { display: block; padding: 6px 8px; border-radius: 6px; background: var(--panel2); font-family: var(--font-mono); font-size: 12px; overflow-x: auto; user-select: all; }
