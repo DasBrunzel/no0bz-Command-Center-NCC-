@@ -586,3 +586,12 @@ select optgroup { background-color: var(--panel); color: var(--text); }
 /* Users, invites and friends need the full settings width. */
 .dashboard-users-card { grid-column: 1 / -1; min-width: 0; }
 .dashboard-user-row { flex-wrap: wrap; row-gap: 8px; }
+
+/* ---------- Telegram and temperature thresholds ---------- */
+.policy-subhead { grid-column: 1 / -1; margin-top: 8px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.policy-subhead small { font-weight: 400; color: var(--subtle); margin-left: 6px; }
+.telegram-code { display: grid; gap: 8px; justify-items: start; padding: 12px 14px; border-radius: 8px; border: 1px dashed var(--accent); background: var(--panel2); font-size: 13px; }
+.telegram-code code { font-family: var(--font-mono); font-size: 20px; letter-spacing: .1em; color: var(--text); user-select: all; }
+.telegram-code small { color: var(--muted); }
+.telegram-code a.primary { text-decoration: none; display: inline-flex; padding: 8px 14px; border-radius: 6px; }
+.telegram-connect-card .toggle-line { margin-top: 8px; }

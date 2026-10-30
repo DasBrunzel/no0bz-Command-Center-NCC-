@@ -32,6 +32,9 @@ class AlertNotification:
     node_name: str
     kind: str
     message: str
+    # Lets Telegram reach the device's owner as well as the server owner.
+    node_id: str | None = None
+    owner_user_id: str | None = None
 
 
 def evaluate_alerts(session: Session, settings: ServerSettings) -> list[AlertNotification]:
@@ -69,7 +72,7 @@ def evaluate_alerts(session: Session, settings: ServerSettings) -> list[AlertNot
             if settings.telegram_enabled and state.last_notified_state != "active":
                 notifications.append(
                     AlertNotification(
-                        state.id, "active", severity, node.display_name, kind, message
+                        state.id, "active", severity, node.display_name, kind, message, node.id, node.owner_user_id
                     )
                 )
         for state in states.values():
@@ -87,6 +90,8 @@ def evaluate_alerts(session: Session, settings: ServerSettings) -> list[AlertNot
                         node.display_name,
                         state.kind,
                         state.message,
+                        node.id,
+                        node.owner_user_id,
                     )
                 )
     session.commit()
@@ -179,6 +184,8 @@ def _active_alerts(
         if value >= threshold:
             severity = "critical" if value >= min(100, threshold + 5) else "warning"
             alerts.append((kind, severity, f"{name}: {label}-Auslastung bei {value:.0f} % ({severity})."))
+    # Heat is reported even in gaming mode; that only silences load alerts.
+    _temperature_alerts(node, metrics, policy, alerts)
     _unraid_alerts(node, metrics, alerts)
     _agent_health_alerts(session, node, latest, settings, alerts)
     return alerts
@@ -310,6 +317,27 @@ def _recent_network_counter_outlier(session: Session, node_id: str) -> bool:
     return False
 
 
+def _temperature_alerts(
+    node: Node, metrics: dict[str, object], policy: AlertPolicy, alerts: list[tuple[str, str, str]]
+) -> None:
+    name = node.display_name
+
+    def check(kind: str, label: str, value: float, threshold: int) -> None:
+        if value >= threshold:
+            severity = "critical" if value >= threshold + 5 else "warning"
+            alerts.append((kind, severity, f"{name}: {label} bei {value:.0f} °C ({severity})."))
+
+    check("cpu-temperature", "CPU-Temperatur", _number(_nested(metrics, "cpu", "temperature_c")), policy.cpu_temperature_threshold)
+    gpu = _number(_nested(metrics, "lhm_gpus", 0, "temperature_c")) or _number(_nested(metrics, "gpus", 0, "temperature_c"))
+    check("gpu-temperature", "GPU-Temperatur", gpu, policy.gpu_temperature_threshold)
+    drives = _nested(metrics, "hardware", "storage")
+    if isinstance(drives, list):
+        for drive in drives:
+            if isinstance(drive, dict):
+                label = str(drive.get("name") or "Laufwerk")[:64]
+                check(f"drive-temperature-{label.casefold()}", label, _number(drive.get("temperature_c")), policy.drive_temperature_threshold)
+
+
 def _unraid_alerts(
     node: Node, metrics: dict[str, object], alerts: list[tuple[str, str, str]]
 ) -> None:
@@ -321,10 +349,6 @@ def _unraid_alerts(
     array_state = str(unraid.get("array_state") or "").upper()
     if array_state and array_state not in {"STARTED", "STARTING"}:
         alerts.append(("unraid-array", "critical", f"{name}: Unraid-Array ist {array_state}."))
-    cpu_temperature = _number(_nested(metrics, "cpu", "temperature_c"))
-    if cpu_temperature >= 85:
-        severity = "critical" if cpu_temperature >= 90 else "warning"
-        alerts.append(("cpu-temperature", severity, f"{name}: CPU-Temperatur bei {cpu_temperature:.0f} °C ({severity})."))
     disks = metrics.get("disks")
     if isinstance(disks, list):
         for disk in disks:

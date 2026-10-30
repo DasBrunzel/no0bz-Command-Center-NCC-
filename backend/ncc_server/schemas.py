@@ -227,6 +227,9 @@ class AlertPolicyResponse(BaseModel):
     memory_threshold: int
     gpu_threshold: int
     disk_threshold: int
+    cpu_temperature_threshold: int = 90
+    gpu_temperature_threshold: int = 85
+    drive_temperature_threshold: int = 65
 
 
 class AlertPolicyUpdateRequest(AlertPolicyResponse):
@@ -236,6 +239,31 @@ class AlertPolicyUpdateRequest(AlertPolicyResponse):
         if not 50 <= value <= 100:
             raise ValueError("Grenzwerte müssen zwischen 50 und 100 liegen")
         return value
+
+    @field_validator("cpu_temperature_threshold", "gpu_temperature_threshold", "drive_temperature_threshold")
+    @classmethod
+    def validate_temperature(cls, value: int) -> int:
+        if not 40 <= value <= 110:
+            raise ValueError("Temperatur-Grenzwerte müssen zwischen 40 und 110 °C liegen")
+        return value
+
+
+class TelegramAccountResponse(BaseModel):
+    available: bool
+    linked: bool
+    telegram_name: str | None = None
+    weekly_recap: bool = True
+    bot_username: str | None = None
+
+
+class TelegramLinkCodeResponse(BaseModel):
+    code: str
+    expires_at: datetime
+    deep_link: str | None = None
+
+
+class TelegramAccountUpdateRequest(BaseModel):
+    weekly_recap: bool
 
 
 class TelegramSettingsResponse(BaseModel):

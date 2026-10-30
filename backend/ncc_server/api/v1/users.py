@@ -20,7 +20,15 @@ from ncc_server.auth import (
     require_commander_access,
     require_dashboard_identity,
 )
-from ncc_server.models import AccountInvite, AuditEvent, DashboardSession, Node, User, utc_now
+from ncc_server.models import (
+    AccountInvite,
+    AuditEvent,
+    DashboardSession,
+    Node,
+    TelegramLink,
+    User,
+    utc_now,
+)
 from ncc_server.schemas import (
     AccountInviteCreatedResponse,
     AccountInviteCreateRequest,
@@ -31,7 +39,12 @@ from ncc_server.schemas import (
     DashboardUserPasswordRequest,
     DashboardUserResponse,
     DashboardUserUpdateRequest,
+    TelegramAccountResponse,
+    TelegramAccountUpdateRequest,
+    TelegramLinkCodeResponse,
 )
+from ncc_server.telegram import telegram_bot_available
+from ncc_server.telegram_bot import bot_username, create_link_code, unlink_user
 from ncc_server.user_passwords import hash_password, verify_password
 
 router = APIRouter(prefix="/users", tags=["dashboard users"])
@@ -62,6 +75,69 @@ async def me(identity: DashboardIdentity = Depends(require_dashboard_identity)) 
         role=identity.access_role, active=True, managed=identity.user_id is not None,
         full_statistics=identity.full_statistics,
     )
+
+
+def _personal_account(identity: DashboardIdentity) -> str:
+    if identity.user_id is None:
+        raise HTTPException(status_code=403, detail="a personal account is required")
+    return identity.user_id
+
+
+@router.get("/me/telegram", response_model=TelegramAccountResponse)
+async def my_telegram(
+    request: Request,
+    identity: DashboardIdentity = Depends(require_dashboard_identity),
+    session: Session = Depends(database_session),
+) -> TelegramAccountResponse:
+    settings = request.app.state.server_settings
+    link = session.scalar(select(TelegramLink).where(TelegramLink.user_id == identity.user_id)) if identity.user_id else None
+    return TelegramAccountResponse(
+        available=telegram_bot_available(settings) and identity.user_id is not None,
+        linked=link is not None,
+        telegram_name=link.telegram_name if link else None,
+        weekly_recap=link.weekly_recap if link else True,
+        bot_username=await bot_username(settings),
+    )
+
+
+@router.post("/me/telegram/link", response_model=TelegramLinkCodeResponse,
+             dependencies=[Depends(limited("telegram-link-code", 10))])
+async def create_telegram_link(
+    request: Request,
+    identity: DashboardIdentity = Depends(require_dashboard_identity),
+    session: Session = Depends(database_session),
+) -> TelegramLinkCodeResponse:
+    user_id = _personal_account(identity)
+    settings = request.app.state.server_settings
+    if not telegram_bot_available(settings):
+        raise HTTPException(status_code=503, detail="Telegram ist auf dem Server nicht eingerichtet")
+    code, expires = create_link_code(session, user_id)
+    username = await bot_username(settings)
+    return TelegramLinkCodeResponse(code=code, expires_at=expires, deep_link=f"https://t.me/{username}?start={code}" if username else None)
+
+
+@router.patch("/me/telegram", response_model=TelegramAccountResponse)
+async def update_my_telegram(
+    payload: TelegramAccountUpdateRequest,
+    request: Request,
+    identity: DashboardIdentity = Depends(require_dashboard_identity),
+    session: Session = Depends(database_session),
+) -> TelegramAccountResponse:
+    user_id = _personal_account(identity)
+    link = session.scalar(select(TelegramLink).where(TelegramLink.user_id == user_id))
+    if link is None:
+        raise HTTPException(status_code=404, detail="no Telegram chat linked")
+    link.weekly_recap = payload.weekly_recap
+    session.commit()
+    return await my_telegram(request, identity, session)
+
+
+@router.delete("/me/telegram", status_code=204)
+async def unlink_my_telegram(
+    identity: DashboardIdentity = Depends(require_dashboard_identity),
+    session: Session = Depends(database_session),
+) -> None:
+    unlink_user(session, _personal_account(identity))
 
 
 @router.get("", response_model=list[DashboardUserResponse], dependencies=[Depends(require_commander_access)])

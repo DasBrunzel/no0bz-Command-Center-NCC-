@@ -51,6 +51,7 @@ import "./concept/styles.css";
 import "./design.css";
 import { Icon as ConceptIcon, Meter as ConceptMeter, SectionHead as ConceptSectionHead, Sparkline as ConceptSparkline, Status as ConceptStatus } from "./concept/components";
 import { HardwareStatistics } from "./HardwareStats";
+import { TelegramConnect } from "./TelegramConnect";
 import { CpuCard, DrivesCard, GpuCard, MainboardCard, MemoryCard, type SensorLabels, type SensorRole } from "./HardwareSensors";
 import { activeGamingUntil, NowPlayingCard, NowPlayingStrip, PlaytimeStatistics, type GameTracking, type NowPlaying } from "./Games";
 import dashboardPackage from "../package.json";
@@ -189,6 +190,9 @@ type AlertPolicy = {
   cpu_threshold: number;
   memory_threshold: number;
   gpu_threshold: number;
+  cpu_temperature_threshold?: number;
+  gpu_temperature_threshold?: number;
+  drive_temperature_threshold?: number;
   disk_threshold: number;
 };
 type TelegramSettings = {
@@ -1877,6 +1881,7 @@ function SettingsPage({
         <p>Agenten melden die tatsächlich installierte Payload-Version. Ein neuer Dashboard-Build ändert diese Angaben nicht.</p>
       </section>
       <DashboardUsers token={token} identity={identity} canManage={canManageReleases} />
+      <TelegramConnect token={token} isFriend={identity?.role === "friend"} hasAccount={!!identity?.user_id} />
       <section className="surface settings-card">
         <header className="section-head">
           <div>
@@ -1975,6 +1980,26 @@ function SettingsPage({
                   }
                 />
                 <span>%</span>
+              </label>
+            ))}
+            <span className="policy-subhead">Temperatur <small>gilt auch im Gaming Mode</small></span>
+            {(
+              [
+                ["cpu_temperature_threshold", "CPU", 90],
+                ["gpu_temperature_threshold", "GPU", 85],
+                ["drive_temperature_threshold", "SSD", 65],
+              ] as const
+            ).map(([key, label, fallback]) => (
+              <label key={key}>
+                <span className="policy-label">{label}</span>
+                <input
+                  type="number"
+                  min="40"
+                  max="110"
+                  value={draft[key] ?? fallback}
+                  onChange={(event) => setDraft({ ...draft, [key]: Number(event.target.value) })}
+                />
+                <span>°C</span>
               </label>
             ))}
             <button className="primary" type="submit">

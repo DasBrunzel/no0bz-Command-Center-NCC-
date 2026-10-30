@@ -23,15 +23,18 @@ _KIND_LABELS = {
     "agent-network-outlier": "Unplausible Netzwerkzähler",
     "unraid-array": "Unraid-Array",
     "cpu-temperature": "CPU-Temperatur",
+    "gpu-temperature": "GPU-Temperatur",
 }
 
 
 def telegram_is_configured(settings: ServerSettings) -> bool:
-    return bool(
-        settings.telegram_enabled
-        and settings.telegram_bot_token.get_secret_value()
-        and settings.telegram_chat_id.strip()
-    )
+    """The server owner's own chat from server.env is set up."""
+    return bool(telegram_bot_available(settings) and settings.telegram_chat_id.strip())
+
+
+def telegram_bot_available(settings: ServerSettings) -> bool:
+    """Accounts can link their own chats; no server-owner chat needed."""
+    return bool(settings.telegram_enabled and settings.telegram_bot_token.get_secret_value())
 
 
 def get_telegram_settings(session: Session) -> TelegramNotificationSettings:
@@ -75,7 +78,10 @@ def format_telegram_alert(
         title = preferences.warning_title if preferences else "NCC WARNUNG"
         heading = f"🟠 <b>{escape(title)}</b>"
         priority = "Warnung"
-    event = _KIND_LABELS.get(notification.kind, notification.kind.replace("-", " ").title())
+    if notification.kind.startswith(("drive-temperature-", "disk-temperature-")):
+        event = "Laufwerkstemperatur"
+    else:
+        event = _KIND_LABELS.get(notification.kind, notification.kind.replace("-", " ").title())
     prefix = f"{notification.node_name}: "
     detail = notification.message.removeprefix(prefix)
     footer = preferences.footer if preferences else "NCC {version}"
@@ -98,21 +104,24 @@ async def send_telegram_alert(
     settings: ServerSettings,
     notification: AlertNotification,
     preferences: TelegramNotificationSettings | None = None,
+    chat_id: str | None = None,
+) -> bool:
+    """Send to the given chat, or to the server owner's chat from server.env."""
+    target = chat_id or settings.telegram_chat_id.strip()
+    if not telegram_bot_available(settings) or not target:
+        return False
+    return await send_telegram_message(settings, target, format_telegram_alert(notification, preferences))
+
+
+async def send_telegram_message(
+    settings: ServerSettings, chat_id: str, text: str, transport: httpx.AsyncBaseTransport | None = None,
 ) -> bool:
     token = settings.telegram_bot_token.get_secret_value()
-    chat_id = settings.telegram_chat_id.strip()
-    if not telegram_is_configured(settings):
-        return False
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=10.0, transport=transport) as client:
             response = await client.post(
                 f"https://api.telegram.org/bot{token}/sendMessage",
-                json={
-                    "chat_id": chat_id,
-                    "text": format_telegram_alert(notification, preferences),
-                    "parse_mode": "HTML",
-                    "disable_web_page_preview": True,
-                },
+                json={"chat_id": chat_id, "text": text, "parse_mode": "HTML", "disable_web_page_preview": True},
             )
         return response.is_success
     except httpx.HTTPError:

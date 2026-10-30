@@ -18,7 +18,8 @@ from ncc_server.config import ServerSettings, get_server_settings
 from ncc_server.database import Database
 from ncc_server.game_metadata import refresh_game_metadata
 from ncc_server.hardware_stats import backfill_hardware_rollups
-from ncc_server.telegram import get_telegram_settings, send_telegram_alert
+from ncc_server.telegram import get_telegram_settings, send_telegram_alert, telegram_bot_available
+from ncc_server.telegram_bot import alert_recipients, poll_updates, send_weekly_recaps
 from ncc_server.unraid_service import collect_unraid
 
 STATIC_DIR = Path(__file__).with_name("static")
@@ -40,6 +41,7 @@ def create_app(
         unraid_task = asyncio.create_task(_unraid_loop(active_database, active_settings))
         game_task = asyncio.create_task(_game_metadata_loop(active_database, active_settings))
         rollup_task = asyncio.create_task(_rollup_backfill_loop(active_database))
+        bot_task = asyncio.create_task(_telegram_bot_loop(active_database, active_settings))
         try:
             yield
         finally:
@@ -47,6 +49,9 @@ def create_app(
             unraid_task.cancel()
             game_task.cancel()
             rollup_task.cancel()
+            bot_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await bot_task
             with suppress(asyncio.CancelledError):
                 await game_task
             with suppress(asyncio.CancelledError):
@@ -102,7 +107,14 @@ async def _alert_loop(database: Database, settings: ServerSettings) -> None:
                 notifications = evaluate_alerts(session, settings)
                 telegram_settings = get_telegram_settings(session)
             for notification in notifications:
-                if telegram_settings.enabled and await send_telegram_alert(settings, notification, telegram_settings):
+                if not telegram_settings.enabled:
+                    continue
+                with database.session() as session:
+                    chats = alert_recipients(session, settings, notification)
+                delivered = False
+                for chat_id in chats:
+                    delivered = await send_telegram_alert(settings, notification, telegram_settings, chat_id) or delivered
+                if delivered:
                     with database.session() as session:
                         mark_notified(session, notification.alert_id, notification.state)
         except Exception as exc:
@@ -144,3 +156,17 @@ async def _rollup_backfill_loop(database: Database) -> None:
             added = 0
         if not added:
             await asyncio.sleep(285)
+
+
+async def _telegram_bot_loop(database: Database, settings: ServerSettings) -> None:
+    """Answer bot messages (account linking) and send the Monday recap."""
+    if not telegram_bot_available(settings):
+        return
+    await asyncio.sleep(5)
+    while True:
+        try:
+            await send_weekly_recaps(database, settings)
+            await poll_updates(database, settings)
+        except Exception as exc:
+            logger.warning("Telegram bot loop failed: %s", exc)
+            await asyncio.sleep(30)

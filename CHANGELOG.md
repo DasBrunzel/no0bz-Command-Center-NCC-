@@ -222,6 +222,22 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 - Nach dem Öffnen eines Pairing-Links meldet das Dashboard, ob die Kopplung
   gelungen ist, abgelaufen ist oder das Gerät einem anderen Konto gehört.
 - Tests setzen den prozessweiten Rate-Limiter vor jedem Test zurück.
+- Temperatur-Warnungen für CPU, GPU und jedes Laufwerk mit eigenen
+  Grenzwerten unter „Grenzwerte“ (Standard 90, 85 und 65 °C, kritisch ab fünf
+  Grad darüber). Sie gelten auch im Gaming Mode, der nur Auslastungswarnungen
+  unterdrückt. Die bisher feste Unraid-CPU-Grenze folgt dem Grenzwert; die
+  HDD-Grenzen des Unraid-Arrays bleiben.
+- Telegram pro Konto: Unter Einstellungen erzeugt jedes Benutzerkonto einen
+  Verbindungscode und schickt ihn dem NCC-Bot, per Direktlink oder als
+  Nachricht; nur private Chats werden verbunden, `/stop` trennt wieder. Der
+  Server fragt dafür den Bot regelmäßig nach neuen Nachrichten. Der Chat aus
+  `server.env` erhält weiterhin alle Warnungen; ein verbundenes Freunde-Konto
+  nur die seiner eigenen Geräte, ohne doppelte Zustellung.
+- Wochenrückblick per Telegram jeden Montag ab 9 Uhr Serverzeit, einmal pro
+  Woche und nachgeholt, falls der Server montags aus war: Spielzeit,
+  meistgespieltes Spiel, heißeste CPU, GPU und SSD sowie die Energie von CPU
+  und GPU, jeweils für die Geräte des Empfängers. Pro Konto abschaltbar.
+  Migration `20261030_0024`.
 - Die Backend-Typprüfung verwendet für gespeicherte Warnungsstufen eine
   explizite Typangabe statt einer zwischen Python-Versionen instabilen
   `type: ignore`-Ausnahme.
