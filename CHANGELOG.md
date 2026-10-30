@@ -2,6 +2,14 @@
 
 Alle wesentlichen Änderungen werden hier dokumentiert.
 
+## [0.6.1] – 2026-10-30
+
+- Der Windows-Payload wird als Ordner (PyInstaller `--onedir`) statt als
+  selbstentpackende Einzeldatei ausgeliefert. Microsoft Defender hatte die
+  Einzeldatei per Machine-Learning-Heuristik als
+  `Trojan:Win32/Bearfoos.A!ml` entfernt. `payload.json`, der Pfad des
+  Hardware-Helfers und Core bleiben unverändert.
+
 ## [0.6.0] – 2026-10-30
 
 Erste reguläre 0.6-Version zum Weitergeben. Alle Komponenten (Server, Dienst,

@@ -2,7 +2,7 @@
 param(
     [Parameter(Mandatory = $true)] [string]$PrivateKey,
     [Parameter(Mandatory = $true)] [string]$KeyId,
-    [string]$Version = "0.6.0",
+    [string]$Version = "0.6.1",
     [ValidateSet('windows')] [string]$Platform = 'windows',
     [string]$ArtifactUrl = '',
     [string]$OutputDirectory = ''
@@ -60,7 +60,9 @@ try {
         throw "Die Python-Laufzeit fuer den Windows-Payload ist unvollstaendig: $($missingRuntimes -join ', ')"
     }
     $pyInstallerArguments = @(
-        '--noconfirm', '--clean', '--onefile', '--name', 'ncc-payload',
+        # --onedir: a self-extracting --onefile build running as SYSTEM trips
+        # Defender's machine-learning heuristics (Trojan:Win32/Bearfoos.A!ml).
+        '--noconfirm', '--clean', '--onedir', '--name', 'ncc-payload',
         '--paths', (Join-Path $project 'backend'),
         '--collect-submodules', 'ncc',
         '--collect-submodules', 'ncc_agent',
@@ -77,7 +79,7 @@ try {
     )
     & $python -m PyInstaller @pyInstallerArguments
     if ($LASTEXITCODE -ne 0) { throw 'PyInstaller konnte den NCC-Payload nicht bauen.' }
-    $payloadExecutable = Join-Path $dist 'ncc-payload.exe'
+    $payloadExecutable = Join-Path $dist 'ncc-payload\ncc-payload.exe'
     $smokeRoot = Join-Path $work 'payload-startup-smoke'
     $smokeState = Join-Path $smokeRoot 'state'
     $smokeData = Join-Path $smokeRoot 'data'
@@ -119,7 +121,9 @@ try {
         if (!$payloadProcess.HasExited) { $payloadProcess.Kill(); $payloadProcess.WaitForExit() }
     }
     $content = Join-Path $work 'content'; New-Item -ItemType Directory -Force -Path $content | Out-Null
-    Copy-Item (Join-Path $dist 'ncc-payload.exe') (Join-Path $content 'ncc-payload.exe')
+    # The executable and its _internal folder sit at the payload root, so
+    # payload.json and the hardware helper path stay as before.
+    Copy-Item (Join-Path $dist 'ncc-payload\*') $content -Recurse
     if ($Platform -eq 'windows') {
         if (!(Test-Path $hardwareProject)) { throw "LibreHardwareMonitor helper project fehlt: $hardwareProject" }
         $hardwareOutput = Join-Path $content 'hardware'
