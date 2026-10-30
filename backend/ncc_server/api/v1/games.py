@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, undefer
 from ncc_server.auth import database_session, require_commander_access, require_dashboard_access
 from ncc_server.fleet_service import fleet_node
 from ncc_server.game_service import correct_game_match, playtime_statistics, update_game_settings
+from ncc_server.hardware_stats import hardware_statistics
 from ncc_server.models import Game
 from ncc_server.schemas import (
     FleetGameSettingsRequest,
@@ -48,6 +49,16 @@ async def game_statistics(
     session: Session = Depends(database_session),
 ) -> dict[str, Any]:
     return playtime_statistics(session, days=days, node_id=node_id, utc_offset_minutes=utc_offset_minutes)
+
+
+@router.get("/hardware/stats")
+async def hardware_stats(
+    days: int = Query(default=30, ge=0, le=3660),
+    node_id: str | None = Query(default=None, max_length=36),
+    utc_offset_minutes: int = Query(default=0, ge=-840, le=840),
+    session: Session = Depends(database_session),
+) -> dict[str, Any]:
+    return hardware_statistics(session, days=days, node_id=node_id, utc_offset_minutes=utc_offset_minutes)
 
 
 @router.get("/games", response_model=list[GameResponse])

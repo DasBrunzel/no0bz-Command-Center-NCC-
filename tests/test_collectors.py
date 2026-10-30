@@ -207,4 +207,4 @@ def test_lhm_reports_component_names_and_drive_numbers() -> None:
     }
     assert metrics["hardware"]["storage"] == [{"name": "CT2000P3SSD8", "temperature_c": 36.0, "disk_number": 3}]
     assert _is_volume_root("C:\\") and _is_volume_root("D:")
-    assert not _is_volume_root("D:\GoogleDrive\\")
+    assert not _is_volume_root("D:\\GoogleDrive\\")

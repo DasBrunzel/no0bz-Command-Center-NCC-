@@ -17,6 +17,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ncc_server.hardware_metrics import hardware_values, system_power_w
 from ncc_server.models import AuditEvent, Game, GameSession, Node, utc_now
 
 # Points of the same game closer than this belong to one session. It also
@@ -26,6 +27,8 @@ SESSION_GAP = timedelta(minutes=5)
 AUTO_GAMING_GRACE = timedelta(minutes=5)
 # Buffered points from the past must not switch gaming mode on again.
 AUTO_GAMING_RECENT = timedelta(minutes=2)
+# A longer gap between two points is not counted as energy drawn.
+ENERGY_GAP = timedelta(seconds=60)
 # The now-playing card disappears once no point arrived for this long.
 NOW_PLAYING_STALE = timedelta(seconds=90)
 GAME_TRACKING_LEVELS = ("off", "presence", "titles")
@@ -86,17 +89,24 @@ def record_game_point(
         and recorded_at >= _aware(latest.started_at) - SESSION_GAP
     ):
         current = latest
-        current.started_at = min(_aware(current.started_at), recorded_at)
-        current.ended_at = max(_aware(current.ended_at), recorded_at)
     else:
         current = GameSession(node_id=node.id, game_id=game_id, started_at=recorded_at, ended_at=recorded_at, sample_count=0, hardware={})
         session.add(current)
+    previous_end = _aware(current.ended_at) if current.sample_count else None
     current.sample_count += 1
     hardware = dict(current.hardware or {})
-    for name, value in _hardware_values(metrics).items():
+    readings = hardware_values(metrics, node.sensor_labels)
+    for name, value in readings.items():
         total, count, peak = hardware.get(name, [0.0, 0.0, value])
         hardware[name] = [round(total + value, 3), count + 1, max(peak, value)]
+    power = system_power_w(readings)
+    if power is not None and previous_end is not None and timedelta(0) < recorded_at - previous_end <= ENERGY_GAP:
+        # Stored as [Wh, 0, 0] so it travels with the other readings.
+        energy = hardware.get("energy_wh", [0.0, 0.0, 0.0])
+        hardware["energy_wh"] = [round(energy[0] + power * (recorded_at - previous_end).total_seconds() / 3600, 4), 0.0, 0.0]
     current.hardware = hardware
+    current.started_at = min(_aware(current.started_at), recorded_at)
+    current.ended_at = max(_aware(current.ended_at), recorded_at)
     if node.auto_gaming_mode and recorded_at >= utc_now() - AUTO_GAMING_RECENT:
         until = recorded_at + AUTO_GAMING_GRACE
         if node.auto_gaming_until is None or _aware(node.auto_gaming_until) < until:
@@ -213,12 +223,15 @@ def playtime_statistics(
             "launcher": game.launcher if game else None,
             "has_artwork": bool(game and game.header_content_type),
             "genres": list(game.genres or []) if game else [],
-            "seconds": 0.0, "sessions": 0, "last_played_at": end, "hardware": {},
+            "seconds": 0.0, "sessions": 0, "last_played_at": end, "hardware": {}, "energy_wh": 0.0,
         })
         entry["seconds"] += seconds
         entry["sessions"] += 1
         entry["last_played_at"] = max(entry["last_played_at"], end)
         for name, (value_sum, count, peak) in (item.hardware or {}).items():
+            if name == "energy_wh":
+                entry["energy_wh"] += value_sum
+                continue
             aggregate = entry["hardware"].setdefault(name, [0.0, 0.0, peak])
             aggregate[0] += value_sum
             aggregate[1] += count
@@ -230,6 +243,7 @@ def playtime_statistics(
     games = sorted(per_game.values(), key=lambda value: value["seconds"], reverse=True)
     for entry in games:
         entry["seconds"] = round(entry["seconds"])
+        entry["energy_wh"] = round(entry["energy_wh"], 1)
         entry["hardware"] = {
             name: {"average": round(value_sum / count, 1), "max": round(peak, 1)}
             for name, (value_sum, count, peak) in entry["hardware"].items() if count
@@ -281,36 +295,6 @@ def _game_for(session: Session, reported: ReportedGame) -> Game:
         session.add(game)
         session.flush()
     return game
-
-
-def _hardware_values(metrics: dict[str, object]) -> dict[str, float]:
-    raw_cpu = metrics.get("cpu")
-    cpu: dict[str, object] = raw_cpu if isinstance(raw_cpu, dict) else {}
-    gpu = _first(metrics.get("gpus"))
-    lhm_gpu = _first(metrics.get("lhm_gpus"))
-    candidates = {
-        "cpu_percent": cpu.get("percent"),
-        "cpu_temperature_c": cpu.get("temperature_c"),
-        "cpu_power_w": cpu.get("power_w"),
-        "gpu_percent": gpu.get("percent"),
-        # LibreHardwareMonitor has the more precise GPU sensors where present.
-        "gpu_temperature_c": _number(lhm_gpu.get("temperature_c")) or gpu.get("temperature_c"),
-        "gpu_power_w": _number(lhm_gpu.get("power_w")) or gpu.get("power_w"),
-    }
-    return {
-        name: float(value) for name, value in candidates.items()
-        if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0
-    }
-
-
-def _number(value: object) -> float | None:
-    return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
-
-
-def _first(value: object) -> dict[str, object]:
-    if isinstance(value, list) and value and isinstance(value[0], dict):
-        return value[0]
-    return {}
 
 
 def _distribute(start: datetime, end: datetime, per_day: dict[str, float], heatmap: list[list[float]]) -> None:

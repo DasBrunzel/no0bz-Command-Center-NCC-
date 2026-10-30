@@ -181,6 +181,20 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 - Laufwerksraten werden je nach Größe in KB/s oder MB/s angezeigt statt als
   „0.0“. In Ordner eingebundene Laufwerke, etwa Google Drive unter `D:\`,
   erscheinen nicht mehr doppelt.
+- Entwicklungs-Pre-Release `v0.6.0-beta.8-dev.6`: signierter Windows-Payload
+  `0.6.0-beta.8-dev.6` mit Mainboard-Modell und Laufwerksnummern; auf HorstPC
+  gesund aktiviert.
+- Neue Statistik-Ansicht „Hardware“ pro Gerät: Temperaturverlauf von CPU, GPU,
+  SSD und RAM (Höchstwert pro Tag), Auslastung und Leistungsaufnahme (Ø pro
+  Tag), Energie von CPU und GPU sowie eine Rekord-Tabelle mit Durchschnitt,
+  Höchstwert und Zeitpunkt. Der Server fasst dafür jeden Messpunkt beim
+  Empfang stündlich zusammen und rechnet die bereits gespeicherte Telemetrie im
+  Hintergrund nach, in Paketen und ohne den Betrieb aufzuhalten. Migration
+  `20261030_0022`.
+- Die Spielstatistik erfasst pro Spiel zusätzlich CPU-Leistung, CPU-Lüfter,
+  GPU-Hotspot, RAM-Temperatur und die Energie von CPU und GPU.
+- Diagrammfarben folgen einer festen, auf Farbsehschwäche geprüften
+  Reihenfolge (CPU, GPU, SSD, RAM) in beiden Farbschemata.
 - Die Backend-Typprüfung verwendet für gespeicherte Warnungsstufen eine
   explizite Typangabe statt einer zwischen Python-Versionen instabilen
   `type: ignore`-Ausnahme.

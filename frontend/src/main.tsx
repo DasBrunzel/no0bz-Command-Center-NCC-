@@ -50,6 +50,7 @@ import "./device-lifecycle.css";
 import "./concept/styles.css";
 import "./design.css";
 import { Icon as ConceptIcon, Meter as ConceptMeter, SectionHead as ConceptSectionHead, Sparkline as ConceptSparkline, Status as ConceptStatus } from "./concept/components";
+import { HardwareStatistics } from "./HardwareStats";
 import { CpuCard, DrivesCard, GpuCard, MainboardCard, MemoryCard, type SensorLabels, type SensorRole } from "./HardwareSensors";
 import { activeGamingUntil, NowPlayingCard, NowPlayingStrip, PlaytimeStatistics, type GameTracking, type NowPlaying } from "./Games";
 import dashboardPackage from "../package.json";
@@ -199,6 +200,7 @@ type ChatAttachment = { name: string; content_type: string; size: number; url: s
 type ChatMessage = { message_id: string; sender_node_id: string | null; sender_user_id: string | null; sender_name: string; body: string; body_format: "plain" | "markdown"; attachment: ChatAttachment | null; created_at: string };
 type ChatParticipant = { user_id: string | null; display_name: string; role: AccessRole };
 type Page = "fleet" | "explorer" | "statistics" | "alerts" | "chat" | "onboarding" | "settings";
+type StatisticsView = "fleet" | "hardware" | "playtime";
 const PAGES: Page[] = ["fleet", "explorer", "statistics", "alerts", "chat", "onboarding", "settings"];
 // Device actions reload the page. Keep the page and device per browser tab so
 // a reload returns to the same view instead of the overview.
@@ -1075,10 +1077,13 @@ function StatisticsPage({
   trafficResetRevision: number;
   canManage: boolean;
 }) {
-  const [view, setView] = useState<"fleet" | "playtime">(() => {
-    try { return localStorage.getItem("ncc-statistics-view") === "playtime" ? "playtime" : "fleet"; } catch { return "fleet"; }
+  const [view, setView] = useState<StatisticsView>(() => {
+    try {
+      const saved = localStorage.getItem("ncc-statistics-view");
+      return saved === "playtime" || saved === "hardware" ? saved : "fleet";
+    } catch { return "fleet"; }
   });
-  const chooseView = (value: "fleet" | "playtime") => {
+  const chooseView = (value: StatisticsView) => {
     setView(value);
     try { localStorage.setItem("ncc-statistics-view", value); } catch { /* Only a convenience. */ }
   };
@@ -1237,10 +1242,10 @@ function StatisticsPage({
     ? availability.reduce((total, entry) => total + entry.value, 0) / availability.length
     : 0;
   return <>
-    <div className="page-intro"><div><div className="eyebrow">INSIGHTS / FLEET</div><h1>Muster erkennen.</h1><p>{view === "playtime" ? "Welche Spiele wann und wie lange laufen, mit den Hardware-Werten dazu." : "Verfügbarkeit, Rekorde und Traffic über die gesamte Fleet."}</p></div>
-      <div className="segmented stats-view-switch"><button type="button" className={view === "fleet" ? "selected" : ""} onClick={() => chooseView("fleet")}>Fleet</button><button type="button" className={view === "playtime" ? "selected" : ""} onClick={() => chooseView("playtime")}>Spielzeit</button></div>
+    <div className="page-intro"><div><div className="eyebrow">INSIGHTS / FLEET</div><h1>Muster erkennen.</h1><p>{view === "hardware" ? "Temperaturen, Auslastung und Leistung eines Geräts über die Zeit, mit Rekorden." : view === "playtime" ? "Welche Spiele wann und wie lange laufen, mit den Hardware-Werten dazu." : "Verfügbarkeit, Rekorde und Traffic über die gesamte Fleet."}</p></div>
+      <div className="segmented stats-view-switch"><button type="button" className={view === "fleet" ? "selected" : ""} onClick={() => chooseView("fleet")}>Fleet</button><button type="button" className={view === "hardware" ? "selected" : ""} onClick={() => chooseView("hardware")}>Hardware</button><button type="button" className={view === "playtime" ? "selected" : ""} onClick={() => chooseView("playtime")}>Spielzeit</button></div>
     </div>
-    {view === "playtime" ? <PlaytimeStatistics nodes={nodes} token={token} canManage={canManage}/> : <>
+    {view === "hardware" ? <HardwareStatistics nodes={nodes} token={token}/> : view === "playtime" ? <PlaytimeStatistics nodes={nodes} token={token} canManage={canManage}/> : <>
     <div className="stats-summary">
       <div><small>Verfügbarkeit seit Aufnahme</small><strong>{averageAvailability.toFixed(2)}<span>%</span></strong><p>Durchschnitt aller OS-Profile</p></div>
       <div><small>Download in diesem Monat</small><strong>{trafficAvailable ? trafficBytes(totalReceived) : "…"}</strong><p>{trafficAvailable ? `${evaluatedDevices}/${trafficDevices.length} Geräte ausgewertet` : "Monatswerte werden berechnet"}</p></div>

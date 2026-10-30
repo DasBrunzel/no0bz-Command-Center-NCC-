@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ncc_server.game_service import prepare_game_metric, record_game_point
+from ncc_server.hardware_stats import record_hardware_point
 from ncc_server.models import AgentToken, AuditEvent, Node, PhysicalDevice, TelemetryPoint, utc_now
 from ncc_server.schemas import (
     NodeEnrollmentRequest,
@@ -181,6 +182,7 @@ def store_telemetry(
             accepted += 1
             if reported_game is not None:
                 record_game_point(session, node, point.recorded_at, reported_game, point.metrics)
+            record_hardware_point(session, node, point.recorded_at, point.metrics)
     now = utc_now()
     node.last_seen_at = now
     node.updated_at = now

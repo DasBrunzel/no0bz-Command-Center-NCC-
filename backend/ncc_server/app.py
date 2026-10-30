@@ -17,6 +17,7 @@ from ncc_server.api.v1 import router as v1_router
 from ncc_server.config import ServerSettings, get_server_settings
 from ncc_server.database import Database
 from ncc_server.game_metadata import refresh_game_metadata
+from ncc_server.hardware_stats import backfill_hardware_rollups
 from ncc_server.telegram import get_telegram_settings, send_telegram_alert
 from ncc_server.unraid_service import collect_unraid
 
@@ -38,14 +39,18 @@ def create_app(
         alert_task = asyncio.create_task(_alert_loop(active_database, active_settings))
         unraid_task = asyncio.create_task(_unraid_loop(active_database, active_settings))
         game_task = asyncio.create_task(_game_metadata_loop(active_database, active_settings))
+        rollup_task = asyncio.create_task(_rollup_backfill_loop(active_database))
         try:
             yield
         finally:
             alert_task.cancel()
             unraid_task.cancel()
             game_task.cancel()
+            rollup_task.cancel()
             with suppress(asyncio.CancelledError):
                 await game_task
+            with suppress(asyncio.CancelledError):
+                await rollup_task
             with suppress(asyncio.CancelledError):
                 await alert_task
             with suppress(asyncio.CancelledError):
@@ -125,3 +130,17 @@ async def _game_metadata_loop(database: Database, settings: ServerSettings) -> N
         except Exception as exc:
             logger.warning("Game metadata refresh failed: %s", exc)
         await asyncio.sleep(40)
+
+
+async def _rollup_backfill_loop(database: Database) -> None:
+    """Add stored telemetry to the hourly statistics, a batch at a time."""
+    while True:
+        await asyncio.sleep(15)
+        try:
+            # The database work is synchronous; keep the event loop free.
+            added = await asyncio.to_thread(backfill_hardware_rollups, database)
+        except Exception as exc:
+            logger.warning("Hardware statistics backfill failed: %s", exc)
+            added = 0
+        if not added:
+            await asyncio.sleep(285)

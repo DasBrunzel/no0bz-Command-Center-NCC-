@@ -74,6 +74,11 @@ class Node(Base):
     auto_gaming_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # User-chosen names and roles for unlabeled sensors, keyed like "fan:Fan #2".
     sensor_labels: Mapped[dict[str, dict[str, str | None]]] = mapped_column(JSON, default=dict, nullable=False)
+    # Hourly statistics: points from this time on are added live, older ones
+    # by the backfill, which walks back until it reaches the first point.
+    rollup_live_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    rollup_backfilled_before: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    rollup_backfill_done: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     physical_device_id: Mapped[str | None] = mapped_column(
         ForeignKey("physical_devices.id", ondelete="SET NULL")
     )
@@ -117,6 +122,24 @@ class Game(Base):
     metadata_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     metadata_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
+class HardwareHourly(Base):
+    """Per-node hourly sums and peaks of the hardware readings in statistics."""
+
+    __tablename__ = "hardware_hourly"
+    __table_args__ = (Index("ux_hardware_hourly_node_hour", "node_id", "hour", unique=True),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    node_id: Mapped[str] = mapped_column(ForeignKey("nodes.id", ondelete="CASCADE"), nullable=False)
+    hour: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    sample_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # {metric: [sum, count, max]}
+    values: Mapped[dict[str, list[float]]] = mapped_column(JSON, default=dict, nullable=False)
+    # Watt-hours of CPU plus GPU, integrated between consecutive points.
+    energy_wh: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    first_point_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_point_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class GameSession(Base):

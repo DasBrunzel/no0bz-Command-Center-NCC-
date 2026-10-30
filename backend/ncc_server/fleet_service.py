@@ -17,6 +17,7 @@ from ncc_server.models import (
     FleetChatMessage,
     FleetGroup,
     GameSession,
+    HardwareHourly,
     Node,
     PhysicalDevice,
     TelemetryPoint,
@@ -493,6 +494,7 @@ def forget_fleet_node(session: Session, node_id: str) -> bool:
     session.execute(delete(AlertState).where(AlertState.node_id == node.id))
     session.execute(delete(TelemetryPoint).where(TelemetryPoint.node_id == node.id))
     session.execute(delete(GameSession).where(GameSession.node_id == node.id))
+    session.execute(delete(HardwareHourly).where(HardwareHourly.node_id == node.id))
     session.execute(delete(AgentToken).where(AgentToken.node_id == node.id))
     session.add(
         AuditEvent(

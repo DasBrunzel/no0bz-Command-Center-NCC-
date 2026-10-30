@@ -36,6 +36,7 @@ type GameEntry = {
   sessions: number;
   last_played_at: string;
   hardware: Record<string, HardwareValue>;
+  energy_wh?: number;
 };
 type PlaytimeStats = {
   days: number;
@@ -317,8 +318,8 @@ export function PlaytimeStatistics({ nodes, token, canManage }: { nodes: GameNod
         <div className="detail-card">
           <ConceptSectionHead eyebrow="Hardware" title="Werte pro Spiel" aside={<span className="muted-small">Durchschnitt und Höchstwert</span>} />
           {hardwareGames.length ? <div className="table-scroll"><table className="game-hardware">
-            <thead><tr><th>Spiel</th><th>CPU-Temp.</th><th>GPU-Temp.</th><th>GPU-Last</th><th>GPU-Leistung</th></tr></thead>
-            <tbody>{hardwareGames.map((game) => <tr key={game.game_id || "presence"}><td>{game.title}</td><td>{hw(game, "cpu_temperature_c", " °C")}</td><td>{hw(game, "gpu_temperature_c", " °C")}</td><td>{hw(game, "gpu_percent", " %")}</td><td>{hw(game, "gpu_power_w", " W")}</td></tr>)}</tbody>
+            <thead><tr><th>Spiel</th><th>CPU-Temp.</th><th>CPU-Leistung</th><th>CPU-Lüfter</th><th>GPU-Temp.</th><th>Hotspot</th><th>GPU-Last</th><th>GPU-Leistung</th><th>RAM</th><th>Energie</th></tr></thead>
+            <tbody>{hardwareGames.map((game) => <tr key={game.game_id || "presence"}><td>{game.title}</td><td>{hw(game, "cpu_temperature_c", " °C")}</td><td>{hw(game, "cpu_power_w", " W")}</td><td>{hw(game, "cpu_fan_rpm", "")}</td><td>{hw(game, "gpu_temperature_c", " °C")}</td><td>{hw(game, "gpu_hotspot_c", " °C")}</td><td>{hw(game, "gpu_percent", " %")}</td><td>{hw(game, "gpu_power_w", " W")}</td><td>{hw(game, "ram_temperature_c", " °C")}</td><td>{game.energy_wh ? (game.energy_wh >= 1000 ? `${(game.energy_wh / 1000).toFixed(1)} kWh` : `${Math.round(game.energy_wh)} Wh`) : "—"}</td></tr>)}</tbody>
           </table></div> : <div className="empty">Noch keine Sensordaten aus Spielsitzungen.</div>}
         </div>
         <div className="detail-card">

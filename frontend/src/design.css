@@ -33,6 +33,11 @@
   --radius: 10px;
   --font: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Roboto, Arial, sans-serif;
   --font-mono: "Cascadia Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  /* Chart series, fixed order: CPU, GPU, SSD, RAM. */
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
 }
 
 @media (prefers-color-scheme: light) {
@@ -56,6 +61,10 @@
     --amber: #b45309;
     --red: #c9343a;
     --shadow: rgba(20, 30, 45, 0.08);
+    --series-1: #2a78d6;
+    --series-2: #eb6834;
+    --series-3: #1baf7a;
+    --series-4: #eda100;
   }
 }
 
@@ -79,6 +88,10 @@
   --amber: #b45309;
   --red: #c9343a;
   --shadow: rgba(20, 30, 45, 0.08);
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
 }
 
 /* Typography: one readable system font, normal tracking, sensible sizes. */
@@ -541,3 +554,16 @@ button.selected {
 select option,
 select optgroup { background-color: var(--panel); color: var(--text); }
 .concept-node-page .action-menu select { background: var(--panel2); border: 1px solid var(--line); margin-top: 2px; }
+
+/* ---------- Hardware statistics ---------- */
+.line-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; font-size: 13px; color: var(--muted); margin-bottom: 10px; min-height: 20px; }
+.line-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.line-legend i { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
+.line-legend b { color: var(--text); font-variant-numeric: tabular-nums; }
+.line-legend .line-date { color: var(--text); font-weight: 600; min-width: 52px; }
+.line-plot { position: relative; padding-left: 30px; }
+.line-plot svg { width: 100%; height: 180px; display: block; overflow: visible; cursor: crosshair; }
+.line-grid { position: absolute; left: 0; top: 0; bottom: 0; width: 26px; display: flex; flex-direction: column; justify-content: space-between; font-size: 11px; color: var(--subtle); text-align: right; padding: 2px 0; }
+.line-chart .grid-line { stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.line-chart .cross-line { stroke: var(--line-strong); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.line-axis { display: flex; justify-content: space-between; padding-left: 30px; margin-top: 6px; font-size: 11px; color: var(--subtle); }
