@@ -18,7 +18,8 @@ $ErrorActionPreference = 'Stop'
 $project = Split-Path -Parent $PSScriptRoot
 $installer = Join-Path $project 'windows\installer'
 $Version = if ($Version) { $Version } else { [string]((Get-Content -LiteralPath (Join-Path $project 'frontend\package.json') -Raw | ConvertFrom-Json).version) }
-if ($Version -notmatch '^\d+\.\d+\.\d+-(?:beta|rc|alpha)\.\d+(?:-dev\.\d+)?$') { throw 'Invalid NCC Agent setup version.' }
+# Final releases such as 0.6.0 have no pre-release part (see InstallerUpdater).
+if ($Version -notmatch '^\d+\.\d+\.\d+(?:-(?:beta|rc|alpha)\.\d+(?:-dev\.\d+)?)?$') { throw 'Invalid NCC Agent setup version.' }
 if ($UpdateFeedUrl -notmatch '^https://') { throw 'Installer update feed must use HTTPS.' }
 if ($ArtifactUrl -and $ArtifactUrl -notmatch '^https://') { throw 'Installer artifact URL must use HTTPS.' }
 if (($ArtifactUrl -and -not $PrivateKey) -or ($PrivateKey -and -not $ArtifactUrl)) {

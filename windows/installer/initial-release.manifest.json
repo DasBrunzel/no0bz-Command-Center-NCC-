@@ -1,7 +1,7 @@
 {
     "channel":  "beta",
     "signature":  {
-                      "value":  "ma6AMpl2Dth2qTAgNqxGAIAvKzpivBwI75rjRfXbdm3CYVcdAjNweVWKhl6jZQJUE7F/xWg3x4a4omGIjBAHBw==",
+                      "value":  "UwTYCbtiLP/gM2/QrlC64Ggu+1gsHAwdWOy5I44nePlL6EYST+lQJnQfl3Dj6rI/AQNPRsfwWCu11V67vxn4Aw==",
                       "key_id":  "ncc-release-2026",
                       "algorithm":  "ed25519"
                   },
@@ -10,12 +10,12 @@
     "artifacts":  [
                       {
                           "architecture":  "x86_64",
-                          "payload_version":  "0.6.0-beta.8-dev.3",
-                          "sha256":  "1c10a1011a724bcb8762aa318b504f43b7cd0d5d685f8ced9d4adb91f297bf44",
-                          "size_bytes":  52441628,
+                          "payload_version":  "0.6.0",
+                          "sha256":  "b9da6c5b880d583d862314eb12446ba8ddeb8826705f6a01d83e58d5b9cc7b7a",
+                          "size_bytes":  52539573,
                           "platform":  "windows",
-                          "url":  "https://github.com/DasBrunzel/no0bz-Command-Center-NCC-/releases/download/v0.6.0-beta.8-dev.3/ncc-payload-0.6.0-beta.8-dev.3-windows-x86_64.zip"
+                          "url":  "https://github.com/DasBrunzel/no0bz-Command-Center-NCC-/releases/download/v0.6.0/ncc-payload-0.6.0-windows-x86_64.zip"
                       }
                   ],
-    "released_at":  "2026-10-29T15:42:29.9064117Z"
+    "released_at":  "2026-10-30T02:03:44.8997974Z"
 }
