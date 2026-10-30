@@ -2,7 +2,7 @@
 param(
     [Parameter(Mandatory = $true)] [string]$PrivateKey,
     [Parameter(Mandatory = $true)] [string]$KeyId,
-    [string]$Version = "0.6.0-beta.8-dev.1",
+    [string]$Version = "0.6.0",
     [ValidateSet('windows')] [string]$Platform = 'windows',
     [string]$ArtifactUrl = '',
     [string]$OutputDirectory = ''

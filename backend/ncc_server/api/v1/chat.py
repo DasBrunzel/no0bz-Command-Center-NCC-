@@ -88,4 +88,15 @@ async def attachment(message_id: str, session: Session = Depends(database_sessio
     message, path = result
     if not path.is_file():
         raise HTTPException(status_code=404, detail="attachment file not found")
-    return FileResponse(path, media_type=message.attachment_type, filename=message.attachment_name)
+    # The uploader chooses the declared type. Only types the dashboard previews
+    # keep it; HTML, SVG or scripts from someone else are always plain downloads.
+    media_type = message.attachment_type if _is_previewable(message.attachment_type) else "application/octet-stream"
+    return FileResponse(path, media_type=media_type, filename=message.attachment_name)
+
+
+_PREVIEWABLE = {"image/png", "image/jpeg", "image/gif", "image/webp", "application/pdf", "text/plain"}
+
+
+def _is_previewable(media_type: str | None) -> bool:
+    value = (media_type or "").split(";")[0].strip().lower()
+    return value in _PREVIEWABLE or value.startswith(("video/", "audio/"))

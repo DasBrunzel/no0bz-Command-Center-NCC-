@@ -2,7 +2,25 @@
 
 Alle wesentlichen Änderungen werden hier dokumentiert.
 
-## [0.6.0-beta.8-dev.1] – Laufende Entwicklung
+## [0.6.0] – 2026-10-30
+
+Erste reguläre 0.6-Version zum Weitergeben. Alle Komponenten (Server, Dienst,
+Core, Payload, Diensthost, Tray, Dashboard und Setup) tragen `0.6.0`; der
+0.5-Rückfallagent behält seinen eigenen Versionsstrang.
+
+- Der Update-Prüfer des Diensthosts erkennt finale Versionen ohne
+  Vorabkennung und stuft sie über jede Alpha-, Beta- und RC-Version gleicher
+  Nummer ein. Geräte mit älterem Diensthost (bis `0.6.0-beta.8-dev.5`) lehnen
+  eine solche Version noch als ungültig ab und brauchen das 0.6.0-Setup
+  einmalig von Hand; danach aktualisieren sie sich wieder selbst.
+- Chat-Anhänge behalten ihren Dateityp nur noch für Vorschau-Formate (Bilder,
+  PDF, Text, Audio, Video); HTML, SVG und alles andere wird als neutraler
+  Download ausgeliefert, damit ein Freund keine Seite im Dashboard-Ursprung
+  unterbringen kann.
+- Neue Anleitung `docs/freunde-anleitung.md` für Freunde und den
+  Server-Besitzer.
+
+## [0.6.0-beta.8-dev.1] – Entwicklung bis 0.6.0
 
 - Ein eigenständiger Windows-Agent-Installer wird vorbereitet. Der bisherige
   Stand baut `setup.exe` samt Tray, Core-Dienst und signiertem Start-Payload;

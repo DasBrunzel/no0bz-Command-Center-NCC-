@@ -17,8 +17,10 @@ internal sealed record InstallerRelease(
 internal static class InstallerUpdater
 {
     private const long MaximumInstallerBytes = 1024L * 1024 * 1024;
+    // A final release such as 0.6.0 has no pre-release part and is newer than
+    // every alpha, beta or rc of the same version.
     private static readonly Regex VersionPattern = new(
-        @"^(\d+)\.(\d+)\.(\d+)-(alpha|beta|rc)\.(\d+)(?:-dev\.(\d+))?$",
+        @"^(\d+)\.(\d+)\.(\d+)(?:-(alpha|beta|rc)\.(\d+)(?:-dev\.(\d+))?)?$",
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     internal static bool CheckAndLaunch(
@@ -150,8 +152,8 @@ internal static class InstallerUpdater
         var l = VersionPattern.Match(left);
         var r = VersionPattern.Match(right);
         if (!l.Success || !r.Success) throw new InvalidDataException("Installer version is invalid");
-        static int Phase(string value) => value switch { "alpha" => 0, "beta" => 1, "rc" => 2, _ => -1 };
-        static long Number(Group group) => long.TryParse(group.Value, out var number)
+        static int Phase(string value) => value switch { "alpha" => 0, "beta" => 1, "rc" => 2, "" => 3, _ => -1 };
+        static long Number(Group group) => !group.Success ? 0 : long.TryParse(group.Value, out var number)
             ? number : throw new InvalidDataException("Installer version number is invalid");
         var a = new[] { Number(l.Groups[1]), Number(l.Groups[2]), Number(l.Groups[3]),
             Phase(l.Groups[4].Value), Number(l.Groups[5]), l.Groups[6].Success ? -1 : 0,

@@ -8,5 +8,5 @@ import os
 __version__ = (
     os.environ.get("NCC_PAYLOAD_VERSION", "").strip()
     or os.environ.get("NCC_TEST_PAYLOAD_VERSION", "").strip()
-    or "0.6.0-beta.8-dev.1"
+    or "0.6.0"
 )

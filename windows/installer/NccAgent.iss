@@ -1,5 +1,5 @@
 #ifndef Version
-  #define Version "0.6.0-beta.8-dev.1"
+  #define Version "0.6.0"
 #endif
 #ifndef Stage
   #error Stage must name the prepared installer input directory.

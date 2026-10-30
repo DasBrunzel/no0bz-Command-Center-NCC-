@@ -171,3 +171,17 @@ def test_commander_grants_full_statistics_and_assigns_owners(tmp_path: Path) -> 
         assert [node["node_id"] for node in friend.get("/api/v1/fleet/nodes").json()] == [horst_id]
         users = {user["username"]: user for user in commander.get("/api/v1/users", headers=COMMANDER).json()}
         assert users["kumpel"]["device_count"] == 1
+
+
+def test_chat_attachments_from_others_never_render_as_html(tmp_path: Path) -> None:
+    _, app = _app(tmp_path)
+    upload_dir = tmp_path / "uploads"
+    app.state.server_settings.chat_upload_dir = upload_dir
+    with TestClient(app) as commander:
+        friend = _register_friend(app, commander)
+        html = friend.post("/api/v1/fleet/chat/uploads", files={"file": ("x.html", b"<script>alert(1)</script>", "text/html")}).json()
+        image = friend.post("/api/v1/fleet/chat/uploads", files={"file": ("x.png", b"\x89PNG", "image/png")}).json()
+        served = commander.get(f"/api/v1/fleet/chat/messages/{html['message_id']}/attachment", headers=COMMANDER)
+        assert served.headers["content-type"] == "application/octet-stream"
+        assert served.headers["content-disposition"].startswith("attachment")
+        assert commander.get(f"/api/v1/fleet/chat/messages/{image['message_id']}/attachment", headers=COMMANDER).headers["content-type"] == "image/png"
