@@ -142,9 +142,10 @@ async def unlink_my_telegram(
 
 @router.get("", response_model=list[DashboardUserResponse], dependencies=[Depends(require_commander_access)])
 async def list_users(session: Session = Depends(database_session)) -> list[DashboardUserResponse]:
-    counts = dict(session.execute(
+    rows = session.execute(
         select(Node.owner_user_id, func.count()).where(Node.owner_user_id.is_not(None)).group_by(Node.owner_user_id)
-    ).all())
+    ).all()
+    counts: dict[str, int] = {str(owner): int(count) for owner, count in rows}
     return [_response(user, counts.get(user.id, 0)) for user in session.scalars(select(User).order_by(User.username)).all()]
 
 
