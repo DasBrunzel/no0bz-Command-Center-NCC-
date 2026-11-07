@@ -1,0 +1,24 @@
+@layer features {
+  .settings-grid { display: grid; gap: var(--s-4); grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)); align-items: start; }
+  .settings-save { grid-column: 1 / -1; }
+  .notice { display: flex; gap: var(--s-2); align-items: flex-start; padding: var(--s-3); border-radius: var(--r-2); font-size: var(--fs-s);
+    background: color-mix(in oklch, var(--c-caution) 22%, transparent);
+    & svg { flex: none; margin-block-start: 1px; } }
+  tr[data-inactive] td { color: var(--c-ink-3); }
+
+  .threshold {
+    display: grid; grid-template-columns: 9rem minmax(0, 1fr) 4.5rem; gap: var(--s-3); align-items: center;
+    @container (width < 26rem) { grid-template-columns: 1fr 4.5rem; & input { grid-column: 1 / -1; grid-row: 2; } }
+  }
+  .threshold-label { font-weight: 600; font-size: var(--fs-s); }
+  .threshold-value { font-family: var(--font-display); font-weight: 650; font-size: var(--fs-xl); text-align: end; }
+  .threshold input[type="range"] {
+    appearance: none; inline-size: 100%; block-size: 1.5rem; background: transparent; cursor: pointer;
+    &::-webkit-slider-runnable-track { block-size: 6px; border-radius: 3px; background: linear-gradient(to right, var(--c-ink-2) var(--fill), color-mix(in oklch, var(--c-ink) 12%, transparent) var(--fill)); }
+    &::-moz-range-track { block-size: 6px; border-radius: 3px; background: color-mix(in oklch, var(--c-ink) 12%, transparent); }
+    &::-moz-range-progress { block-size: 6px; border-radius: 3px; background: var(--c-ink-2); }
+    &::-webkit-slider-thumb { appearance: none; inline-size: 1.25rem; block-size: 1.25rem; margin-block-start: -7px; border-radius: var(--r-round); background: var(--c-panel-raised); border: 2px solid var(--c-ink); }
+    &::-moz-range-thumb { inline-size: 1rem; block-size: 1rem; border-radius: var(--r-round); background: var(--c-panel-raised); border: 2px solid var(--c-ink); }
+    &:disabled { cursor: not-allowed; opacity: 0.6; }
+  }
+}

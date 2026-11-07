@@ -1,0 +1,7 @@
+@layer features {
+  .releases .section { margin-block: var(--s-5) 0; }
+  .feed-row { display: flex; gap: var(--s-4); align-items: flex-start;
+    & .lamp { margin-block-start: 0.25rem; } }
+  .select-s { min-block-size: 2rem; padding-block: 0; font-size: var(--fs-s); inline-size: auto; min-inline-size: 9rem; }
+  .textarea.code { font-family: var(--font-code); font-size: var(--fs-xs); max-block-size: 22rem; }
+}
