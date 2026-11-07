@@ -1,4 +1,4 @@
-# NCC Dashboard „Stellwerk“ (0.7)
+# NCC Dashboard „Stellwerk“ (0.7.1)
 
 Web-Frontend des no0bz Command Center. React 19, TypeScript 7, Vite 8, TanStack Query 5, reines CSS. Das Backend (`backend/ncc_server`) bleibt unverändert; alle Daten kommen per Polling aus `/api/v1`.
 

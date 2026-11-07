@@ -1,4 +1,4 @@
-# API- und Rechte-Matrix (Server 0.7.0)
+# API- und Rechte-Matrix (Server 0.7.1)
 
 Quelle: `backend/ncc_server/api/v1/*.py`, `backend/ncc_server/auth.py`, `backend/ncc_server/access.py`, `backend/ncc_server/schemas.py`.
 Alle Pfade relativ zu `/api/v1`. UI-Orte sind Hash-Routen des neuen Frontends (siehe `DECISIONS.md`, D-04).

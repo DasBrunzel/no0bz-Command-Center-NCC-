@@ -4,6 +4,8 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.7.1] – 2026-11-08
+
 ### Added
 
 - Commander können deaktivierte Konten endgültig löschen
@@ -22,7 +24,13 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 - `/fleet/games/stats` und `/fleet/hardware/stats` haben ein festes
   Antwortschema (`PlaytimeStatisticsResponse`, `HardwareStatisticsResponse`);
   die Felder bleiben gleich.
-- Keine Datenbank-Migration; nur Server und Dashboard.
+- Keine Datenbank-Migration; nur Server und Dashboard. Agenten, Core und
+  Payload bleiben bei 0.6.2.
+- Übernommene Dependabot-Updates: GitHub-Actions `checkout`, `setup-python`
+  und `setup-node` v7, `pnpm/action-setup` v6, `action-gh-release` v3;
+  `nvidia-ml-py` < 14, `pyinstaller` ≥ 6.22.3, `duckdb` ≥ 1.5.6.
+- README beschreibt den Stand 0.7.1 (Dashboard „Stellwerk“, Rollen,
+  Freunde-Konten, Spiele, Hardware-Statistik, Telegram).
 
 ## [0.7.0] – 2026-11-07
 
