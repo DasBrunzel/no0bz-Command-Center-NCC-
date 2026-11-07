@@ -29,3 +29,6 @@ windows/**/bin/
 windows/**/obj/
 *.spec
 
+frontend/test-results/
+frontend/playwright-report/
+frontend/.lighthouse/

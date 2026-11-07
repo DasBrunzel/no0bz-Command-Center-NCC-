@@ -1,0 +1,49 @@
+@layer components {
+  .chart { display: grid; gap: var(--s-2); min-inline-size: 0; margin: 0; }
+  .chart-plot { position: relative; inline-size: 100%; touch-action: pan-y; border-radius: var(--r-2); }
+  .chart-plot:focus-visible { outline-offset: 4px; }
+  .chart-grid { stroke: var(--c-line); stroke-width: 1; shape-rendering: crispEdges; }
+  .chart-tick { fill: var(--c-ink-3); font-size: 11px; font-variant-numeric: tabular-nums; font-family: var(--font-text); }
+  .chart-crosshair { stroke: var(--c-ink-3); stroke-width: 1; shape-rendering: crispEdges; }
+  .chart-dot { stroke: var(--c-panel-raised); stroke-width: 2; }
+  .chart-bar { outline: none; cursor: default; }
+  .chart-bar:focus-visible path { stroke: var(--c-focus); stroke-width: 2; }
+  .chart-tip {
+    position: absolute; inset-block-start: 0; z-index: 2; pointer-events: none;
+    display: grid; gap: 2px; min-inline-size: 9rem; padding: var(--s-2) var(--s-3);
+    border-radius: var(--r-2); background: var(--c-panel-raised); border: 1px solid var(--c-line-strong);
+    box-shadow: var(--shadow-float); font-size: var(--fs-xs); font-variant-numeric: tabular-nums;
+  }
+  .chart-tip-label { color: var(--c-ink-3); }
+  .chart-tip-row {
+    display: flex; align-items: center; gap: var(--s-2);
+    & i { inline-size: 0.75rem; block-size: 2px; border-radius: 1px; flex: none; }
+    & b { font-size: var(--fs-s); }
+    & span { color: var(--c-ink-2); }
+  }
+  .legend {
+    display: flex; flex-wrap: wrap; gap: var(--s-1) var(--s-4); font-size: var(--fs-xs); color: var(--c-ink-2);
+    & li { display: inline-flex; align-items: center; gap: var(--s-2); }
+    & i { inline-size: 0.625rem; block-size: 0.625rem; border-radius: 2px; }
+    & i[data-kind="line"] { inline-size: 0.875rem; block-size: 2px; }
+  }
+  .chart-table {
+    font-size: var(--fs-xs);
+    & summary { cursor: pointer; color: var(--c-ink-3); inline-size: fit-content; }
+    & summary:hover { color: var(--c-ink); }
+    & .table-wrap { max-block-size: 16rem; overflow: auto; margin: var(--s-2) 0 0; padding: 0; }
+  }
+  .sparkline { inline-size: 100%; block-size: 1.75rem; overflow: visible; }
+
+  .heatmap-grid {
+    display: grid; grid-template-columns: 1.75rem repeat(24, minmax(0, 1fr)); gap: 2px; align-items: center;
+    font-size: 10px; color: var(--c-ink-3); font-variant-numeric: tabular-nums;
+  }
+  .heatmap-cell {
+    aspect-ratio: 1; border-radius: 2px;
+    background: color-mix(in oklch, var(--c-seq-high) calc(var(--v) * 100%), var(--c-seq-low));
+    &[data-active] { outline: 2px solid var(--c-ink); outline-offset: 1px; }
+  }
+  .heatmap-day { font-size: var(--fs-xs); }
+  .heatmap-readout { font-size: var(--fs-s); color: var(--c-ink-2); min-block-size: 1.5em; font-variant-numeric: tabular-nums; }
+}

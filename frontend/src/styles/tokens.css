@@ -1,0 +1,139 @@
+/*
+ * Stellwerk design tokens. Every colour, size and duration in the app comes
+ * from here. Light "Emaille" and dark "Nachtschicht" are separate steps, not
+ * an inversion; light-dark() picks them from the active color-scheme.
+ */
+
+@property --glow {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+
+@property --value {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+@property --int {
+  syntax: "<integer>";
+  inherits: false;
+  initial-value: 0;
+}
+
+@layer tokens {
+  :root {
+    color-scheme: light dark;
+
+    /* Surfaces */
+    --c-panel: light-dark(oklch(93% 0.012 145), oklch(21.5% 0.014 250));
+    --c-panel-raised: light-dark(oklch(96.8% 0.007 145), oklch(25.5% 0.016 250));
+    --c-panel-sunken: light-dark(oklch(89% 0.014 145), oklch(18.5% 0.013 250));
+    --c-line: light-dark(oklch(81% 0.014 150), oklch(34% 0.016 250));
+    --c-line-strong: light-dark(oklch(66% 0.016 160), oklch(46% 0.016 250));
+
+    /* Ink */
+    --c-ink: light-dark(oklch(25% 0.03 255), oklch(94% 0.01 145));
+    --c-ink-2: light-dark(oklch(38% 0.026 255), oklch(82% 0.012 145));
+    --c-ink-3: light-dark(oklch(47% 0.02 255), oklch(70% 0.012 150));
+    --c-ink-invert: light-dark(oklch(97% 0.006 145), oklch(20% 0.02 255));
+    --c-track: light-dark(oklch(31% 0.025 255), oklch(76% 0.012 145));
+
+    /* Signal lamps: one meaning each, never reused as a series colour */
+    --c-go: light-dark(oklch(57% 0.16 145), oklch(74% 0.17 145));
+    --c-caution: light-dark(oklch(79% 0.16 78), oklch(83% 0.15 82));
+    --c-stop: light-dark(oklch(56% 0.21 28), oklch(67% 0.19 28));
+    --c-shunt: light-dark(oklch(52% 0.17 262), oklch(72% 0.13 262));
+    --c-unlit: light-dark(oklch(77% 0.01 150), oklch(40% 0.012 250));
+
+    /* Signal colours as text (contrast ≥ 4.5:1 on the panel) */
+    --c-go-ink: light-dark(oklch(43% 0.13 145), oklch(80% 0.15 145));
+    --c-caution-ink: light-dark(oklch(48% 0.11 70), oklch(85% 0.13 82));
+    --c-stop-ink: light-dark(oklch(47% 0.19 28), oklch(76% 0.15 28));
+    --c-shunt-ink: light-dark(oklch(45% 0.17 262), oklch(80% 0.11 262));
+    --c-on-caution: oklch(25% 0.03 255);
+    --c-on-signal: oklch(98% 0.005 145);
+
+    /* Chart series (validated categorical order; data only, never text) */
+    --c-series-1: light-dark(oklch(52% 0.13 255), oklch(72% 0.12 255));
+    --c-series-2: light-dark(oklch(66% 0.15 55), oklch(76% 0.14 60));
+    --c-series-3: light-dark(oklch(55% 0.12 175), oklch(73% 0.11 180));
+    --c-series-4: light-dark(oklch(52% 0.16 330), oklch(72% 0.13 330));
+    --c-seq-low: light-dark(oklch(91% 0.03 255), oklch(28% 0.04 255));
+    --c-seq-high: light-dark(oklch(42% 0.15 258), oklch(78% 0.12 255));
+
+    --c-focus: light-dark(oklch(52% 0.17 262), oklch(84% 0.14 82));
+    --c-scrim: color-mix(in oklch, oklch(20% 0.03 255) 45%, transparent);
+
+    /* Typography (classical scale) */
+    --font-text: "Barlow", "Segoe UI Variable Text", "Segoe UI", sans-serif;
+    --font-display: "Barlow Condensed", "Barlow", "Arial Narrow", sans-serif;
+    --font-code: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace;
+    --fs-xs: 0.75rem;   /* 12 */
+    --fs-s: 0.875rem;   /* 14 */
+    --fs-m: 1rem;       /* 16 */
+    --fs-l: 1.125rem;   /* 18 */
+    --fs-xl: 1.3125rem; /* 21 */
+    --fs-2xl: 1.5rem;   /* 24 */
+    --fs-3xl: 2.25rem;  /* 36 */
+    --fs-4xl: 3rem;     /* 48 */
+    --fs-5xl: 3.75rem;  /* 60 */
+    --lh-tight: 1.05;
+    --lh-snug: 1.25;
+    --lh-text: 1.5;
+
+    /* Space (4 px grid) */
+    --s-1: 0.25rem;
+    --s-2: 0.5rem;
+    --s-3: 0.75rem;
+    --s-4: 1rem;
+    --s-5: 1.5rem;
+    --s-6: 2rem;
+    --s-7: 3rem;
+    --s-8: 4rem;
+
+    /* Radius: panels are enamel plates with eased corners, lamps are round */
+    --r-1: 2px;
+    --r-2: 4px;
+    --r-3: 7px;
+    --r-round: 999px;
+
+    /* Elevation: only dialogs and popovers float */
+    --shadow-float: 0 1px 0 color-mix(in oklch, var(--c-ink) 8%, transparent),
+      0 12px 32px -8px color-mix(in oklch, var(--c-ink) 28%, transparent);
+
+    /* Motion */
+    --t-fast: 120ms;
+    --t-med: 220ms;
+    --t-slow: 420ms;
+    --t-lamp: 260ms;
+    --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+    --ease-lamp: cubic-bezier(0.3, 0, 0.2, 1);
+
+    /* Layout */
+    --rail-width: 15rem;
+    --bar-height: 3rem;
+    --content-max: 92rem;
+    --gutter: clamp(var(--s-4), 2.5vw, var(--s-6));
+  }
+
+  :root[data-theme="light"] { color-scheme: light; }
+  :root[data-theme="dark"] { color-scheme: dark; }
+
+  @media (prefers-reduced-motion: reduce) {
+    :root {
+      --t-fast: 0ms;
+      --t-med: 0ms;
+      --t-slow: 0ms;
+      --t-lamp: 0ms;
+    }
+  }
+
+  @media (prefers-contrast: more) {
+    :root {
+      --c-line: var(--c-line-strong);
+      --c-ink-3: var(--c-ink-2);
+    }
+  }
+}

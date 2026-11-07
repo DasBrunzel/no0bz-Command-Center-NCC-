@@ -1,0 +1,164 @@
+@layer features {
+  .app {
+    display: grid;
+    grid-template-columns: var(--rail-width) minmax(0, 1fr);
+    min-block-size: 100dvh;
+    @media (width < 64rem) { grid-template-columns: 4.25rem minmax(0, 1fr); }
+    @media (width < 48rem) { grid-template-columns: minmax(0, 1fr); }
+  }
+
+  /* ── Brand: the zero in no0bz is the fleet's master lamp ─────────── */
+  .brand-mark {
+    display: inline-flex; align-items: center; gap: 0.04em;
+    font-family: var(--font-display); font-weight: 700; font-size: var(--fs-3xl); line-height: 1; letter-spacing: -0.01em;
+    & .lamp { --size: 0.62em; margin-inline: 0.04em; translate: 0 0.05em; }
+  }
+
+  .rail {
+    position: sticky; inset-block-start: 0; block-size: 100dvh;
+    display: flex; flex-direction: column; gap: var(--s-5);
+    padding: var(--s-5) var(--s-3) var(--s-4);
+    background: var(--c-panel-sunken);
+    border-inline-end: 1px solid var(--c-line);
+    overflow-y: auto;
+    @media (width < 48rem) { display: none; }
+  }
+  .brand {
+    display: grid; gap: var(--s-1); padding-inline: var(--s-2); text-decoration: none;
+    & .brand-sub { font-size: var(--fs-s); color: var(--c-ink-3); font-weight: 500; }
+    @media (width < 64rem) {
+      padding-inline: 0; justify-items: center;
+      & .brand-mark { font-size: var(--fs-xl); }
+      & .brand-sub { display: none; }
+    }
+  }
+
+  .rail-nav {
+    display: grid; gap: 2px;
+    & a {
+      position: relative; display: flex; align-items: center; gap: var(--s-3);
+      padding: var(--s-2) var(--s-3); border-radius: var(--r-2);
+      color: var(--c-ink-2); font-weight: 600; text-decoration: none;
+      transition: background-color var(--t-fast), color var(--t-fast);
+      &:hover { background: color-mix(in oklch, var(--c-ink) 6%, transparent); color: var(--c-ink); }
+      /* The current section is a lever thrown: dark plate, lit edge */
+      &[aria-current="page"] {
+        background: var(--c-ink); color: var(--c-ink-invert);
+        &::before { content: ""; position: absolute; inset-block: 25%; inset-inline-start: -0.75rem; inline-size: 4px; border-radius: 0 3px 3px 0; background: var(--c-caution); }
+      }
+    }
+    @media (width < 64rem) {
+      & a { justify-content: center; padding: var(--s-3) 0; }
+      & a span:not(.rail-count) { display: none; }
+      & .rail-count { position: absolute; inset-block-start: 2px; inset-inline-end: 4px; }
+    }
+  }
+  .rail-count {
+    margin-inline-start: auto; min-inline-size: 1.4rem; padding: 0 0.35rem; border-radius: var(--r-round);
+    background: var(--c-caution); color: var(--c-on-caution); font-size: var(--fs-xs); font-weight: 700; text-align: center; line-height: 1.4rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .rail-foot {
+    margin-block-start: auto; display: grid; gap: var(--s-3); padding-inline: var(--s-2);
+    @media (width < 64rem) { display: none; }
+  }
+  .identity {
+    display: flex; gap: var(--s-2); align-items: flex-start;
+    & strong { display: block; font-weight: 600; line-height: 1.2; overflow-wrap: anywhere; }
+    & svg { margin-block-start: 2px; color: var(--c-ink-3); }
+    & .badge { margin-block-start: var(--s-1); }
+  }
+  .identity-role { font-size: var(--fs-xs); color: var(--c-ink-3); }
+  .rail-tools { display: flex; flex-wrap: wrap; gap: var(--s-1); margin-inline: calc(var(--s-3) * -1); }
+  .rail-version { font-size: var(--fs-xs); color: var(--c-ink-3); font-variant-numeric: tabular-nums; }
+
+  /* ── Workspace & status bar ──────────────────────────────────────── */
+  .workspace { min-inline-size: 0; display: flex; flex-direction: column; }
+  .bar {
+    position: sticky; inset-block-start: 0; z-index: 10;
+    display: flex; align-items: center; gap: var(--s-4); min-block-size: var(--bar-height);
+    padding: var(--s-2) var(--gutter);
+    background: color-mix(in oklch, var(--c-panel) 88%, transparent);
+    backdrop-filter: blur(8px);
+    border-block-end: 1px solid var(--c-line);
+    font-size: var(--fs-s);
+    /* The bar gains a hairline shadow once the page scrolls under it */
+    animation: bar-lift linear both; animation-timeline: scroll(root); animation-range: 0 4rem;
+  }
+  @keyframes bar-lift { to { box-shadow: 0 6px 16px -12px color-mix(in oklch, var(--c-ink) 40%, transparent); } }
+  .bar-connection, .bar-clock { display: inline-flex; align-items: center; gap: var(--s-2); color: var(--c-ink-2); white-space: nowrap; }
+  .bar-clock time { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--c-ink); }
+  .bar-spacer { flex: 1; }
+  .bar-alerts[data-count] { border-color: color-mix(in oklch, var(--c-caution) 70%, var(--c-line)); background: color-mix(in oklch, var(--c-caution) 18%, var(--c-panel-raised)); }
+  @media (width < 36rem) { .bar-clock, .bar-beta { display: none; } }
+  .alerts-menu { inline-size: min(24rem, calc(100vw - 2rem)); max-block-size: 70vh; overflow-y: auto;
+    & .menu-item { align-items: flex-start; }
+    & .lamp { margin-block-start: 0.35rem; }
+    & small { color: var(--c-ink-3); }
+  }
+  .alerts-empty { padding: var(--s-3); font-size: var(--fs-s); color: var(--c-ink-2); }
+
+  .content {
+    inline-size: 100%; max-inline-size: var(--content-max); margin-inline: auto;
+    padding: var(--s-6) var(--gutter) var(--s-8);
+    outline: none;
+    @media (width < 48rem) { padding-block: var(--s-5) calc(5.5rem + env(safe-area-inset-bottom)); }
+  }
+
+  /* ── Mobile tab bar ──────────────────────────────────────────────── */
+  .tabbar {
+    display: none;
+    @media (width < 48rem) {
+      position: fixed; inset: auto 0 0; z-index: 20; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;
+      padding: var(--s-1) var(--s-1) calc(var(--s-1) + env(safe-area-inset-bottom));
+      background: var(--c-panel-sunken); border-block-start: 1px solid var(--c-line-strong);
+      & > a, & > button {
+        position: relative; display: grid; justify-items: center; gap: 2px; padding: var(--s-1) 0; min-block-size: 3.25rem;
+        font-size: var(--fs-xs); font-weight: 600; color: var(--c-ink-3); text-decoration: none; border-radius: var(--r-2);
+        &[aria-current="page"] { color: var(--c-ink); background: color-mix(in oklch, var(--c-ink) 8%, transparent); }
+        & .rail-count { position: absolute; inset-block-start: 2px; inset-inline-end: 18%; margin: 0; }
+      }
+    }
+  }
+  .more-menu { inset: auto var(--s-3) calc(4.5rem + env(safe-area-inset-bottom)) auto; margin: 0; }
+
+  /* ── Page head ───────────────────────────────────────────────────── */
+  .page-head {
+    display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--s-4);
+    margin-block-end: var(--s-6);
+    & h1 { font-size: clamp(var(--fs-3xl), 4vw, var(--fs-4xl)); }
+    & .lead { margin-block-start: var(--s-2); color: var(--c-ink-2); font-size: var(--fs-l); }
+  }
+  .back-link { display: inline-flex; align-items: center; gap: var(--s-1); font-size: var(--fs-s); font-weight: 600; color: var(--c-ink-3); text-decoration: none; margin-block-end: var(--s-2);
+    &:hover { color: var(--c-ink); } }
+
+  /* ── Boot and offline screens ────────────────────────────────────── */
+  .boot { min-block-size: 100dvh; display: grid; place-items: center; padding: var(--s-5); }
+  .boot-card {
+    display: grid; gap: var(--s-4); justify-items: start; max-inline-size: 30rem;
+    & h1 { font-size: var(--fs-3xl); }
+    & p { color: var(--c-ink-2); }
+    & .brand-mark { font-size: var(--fs-5xl); }
+  }
+
+  .status-label { display: inline-flex; align-items: center; gap: var(--s-2); white-space: nowrap; }
+
+  .loading { padding-block: var(--s-6); max-inline-size: 20rem; }
+
+  .muted { color: var(--c-ink-3); }
+
+  .section { margin-block-end: var(--s-7); }
+  .section-title { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; margin-block-end: var(--s-4);
+    & h2 { font-size: var(--fs-2xl); }
+    & p { color: var(--c-ink-3); font-size: var(--fs-s); }
+  }
+
+  /* Scroll-driven reveal for long pages: sections settle as they enter */
+  @supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+      .reveal { animation: reveal linear both; animation-timeline: view(); animation-range: entry 0% entry 35%; }
+    }
+  }
+  @keyframes reveal { from { opacity: 0.25; translate: 0 1.25rem; } }
+}

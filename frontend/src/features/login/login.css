@@ -1,0 +1,59 @@
+@layer features {
+  .login {
+    min-block-size: 100dvh;
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(20rem, 28rem);
+    @media (width < 56rem) { grid-template-columns: 1fr; }
+  }
+
+  .login-hero {
+    display: flex; flex-direction: column; justify-content: center; gap: var(--s-5);
+    padding: var(--s-7) clamp(var(--s-5), 6vw, var(--s-8));
+    background: var(--c-panel-sunken);
+    border-inline-end: 1px solid var(--c-line);
+    & .brand-mark { font-size: clamp(4rem, 11vw, 8.5rem); }
+    @media (width < 56rem) {
+      padding-block: var(--s-6) var(--s-5); border-inline-end: 0; border-block-end: 1px solid var(--c-line);
+      & .brand-mark { font-size: var(--fs-5xl); }
+      & .login-track { display: none; }
+    }
+  }
+  .login-claim { font-size: var(--fs-xl); color: var(--c-ink-2); max-inline-size: 30ch; line-height: var(--lh-snug); }
+
+  .login-track {
+    inline-size: min(100%, 34rem); margin-block-start: var(--s-5);
+    & .track { fill: none; stroke: var(--c-track); stroke-width: 6; stroke-linecap: square; }
+    & .track-joint { stroke: var(--c-panel-sunken); stroke-width: 3; }
+    & .signal rect { fill: var(--c-ink); }
+    & .lit-go { fill: var(--c-go); }
+    & .lit-shunt { fill: var(--c-shunt); }
+    & .lit-caution { fill: var(--c-caution); }
+    & .track-label { font-family: var(--font-display); font-weight: 600; font-size: 15px; fill: var(--c-ink-3); }
+    /* One orchestrated moment: the turnout throws once on first load */
+    @media (prefers-reduced-motion: no-preference) {
+      & .lit-shunt { animation: signal-on 900ms 500ms var(--ease-lamp) both; }
+      & .lit-caution { animation: signal-on 900ms 750ms var(--ease-lamp) both; }
+    }
+  }
+  @keyframes signal-on { from { fill: var(--c-unlit); } }
+
+  .login-panel {
+    display: flex; flex-direction: column; justify-content: center; gap: var(--s-5);
+    padding: var(--s-7) clamp(var(--s-5), 4vw, var(--s-7));
+    & h1 { font-size: var(--fs-3xl); }
+    @media (width < 56rem) { padding-block: var(--s-6); }
+  }
+  .login-modes { align-self: flex-start; }
+  .login-note {
+    display: flex; gap: var(--s-2); align-items: flex-start; padding: var(--s-3) var(--s-4); border-radius: var(--r-2);
+    font-size: var(--fs-s); font-weight: 500;
+    background: color-mix(in oklch, var(--c-shunt) 12%, transparent);
+    & svg { flex: none; margin-block-start: 2px; }
+    &[data-tone="caution"] { background: color-mix(in oklch, var(--c-caution) 25%, transparent); }
+  }
+  .login-legacy {
+    font-size: var(--fs-s); color: var(--c-ink-3);
+    & summary { cursor: pointer; inline-size: fit-content; }
+  }
+  .form-error:empty { display: none; }
+}
