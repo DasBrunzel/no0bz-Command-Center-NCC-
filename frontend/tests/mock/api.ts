@@ -187,7 +187,12 @@ export function createMockApi(options: MockOptions = {}) {
       const node = found;
       const sub = match[2] ?? "";
       if (sub === "" && method === "GET") return ok(node);
-      if (sub === "/telemetry") return ok(telemetry(node.node_id, Math.min(Number(params.get("limit") ?? 120), 240)));
+      if (sub === "/telemetry") {
+        const points = telemetry(node.node_id, Math.min(Number(params.get("limit") ?? 120), 240));
+        // With a cursor only the newest point is "new" (one fresh sample per poll).
+        if (params.get("after")) { const fresh = points[points.length - 1]!; return ok([{ ...fresh, point_id: `${node.node_id}-t${Date.now()}`, recorded_at: iso() }]); }
+        return ok(points);
+      }
       if (sub === "/network/history") return ok(networkHistory(node.node_id, Number(params.get("limit") ?? 48)));
       if (sub === "/network/month") return ok({ period_start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString(), received_bytes: 412_000_000_000, sent_bytes: 38_200_000_000, samples: 12_000, available: node.online || node.node_id !== "n-lappi" });
       if (sub === "" && method === "DELETE") { const d = needCommander(); if (d) return d; data.nodes = data.nodes.filter((n) => n !== node); return empty(); }
