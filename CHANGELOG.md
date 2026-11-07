@@ -4,6 +4,26 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+### Added
+
+- Commander können deaktivierte Konten endgültig löschen
+  (`DELETE /api/v1/users/{id}`). Abgelehnt werden das eigene Konto, der
+  letzte aktive Commander und Konten, denen noch Geräte gehören.
+- Agent-Einladungen tragen eine Rolle (`access_role`: Commander oder
+  Beta-Tester); das eingerichtete Gerät startet mit ihr.
+- Gruppen lassen sich umbenennen (`PATCH /api/v1/fleet/groups/{id}`), im
+  Dashboard über den Stift im Dialog „Anordnen“.
+- `GET /api/v1/fleet/network`: Live-Verkehr aller sichtbaren Online-Geräte
+  mit Verlauf der letzten Minuten. Die Lage zeigt den Verlauf damit sofort
+  statt erst nach einigen Minuten offener Seite.
+
+### Changed
+
+- `/fleet/games/stats` und `/fleet/hardware/stats` haben ein festes
+  Antwortschema (`PlaytimeStatisticsResponse`, `HardwareStatisticsResponse`);
+  die Felder bleiben gleich.
+- Keine Datenbank-Migration; nur Server und Dashboard.
+
 ## [0.7.0] – 2026-11-07
 
 ### Added

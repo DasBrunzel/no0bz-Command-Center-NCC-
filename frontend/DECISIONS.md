@@ -124,11 +124,16 @@ Umgesetzt nach Abnahme der Vorschläge (Tests: `tests/test_dashboard_v2_server.p
 | Gaming Mode für Beta-Tester | eigene Prüfung `access.gaming_mode_node`; alle anderen Rechte von `manageable_node` bleiben unverändert |
 | Paketdaten | `static/assets/**/*` statt fester Unterordner; sonst hätte das Update auf HorstServer an fehlenden `icons/` abgebrochen |
 
-Weiterhin offen (bewusst nicht umgesetzt):
+Nach 0.7.0 umgesetzt (Tests: `tests/test_open_items_api.py`, `frontend/tests/open-items.spec.ts`):
 
-- **Benutzer löschen:** existiert nicht; „Deaktivieren“ über `PATCH active=false` genügt und erhält das Audit.
-- **Agent-Einladung mit Rolle:** `AgentInvitationCreateRequest` kennt keine Rolle; neue Agenten starten mit der Server-Vorgabe.
-- **Gruppen umbenennen:** keine Route. Das Dashboard zeigt die Standardgruppen (`PCS & LAPTOPS` …) lesbar an („PCs & Laptops“), ohne Daten zu ändern.
-- **Live-Netzwerk der ganzen Fleet:** kein Sammel-Endpoint; das UI summiert `latest.metrics.network` aus `/fleet/nodes`.
-- `/fleet/games/stats` und `/fleet/hardware/stats` haben kein `response_model`; die Frontend-Typen sind aus dem Service-Code abgeleitet.
+| Änderung | Entscheidung |
+|---|---|
+| Benutzer löschen | `DELETE /users/{id}`, nur Commander. Das Dashboard bietet Löschen nur für deaktivierte Konten an. Der Server lehnt das eigene Konto, den letzten aktiven Commander und Konten mit Geräten ab (409) – Geräte zuerst umhängen oder vergessen, sonst fielen sie still an den Server-Besitzer. Sitzungen, Telegram-Verknüpfung und Link-Codes werden gelöscht, Chat-Nachrichten behalten den Namen, offene Kopplungen des Freundes werden abgelehnt. Die Bereinigung steht ausdrücklich im Code, weil SQLite die `ON DELETE`-Regeln nicht durchsetzt. Das Audit vermerkt Name und Rolle |
+| Agent-Einladung mit Rolle | `access_role` (`commander` oder `beta_tester`, Vorgabe `commander`) im Request und in der Antwort. Die Spalte gab es schon am Token; Enrollment übernimmt sie, keine Migration |
+| Gruppen umbenennen | `PATCH /fleet/groups/{id}`, nur Commander. Standardgruppen behalten ihre ID, also auch die Platzierungsregeln (Freunde-Geräte landen weiter in `default-friends`). Ein umbenannter Standardname wird nicht mehr übersetzt, weil `groupLabel` nur Großbuchstaben-Platzhalter ersetzt |
+| Live-Netzwerk der Fleet | `GET /fleet/network?minutes=30` (1–360). Pro Bucket (Fensterlänge / 90, mindestens 10 s) wird je Gerät gemittelt und dann addiert, damit häufig meldende Geräte nicht mehrfach zählen. Geladen wird nur das `network`-Fragment der Telemetrie. Der Verlauf ist damit beim ersten Laden da und nicht mehr an die offene Seite gebunden |
+| Typen für Statistik | `PlaytimeStatisticsResponse` und `HardwareStatisticsResponse` als `response_model`; die Felder entsprechen genau den bisherigen Dicts, das Frontend musste nichts ändern |
+
+Weiterhin bewusst so gelassen:
+
 - Zeitstempel ohne Zeitzone (SQLite) liest der Client zentral als UTC (`client.ts`, `utcReviver`); Postgres liefert ohnehin `+00:00`.

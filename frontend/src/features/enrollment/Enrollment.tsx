@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { POLL, api, qk } from "../../api/endpoints";
-import type { AdminCodeCreated, AgentInvitation, AgentInvitationCreated, AgentPairing } from "../../api/types";
+import type { AccessRole, AdminCodeCreated, AgentInvitation, AgentInvitationCreated, AgentPairing } from "../../api/types";
 import { roleLabel, useCan } from "../../app/auth";
 import { Icon } from "../../components/Icon";
 import { useToast } from "../../components/toast";
@@ -170,6 +170,7 @@ function Invitations() {
   const invitations = useQuery({ queryKey: qk.invitations, queryFn: api.invitations.list, refetchInterval: POLL.admin });
   const [name, setName] = useState("");
   const [hours, setHours] = useState(168);
+  const [role, setRole] = useState<AccessRole>("commander");
   const [created, setCreated] = useState<AgentInvitationCreated | null>(null);
   const [revoke, setRevoke] = useState<AgentInvitation | null>(null);
   const [busy, setBusy] = useState(false);
@@ -178,7 +179,7 @@ function Invitations() {
     event.preventDefault();
     setBusy(true);
     try {
-      const result = await api.invitations.create(name.trim(), hours);
+      const result = await api.invitations.create(name.trim(), hours, role);
       setCreated(result);
       setName("");
       await client.invalidateQueries({ queryKey: qk.invitations });
@@ -216,6 +217,11 @@ function Invitations() {
               <option value={24}>1 Tag</option><option value={168}>7 Tage</option><option value={720}>30 Tage</option><option value={0}>unbegrenzt</option>
             </select>
           </label>
+          <label className="field"><span>Rolle des Geräts</span>
+            <select className="select" value={role} onChange={(event) => setRole(event.target.value as AccessRole)}>
+              <option value="commander">{roleLabel("commander")}</option><option value="beta_tester">{roleLabel("beta_tester")}</option>
+            </select>
+          </label>
           <button type="submit" className="btn btn-primary" disabled={busy || !name.trim()} style={{ alignSelf: "end" }}><Icon name="plus" /> Einladung erstellen</button>
         </form>
       ) : (
@@ -234,11 +240,12 @@ function Invitations() {
       ) : (
         <div className="table-wrap mt-4">
           <table className="table">
-            <thead><tr><th>Name</th><th>Status</th><th>Gerät</th><th>Läuft ab</th><th>Zuletzt genutzt</th>{can.commander && <th className="r"><span className="visually-hidden">Aktionen</span></th>}</tr></thead>
+            <thead><tr><th>Name</th><th>Rolle</th><th>Status</th><th>Gerät</th><th>Läuft ab</th><th>Zuletzt genutzt</th>{can.commander && <th className="r"><span className="visually-hidden">Aktionen</span></th>}</tr></thead>
             <tbody>
               {invitations.data.map((item) => (
                 <tr key={item.token_id}>
                   <td>{item.name}</td>
+                  <td>{roleLabel(item.access_role)}</td>
                   <td><span className="badge" data-tone={INVITE_STATE[item.status].tone}>{INVITE_STATE[item.status].text}</span></td>
                   <td>{item.node_name ?? <span className="ink-3">–</span>}</td>
                   <td>{item.expires_at ? fmtDateTime(item.expires_at) : "nie"}</td>

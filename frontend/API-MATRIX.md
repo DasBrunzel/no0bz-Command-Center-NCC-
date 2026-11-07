@@ -45,6 +45,7 @@ Freunde sehen über `access.visible_node_ids` nur eigene Geräte (oder alle Stat
 | ✅ | GET | `/users` | Commander | Konten auflisten | Einstellungen › Konten |
 | ✅ | POST | `/users` | Commander | Konto anlegen | Einstellungen › Konten › „Konto anlegen“ |
 | ✅ | PATCH | `/users/{user_id}` | Commander | Rolle, aktiv, volle Statistik | Einstellungen › Konten › Zeile |
+| ✅ | DELETE | `/users/{user_id}` | Commander | Konto endgültig löschen (nicht das eigene, nicht der letzte Commander, keine Geräte mehr) | Einstellungen › Konten › deaktivierte Zeile |
 | ✅ | GET | `/users/invites` | Commander | Konto-Einladungen | Einstellungen › Konten › Einladungen |
 | ✅ | POST | `/users/invites` | Commander | Einladung erstellen (Code einmalig) | Einstellungen › Konten › „Einladung erstellen“ |
 | ✅ | POST | `/users/invites/{invite_id}/revoke` | Commander | Einladung widerrufen | Einstellungen › Konten › Einladungen |
@@ -68,11 +69,13 @@ Freunde sehen über `access.visible_node_ids` nur eigene Geräte (oder alle Stat
 | ✅ | PUT | `/fleet/nodes/{id}/release` | Commander | Release zuweisen | Geräte › Detail › Updates (Releases › Zuweisung nutzt die Releases-Route) |
 | ✅ | PUT | `/fleet/nodes/{id}/update-channel` | Commander | Kanal setzen | Geräte › Detail › Updates |
 | ✅ | GET | `/fleet/nodes/{id}/telemetry?limit=&after=` | angemeldet (sichtbar) | Telemetrie-Verlauf, Cursor | Geräte › Detail › Verlauf (Charts) |
-| ✅ | GET | `/fleet/nodes/{id}/network/history?limit=` | angemeldet (sichtbar) | Netzwerk-Verlauf | Geräte › Detail › Netzwerk (Lage › Live-Verkehr summiert `latest` aus `/fleet/nodes`) |
+| ✅ | GET | `/fleet/nodes/{id}/network/history?limit=` | angemeldet (sichtbar) | Netzwerk-Verlauf | Geräte › Detail › Netzwerk |
+| ✅ | GET | `/fleet/network?minutes=` | angemeldet (sichtbar) | Live-Verkehr aller sichtbaren Online-Geräte, Verlauf in Buckets | Lage › Live-Verkehr |
 | ✅ | GET | `/fleet/nodes/{id}/network/month` | angemeldet (sichtbar) | Monatsverbrauch | Geräte › Detail › Netzwerk |
 | ✅ | POST | `/fleet/network/reset` | Commander | Netzwerkzähler zurücksetzen | Geräte › Detail › Netzwerk |
 | ✅ | GET | `/fleet/groups` | angemeldet | Gruppen | Geräte (Gruppierung), Lage (Gleise) |
 | ✅ | POST | `/fleet/groups` | Commander | Gruppe anlegen | Geräte › „Anordnen“ |
+| ✅ | PATCH | `/fleet/groups/{id}` | Commander | Gruppe umbenennen (Name eindeutig, ohne Groß-/Kleinschreibung) | Geräte › „Anordnen“ › Stift |
 | ✅ | PUT | `/fleet/layout` | Commander | Gruppen/Reihenfolge speichern | Geräte › „Anordnen“ |
 | ✅ | GET | `/fleet/physical-devices` | angemeldet | Physische Geräte / Dualboot | Geräte (Weiche), Detail › Verwaltung |
 | ✅ | POST | `/fleet/physical-devices` | Commander | Physisches Gerät aus Profilen anlegen | Geräte › Detail › Verwaltung › Dualboot |
@@ -100,7 +103,7 @@ Freunde sehen über `access.visible_node_ids` nur eigene Geräte (oder alle Stat
 | ➖ | POST | `/agent-pairings/register` | öffentlich (Agent) | Agent meldet sich an | – |
 | ➖ | POST | `/agent-pairings/{id}/claim` | öffentlich (Agent-Secret) | Agent holt Token | – |
 | ✅ | GET | `/agent-invitations` | Team | Agent-Einladungen | Aufnahme › Agent-Einladungen |
-| ✅ | POST | `/agent-invitations` | Commander | Einladung erstellen (Token einmalig) | Aufnahme › Agent-Einladungen |
+| ✅ | POST | `/agent-invitations` | Commander | Einladung erstellen (Token einmalig, `access_role` für das Gerät) | Aufnahme › Agent-Einladungen |
 | ✅ | POST | `/agent-invitations/{id}/revoke` | Commander | Widerrufen | Aufnahme › Agent-Einladungen |
 | ✅ | DELETE | `/agent-invitations/{id}` | Commander | Widerrufene entfernen | Aufnahme › Agent-Einladungen |
 | ✅ | GET | `/releases` | Team | Release-Liste | Releases |

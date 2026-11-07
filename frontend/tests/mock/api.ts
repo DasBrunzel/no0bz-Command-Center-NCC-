@@ -141,6 +141,27 @@ export function createMockApi(options: MockOptions = {}) {
     if (path === "/fleet/nodes" && method === "GET") return ok(data.nodes.filter(visible));
     if (path === "/fleet/groups" && method === "GET") return ok(data.groups);
     if (path === "/fleet/groups" && method === "POST") { const d = needCommander(); if (d) return d; const group = { group_id: `g-${data.groups.length}`, name: body.name, position: data.groups.length }; data.groups.push(group); return ok(group, 201); }
+    const groupMatch = path.match(/^\/fleet\/groups\/([^/]+)$/);
+    if (groupMatch && method === "PATCH") {
+      const d = needCommander(); if (d) return d;
+      const group = data.groups.find((item) => item.group_id === groupMatch[1]);
+      if (!group) return fail(404, "group not found");
+      const name = String(body.name ?? "").trim();
+      if (data.groups.some((item) => item !== group && item.name.toLowerCase() === name.toLowerCase())) return fail(409, "a group with this name already exists");
+      group.name = name;
+      return ok(group);
+    }
+    if (path === "/fleet/network") {
+      const minutes = Number(params.get("minutes") ?? 30);
+      const online = data.nodes.filter(visible).filter((node) => node.online);
+      const nodes = online.map((node) => ({ node_id: node.node_id, display_name: node.display_name, download_mbps: Number(node.latest?.metrics.network?.download_mbps ?? 0), upload_mbps: Number(node.latest?.metrics.network?.upload_mbps ?? 0) }))
+        .sort((a, b) => b.download_mbps + b.upload_mbps - a.download_mbps - a.upload_mbps);
+      const download = nodes.reduce((sum, node) => sum + node.download_mbps, 0);
+      const upload = nodes.reduce((sum, node) => sum + node.upload_mbps, 0);
+      const bucket = Math.max(10, Math.floor((minutes * 60) / 90));
+      const history = Array.from({ length: 60 }, (_, index) => ({ at: iso(-(60 - index) * bucket * 1000), download_mbps: download * (0.6 + 0.4 * Math.abs(Math.sin(index / 6))), upload_mbps: upload * (0.7 + 0.3 * Math.abs(Math.cos(index / 7))), nodes: online.length }));
+      return ok({ minutes, bucket_seconds: bucket, online_nodes: online.length, download_mbps: download, upload_mbps: upload, nodes, history });
+    }
     if (path === "/fleet/layout" && method === "PUT") {
       const d = needCommander(); if (d) return d;
       for (const placement of body.placements ?? []) { const node = data.nodes.find((n) => n.node_id === placement.node_id); if (node) { node.fleet_group_id = placement.group_id; node.fleet_position = placement.position; } }
@@ -280,7 +301,7 @@ export function createMockApi(options: MockOptions = {}) {
     if (path === "/agent-invitations" && method === "GET") { const d = needStaff(); if (d) return d; return ok(data.agentInvitations.filter((item) => item.status !== "revoked" || item.revoked_at)); }
     if (path === "/agent-invitations" && method === "POST") {
       const d = needCommander(); if (d) return d;
-      const item = { token_id: `t${data.agentInvitations.length + 1}`, name: body.name, status: "ready" as const, node_id: null, node_name: null, created_at: iso(), expires_at: body.expires_hours ? iso(body.expires_hours * 3600_000) : null, last_used_at: null, revoked_at: null };
+      const item = { token_id: `t${data.agentInvitations.length + 1}`, name: body.name, access_role: body.access_role ?? "commander", status: "ready" as const, node_id: null, node_name: null, created_at: iso(), expires_at: body.expires_hours ? iso(body.expires_hours * 3600_000) : null, last_used_at: null, revoked_at: null };
       data.agentInvitations.unshift(item);
       return ok({ ...item, token: "ncc_agent_9f8e7d6c5b4a3210fedcba9876543210" }, 201);
     }
@@ -340,6 +361,15 @@ export function createMockApi(options: MockOptions = {}) {
     match = path.match(/^\/users\/invites\/([^/]+)\/revoke$/);
     if (match) { const d = needCommander(); if (d) return d; const invite = data.invites.find((i) => i.invite_id === match![1]); if (!invite) return fail(404, "invite not found"); invite.status = "revoked"; return ok(invite); }
     match = path.match(/^\/users\/([^/]+)$/);
+    if (match && method === "DELETE") {
+      const d = needCommander(); if (d) return d;
+      const user = data.users.find((u) => u.user_id === match![1]);
+      if (!user) return fail(404, "user not found");
+      if (user.user_id === session?.userId) return fail(409, "cannot delete your own account");
+      if (user.device_count > 0) return fail(409, `user still owns ${user.device_count} device(s); reassign or forget them first`);
+      data.users = data.users.filter((u) => u !== user);
+      return empty();
+    }
     if (match && method === "PATCH") { const d = needCommander(); if (d) return d; const user = data.users.find((u) => u.user_id === match![1]); if (!user) return fail(404, "user not found"); Object.assign(user, Object.fromEntries(Object.entries(body).filter(([, v]) => v !== undefined))); return ok(user); }
 
     return fail(404, `mock: no route for ${method} ${path}`);
