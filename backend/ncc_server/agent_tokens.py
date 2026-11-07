@@ -30,12 +30,14 @@ def issue_agent_token(
     expires_at: datetime | None,
     *,
     actor_type: str = "server-cli",
+    access_role: str = "commander",
 ) -> IssuedAgentToken:
     plaintext = f"{TOKEN_PREFIX}{secrets.token_urlsafe(32)}"
     record = AgentToken(
         name=name,
         token_hash=hash_agent_token(plaintext),
         expires_at=expires_at,
+        access_role=access_role,
     )
     session.add(record)
     session.flush()
@@ -44,7 +46,7 @@ def issue_agent_token(
             actor_type=actor_type,
             action="agent-token.created",
             details=json.dumps(
-                {"token_id": record.id, "name": name, "expires_at": _iso(expires_at)},
+                {"token_id": record.id, "name": name, "expires_at": _iso(expires_at), "access_role": access_role},
                 separators=(",", ":"),
             ),
         )

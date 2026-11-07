@@ -20,6 +20,7 @@ from ncc_server.fleet_service import (
     create_fleet_group,
     create_physical_device,
     detach_physical_device_node,
+    fleet_network,
     fleet_node,
     fleet_summary,
     forget_fleet_node,
@@ -30,6 +31,7 @@ from ncc_server.fleet_service import (
     node_monthly_network_usage,
     node_network_history,
     node_telemetry,
+    rename_fleet_group,
     rename_fleet_node,
     request_fleet_update_check,
     reset_network_statistics,
@@ -46,8 +48,10 @@ from ncc_server.schemas import (
     FleetAlertResponse,
     FleetGamingModeRequest,
     FleetGroupCreateRequest,
+    FleetGroupRenameRequest,
     FleetGroupResponse,
     FleetLayoutUpdateRequest,
+    FleetNetworkResponse,
     FleetNodeReleaseAssignmentRequest,
     FleetNodeRenameRequest,
     FleetNodeResponse,
@@ -156,6 +160,29 @@ async def create_group(
     payload: FleetGroupCreateRequest, session: Session = Depends(database_session)
 ) -> FleetGroupResponse:
     return create_fleet_group(session, payload.name)
+
+
+@router.patch("/groups/{group_id}", response_model=FleetGroupResponse, dependencies=[Depends(require_commander_access)])
+async def rename_group(
+    group_id: str, payload: FleetGroupRenameRequest, session: Session = Depends(database_session)
+) -> FleetGroupResponse:
+    try:
+        result = rename_fleet_group(session, group_id, payload.name)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail="a group with this name already exists") from exc
+    if result is None:
+        raise HTTPException(status_code=404, detail="group not found")
+    return result
+
+
+@router.get("/network", response_model=FleetNetworkResponse)
+async def network(
+    request: Request,
+    minutes: int = Query(default=30, ge=1, le=360),
+    identity: DashboardIdentity = Depends(require_dashboard_identity),
+    session: Session = Depends(database_session),
+) -> FleetNetworkResponse:
+    return fleet_network(session, request.app.state.server_settings, visible_node_ids(session, identity), minutes)
 
 
 @router.put("/layout", status_code=204, dependencies=[Depends(require_commander_access)])

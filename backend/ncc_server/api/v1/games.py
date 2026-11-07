@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Any
-
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from ncc.security import limited
@@ -34,6 +32,8 @@ from ncc_server.schemas import (
     FleetNodeResponse,
     GameMatchUpdateRequest,
     GameResponse,
+    HardwareStatisticsResponse,
+    PlaytimeStatisticsResponse,
 )
 
 router = APIRouter(
@@ -59,28 +59,28 @@ async def set_game_settings(
     return response
 
 
-@router.get("/games/stats")
+@router.get("/games/stats", response_model=PlaytimeStatisticsResponse)
 async def game_statistics(
     days: int = Query(default=30, ge=0, le=3660),
     node_id: str | None = Query(default=None, max_length=36),
     utc_offset_minutes: int = Query(default=0, ge=-840, le=840),
     identity: DashboardIdentity = Depends(require_dashboard_identity),
     session: Session = Depends(database_session),
-) -> dict[str, Any]:
+) -> PlaytimeStatisticsResponse:
     node_ids = _statistics_scope(session, identity, node_id)
-    return playtime_statistics(session, days=days, node_id=node_id, utc_offset_minutes=utc_offset_minutes, node_ids=node_ids)
+    return PlaytimeStatisticsResponse.model_validate(playtime_statistics(session, days=days, node_id=node_id, utc_offset_minutes=utc_offset_minutes, node_ids=node_ids))
 
 
-@router.get("/hardware/stats")
+@router.get("/hardware/stats", response_model=HardwareStatisticsResponse)
 async def hardware_stats(
     days: int = Query(default=30, ge=0, le=3660),
     node_id: str | None = Query(default=None, max_length=36),
     utc_offset_minutes: int = Query(default=0, ge=-840, le=840),
     identity: DashboardIdentity = Depends(require_dashboard_identity),
     session: Session = Depends(database_session),
-) -> dict[str, Any]:
+) -> HardwareStatisticsResponse:
     node_ids = _statistics_scope(session, identity, node_id)
-    return hardware_statistics(session, days=days, node_id=node_id, utc_offset_minutes=utc_offset_minutes, node_ids=node_ids)
+    return HardwareStatisticsResponse.model_validate(hardware_statistics(session, days=days, node_id=node_id, utc_offset_minutes=utc_offset_minutes, node_ids=node_ids))
 
 
 @router.get("/games", response_model=list[GameResponse])

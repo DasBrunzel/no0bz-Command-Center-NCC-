@@ -195,6 +195,36 @@ class FleetGroupCreateRequest(BaseModel):
         return normalized
 
 
+class FleetGroupRenameRequest(FleetGroupCreateRequest):
+    pass
+
+
+class FleetNetworkNode(BaseModel):
+    node_id: str
+    display_name: str
+    download_mbps: float
+    upload_mbps: float
+
+
+class FleetNetworkSample(BaseModel):
+    at: datetime
+    download_mbps: float
+    upload_mbps: float
+    nodes: int
+
+
+class FleetNetworkResponse(BaseModel):
+    """Live traffic of every visible online node and a bucketed recent history."""
+
+    minutes: int
+    bucket_seconds: int
+    online_nodes: int
+    download_mbps: float
+    upload_mbps: float
+    nodes: list[FleetNetworkNode]
+    history: list[FleetNetworkSample]
+
+
 class FleetLayoutPlacement(BaseModel):
     node_id: str = Field(min_length=1, max_length=36)
     group_id: str = Field(min_length=1, max_length=36)
@@ -429,6 +459,8 @@ class FleetChatParticipantResponse(BaseModel):
 class AgentInvitationCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=128)
     expires_hours: int = Field(default=168, ge=0, le=8760)
+    # The role the enrolled device starts with; the server default is "commander".
+    access_role: Literal["commander", "beta_tester"] = "commander"
 
     @field_validator("name")
     @classmethod
@@ -442,6 +474,7 @@ class AgentInvitationCreateRequest(BaseModel):
 class AgentInvitationResponse(BaseModel):
     token_id: str
     name: str
+    access_role: Literal["commander", "beta_tester"] = "commander"
     status: Literal["ready", "bound", "expired", "revoked"]
     node_id: str | None
     node_name: str | None
@@ -583,3 +616,85 @@ class AgentPairingResponse(BaseModel):
 
 class AgentPairingClaimResponse(BaseModel):
     token: str
+
+
+class MetricSummary(BaseModel):
+    average: float
+    max: float
+
+
+class LongestGameSession(BaseModel):
+    title: str | None
+    node_name: str | None
+    seconds: int
+    started_at: datetime
+
+
+class PlaytimeGame(BaseModel):
+    game_id: str | None
+    title: str | None
+    launcher: str | None
+    has_artwork: bool
+    custom_artwork: bool
+    genres: list[str]
+    seconds: int
+    sessions: int
+    last_played_at: datetime
+    hardware: dict[str, MetricSummary]
+    energy_wh: float
+
+
+class PlaytimeNode(BaseModel):
+    node_id: str
+    display_name: str
+    seconds: int
+
+
+class PlaytimeDay(BaseModel):
+    date: str
+    seconds: int
+
+
+class RecentGameSession(BaseModel):
+    session_id: str
+    game_id: str | None
+    title: str | None
+    node_name: str
+    started_at: datetime
+    ended_at: datetime
+    seconds: int
+
+
+class PlaytimeStatisticsResponse(BaseModel):
+    days: int
+    total_seconds: int
+    session_count: int
+    game_count: int
+    longest_session: LongestGameSession | None
+    games: list[PlaytimeGame]
+    nodes: list[PlaytimeNode]
+    daily: list[PlaytimeDay]
+    heatmap: list[list[int]]
+    recent_sessions: list[RecentGameSession]
+
+
+class HardwareRecord(BaseModel):
+    value: float
+    at: datetime
+    node_name: str | None
+
+
+class HardwareDay(BaseModel):
+    date: str
+    energy_wh: float
+    metrics: dict[str, MetricSummary]
+
+
+class HardwareStatisticsResponse(BaseModel):
+    days: int
+    metrics: list[str]
+    summary: dict[str, MetricSummary]
+    records: dict[str, HardwareRecord]
+    energy_wh: float
+    daily: list[HardwareDay]
+    hours_covered: int
