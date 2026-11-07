@@ -22,6 +22,7 @@ export default function UsersTab() {
   const users = useQuery({ queryKey: qk.users, queryFn: api.users.list, refetchInterval: POLL.admin });
   const [creating, setCreating] = useState(false);
   const [deactivate, setDeactivate] = useState<DashboardUser | null>(null);
+  const [remove, setRemove] = useState<DashboardUser | null>(null);
   const [busy, setBusy] = useState(false);
 
   const update = async (user: DashboardUser, patch: Parameters<typeof api.users.update>[1], success: string) => {
@@ -36,6 +37,21 @@ export default function UsersTab() {
     } finally {
       setBusy(false);
       setDeactivate(null);
+    }
+  };
+
+  const removeUser = async (user: DashboardUser) => {
+    if (!user.user_id) return;
+    setBusy(true);
+    try {
+      await api.users.remove(user.user_id);
+      await client.invalidateQueries({ queryKey: qk.users });
+      toast.ok(`${user.username} ist gelöscht.`);
+    } catch (error) {
+      toast.fail(error, "Das Konto konnte nicht gelöscht werden.");
+    } finally {
+      setBusy(false);
+      setRemove(null);
     }
   };
 
@@ -76,7 +92,14 @@ export default function UsersTab() {
                         {user.active ? (
                           <button type="button" className="btn btn-danger btn-s" disabled={busy || self} title={self ? "Das eigene Konto lässt sich nicht deaktivieren." : undefined} onClick={() => setDeactivate(user)}>Deaktivieren</button>
                         ) : (
-                          <button type="button" className="btn btn-s" disabled={busy} onClick={() => void update(user, { active: true }, `${user.username} ist wieder aktiv.`)}>Aktivieren</button>
+                          <span className="row" style={{ justifyContent: "end", gap: "var(--s-1)" }}>
+                            <button type="button" className="btn btn-s" disabled={busy} onClick={() => void update(user, { active: true }, `${user.username} ist wieder aktiv.`)}>Aktivieren</button>
+                            <button
+                              type="button" className="btn btn-danger btn-s" disabled={busy || user.device_count > 0}
+                              title={user.device_count > 0 ? "Erst die Geräte einem anderen Konto geben oder vergessen." : undefined}
+                              onClick={() => setRemove(user)}
+                            ><Icon name="trash" /> Löschen</button>
+                          </span>
                         )}
                       </td>
                     </tr>
@@ -101,7 +124,18 @@ export default function UsersTab() {
         busy={busy}
         onConfirm={() => deactivate && void update(deactivate, { active: false }, `${deactivate.username} ist deaktiviert und abgemeldet.`)}
       >
-        <p>Das Konto kann sich nicht mehr anmelden, laufende Sitzungen enden sofort. Du kannst es später wieder aktivieren.</p>
+        <p>Das Konto kann sich nicht mehr anmelden, laufende Sitzungen enden sofort. Du kannst es später wieder aktivieren oder endgültig löschen.</p>
+      </ConfirmDialog>
+      <ConfirmDialog
+        open={!!remove}
+        onClose={() => setRemove(null)}
+        danger
+        title={`${remove?.username} endgültig löschen?`}
+        confirmLabel="Endgültig löschen"
+        busy={busy}
+        onConfirm={() => remove && void removeUser(remove)}
+      >
+        <p>Das Konto, seine Sitzungen und die Telegram-Verknüpfung werden entfernt. Das lässt sich nicht rückgängig machen. Chat-Nachrichten behalten den Namen, das Audit-Protokoll vermerkt die Löschung.</p>
       </ConfirmDialog>
     </div>
   );

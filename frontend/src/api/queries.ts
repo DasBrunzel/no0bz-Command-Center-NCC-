@@ -37,6 +37,8 @@ export const useNetworkHistory = (nodeId: string | null, limit = 60) =>
     refetchInterval: POLL.networkHistory,
     placeholderData: keepPreviousData,
   });
+export const useFleetNetwork = (minutes = 30) =>
+  useQuery({ queryKey: qk.fleetNetwork(minutes), queryFn: () => api.fleet.network(minutes), refetchInterval: POLL.fleetNetwork, placeholderData: keepPreviousData });
 export const useNetworkMonth = (nodeId: string) =>
   useQuery({ queryKey: qk.networkMonth(nodeId), queryFn: () => api.fleet.networkMonth(nodeId), refetchInterval: POLL.networkMonth });
 export const useHardwareStats = (days: number, nodeId: string | null) =>

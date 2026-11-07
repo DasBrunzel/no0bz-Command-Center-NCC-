@@ -7,7 +7,7 @@ import { useToast } from "../../components/toast";
 import { Dialog } from "../../components/ui";
 import { groupLabel, sortByLayout } from "../../lib/node";
 
-/** Commander only: move nodes between groups, reorder them, add groups. */
+/** Commander only: move nodes between groups, reorder them, add and rename groups. */
 export function LayoutDialog({ nodes, groups, onClose }: { nodes: FleetNode[]; groups: FleetGroup[]; onClose: () => void }) {
   const client = useQueryClient();
   const toast = useToast();
@@ -21,6 +21,7 @@ export function LayoutDialog({ nodes, groups, onClose }: { nodes: FleetNode[]; g
     return map;
   });
   const [newGroup, setNewGroup] = useState("");
+  const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const byId = new Map(nodes.map((node) => [node.node_id, node]));
 
@@ -50,6 +51,25 @@ export function LayoutDialog({ nodes, groups, onClose }: { nodes: FleetNode[]; g
       toast.ok(`Gruppe „${group.name}“ angelegt.`);
     } catch (error) {
       toast.fail(error, "Die Gruppe konnte nicht angelegt werden.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const rename = async () => {
+    if (!renaming) return;
+    const name = renaming.name.trim();
+    const current = allGroups.find((group) => group.group_id === renaming.id);
+    if (!name || !current || name === groupLabel(current)) return setRenaming(null);
+    setBusy(true);
+    try {
+      const group = await api.fleet.renameGroup(renaming.id, name);
+      setAllGroups((list) => list.map((item) => (item.group_id === group.group_id ? group : item)));
+      setRenaming(null);
+      await client.invalidateQueries({ queryKey: qk.groups });
+      toast.ok(`Gruppe heißt jetzt „${group.name}“.`);
+    } catch (error) {
+      toast.fail(error, "Die Gruppe konnte nicht umbenannt werden – gibt es den Namen schon?");
     } finally {
       setBusy(false);
     }
@@ -88,7 +108,26 @@ export function LayoutDialog({ nodes, groups, onClose }: { nodes: FleetNode[]; g
       <div className="layout-groups">
         {allGroups.map((group) => (
           <section key={group.group_id} className="layout-group" aria-label={`Gruppe ${groupLabel(group)}`}>
-            <h3>{groupLabel(group)}</h3>
+            {renaming?.id === group.group_id ? (
+              <form className="row layout-rename" onSubmit={(event) => { event.preventDefault(); void rename(); }}>
+                <label className="visually-hidden" htmlFor={`rename-${group.group_id}`}>Neuer Name für {groupLabel(group)}</label>
+                <input
+                  id={`rename-${group.group_id}`} className="input grow" maxLength={64} autoFocus value={renaming.name}
+                  onChange={(event) => setRenaming({ id: group.group_id, name: event.target.value })}
+                  onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setRenaming(null); } }}
+                />
+                <button type="submit" className="btn btn-s" disabled={busy || !renaming.name.trim()}><Icon name="check" /> Übernehmen</button>
+                <button type="button" className="btn btn-quiet btn-s" onClick={() => setRenaming(null)}>Abbrechen</button>
+              </form>
+            ) : (
+              <div className="row layout-group-head">
+                <h3 className="grow">{groupLabel(group)}</h3>
+                <button
+                  type="button" className="btn btn-quiet btn-icon btn-s" aria-label={`Gruppe ${groupLabel(group)} umbenennen`}
+                  onClick={() => setRenaming({ id: group.group_id, name: groupLabel(group) })}
+                ><Icon name="edit" /></button>
+              </div>
+            )}
             {(order[group.group_id] ?? []).length === 0 ? (
               <p className="ink-3 small">Noch leer.</p>
             ) : (

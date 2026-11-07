@@ -71,7 +71,7 @@ export default function Overview(_: { route: Route }) {
 
       <div className="overview-split">
         <Annunciator alerts={alerts.data ?? []} loading={alerts.isPending} error={alerts.isError && !alerts.data} onRetry={() => void alerts.refetch()} />
-        <LiveTraffic nodes={list} updatedAt={nodes.dataUpdatedAt} />
+        <LiveTraffic />
       </div>
     </div>
   );

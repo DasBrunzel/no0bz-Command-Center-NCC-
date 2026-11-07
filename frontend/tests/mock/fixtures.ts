@@ -160,8 +160,8 @@ export function createFixtures() {
     { pairing_id: "pair-claimed-123456", display_name: "Kalle-PC", platform: "windows", access_role: "beta_tester", status: "claimed", created_at: iso(-2 * 86400_000), expires_at: iso(-2 * 86400_000 + 15 * minute) },
   ];
   const agentInvitations: AgentInvitation[] = [
-    { token_id: "t1", name: "Kalle-PC", status: "bound", node_id: "n-kalle", node_name: "Kalle-PC", created_at: iso(-50 * 86400_000), expires_at: null, last_used_at: iso(-3000), revoked_at: null },
-    { token_id: "t2", name: "Ersatz-Laptop", status: "ready", node_id: null, node_name: null, created_at: iso(-3600_000), expires_at: iso(7 * 86400_000), last_used_at: null, revoked_at: null },
+    { token_id: "t1", name: "Kalle-PC", access_role: "commander", status: "bound", node_id: "n-kalle", node_name: "Kalle-PC", created_at: iso(-50 * 86400_000), expires_at: null, last_used_at: iso(-3000), revoked_at: null },
+    { token_id: "t2", name: "Ersatz-Laptop", access_role: "beta_tester", status: "ready", node_id: null, node_name: null, created_at: iso(-3600_000), expires_at: iso(7 * 86400_000), last_used_at: null, revoked_at: null },
   ];
   const adminCodes: AdminCode[] = [
     { code_id: "c1", label: "Kalle Handy", status: "used", created_at: iso(-86400_000), expires_at: iso(-86400_000 + 15 * minute), used_at: iso(-86400_000 + 2 * minute), revoked_at: null, access_role: "beta_tester" },

@@ -2,7 +2,7 @@ import { request } from "./client";
 import type {
   AccessRole, AccountInvite, ArtworkCandidate, AccountInviteCreated, AdminCode, AdminCodeCreated, AgentInvitation,
   AgentInvitationCreated, AgentPairing, AgentRelease, AlertPolicy, ChatMessage, ChatParticipant,
-  DashboardAccess, DashboardRole, DashboardUser, FleetAlert, FleetGroup, FleetLayoutPlacement, FleetNode,
+  DashboardAccess, DashboardRole, DashboardUser, FleetAlert, FleetGroup, FleetLayoutPlacement, FleetNetwork, FleetNode,
   FleetSummary, FleetTelemetryPoint, Game, GameTracking, HardwareStats, NetworkHistorySample,
   NetworkUsageSummary, PhysicalDevice, PlaytimeStats, ReleaseFeedStatus, SensorRole, ServerVersion,
   TelegramAccount, TelegramLinkCode, TelegramSettings, TelegramSettingsUpdate, UpdateChannel,
@@ -40,6 +40,8 @@ export const api = {
     node: (nodeId: string) => request<FleetNode>(`/fleet/nodes/${id(nodeId)}`),
     groups: () => request<FleetGroup[]>("/fleet/groups"),
     createGroup: (name: string) => request<FleetGroup>("/fleet/groups", { method: "POST", json: { name } }),
+    renameGroup: (groupId: string, name: string) => request<FleetGroup>(`/fleet/groups/${id(groupId)}`, { method: "PATCH", json: { name } }),
+    network: (minutes = 30) => request<FleetNetwork>(`/fleet/network${query({ minutes })}`),
     saveLayout: (placements: FleetLayoutPlacement[]) => request<void>("/fleet/layout", { method: "PUT", json: { placements } }),
     physicalDevices: () => request<PhysicalDevice[]>("/fleet/physical-devices"),
     createPhysicalDevice: (display_name: string, node_ids: string[]) =>
@@ -116,7 +118,8 @@ export const api = {
 
   invitations: {
     list: () => request<AgentInvitation[]>("/agent-invitations"),
-    create: (name: string, expires_hours: number) => request<AgentInvitationCreated>("/agent-invitations", { method: "POST", json: { name, expires_hours } }),
+    create: (name: string, expires_hours: number, access_role: AccessRole = "commander") =>
+      request<AgentInvitationCreated>("/agent-invitations", { method: "POST", json: { name, expires_hours, access_role } }),
     revoke: (tokenId: string) => request<AgentInvitation>(`/agent-invitations/${id(tokenId)}/revoke`, { method: "POST" }),
     remove: (tokenId: string) => request<void>(`/agent-invitations/${id(tokenId)}`, { method: "DELETE" }),
   },
@@ -142,6 +145,7 @@ export const api = {
     create: (username: string, password: string, role: DashboardRole) => request<DashboardUser>("/users", { method: "POST", json: { username, password, role } }),
     update: (userId: string, patch: { role?: DashboardRole; active?: boolean; full_statistics?: boolean }) =>
       request<DashboardUser>(`/users/${id(userId)}`, { method: "PATCH", json: patch }),
+    remove: (userId: string) => request<void>(`/users/${id(userId)}`, { method: "DELETE" }),
     invites: () => request<AccountInvite[]>("/users/invites"),
     createInvite: (label: string, expires_days: number) => request<AccountInviteCreated>("/users/invites", { method: "POST", json: { label, expires_days } }),
     revokeInvite: (inviteId: string) => request<AccountInvite>(`/users/invites/${id(inviteId)}/revoke`, { method: "POST" }),
@@ -167,6 +171,7 @@ export const qk = {
   telemetry: (nodeId: string) => ["fleet", "telemetry", nodeId] as const,
   networkHistory: (nodeId: string) => ["fleet", "network-history", nodeId] as const,
   networkMonth: (nodeId: string) => ["fleet", "network-month", nodeId] as const,
+  fleetNetwork: (minutes: number) => ["fleet", "network", minutes] as const,
   hardwareStats: (days: number, nodeId: string | null) => ["fleet", "hardware-stats", days, nodeId] as const,
   games: ["games"] as const,
   gameStats: (days: number, nodeId: string | null) => ["games", "stats", days, nodeId] as const,
@@ -187,6 +192,7 @@ export const POLL = {
   chat: 5_000,
   pairings: 5_000,
   nodes: 4_000,
+  fleetNetwork: 5_000,
   alerts: 5_000,
   summary: 10_000,
   networkHistory: 30_000,

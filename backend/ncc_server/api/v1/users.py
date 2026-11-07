@@ -10,7 +10,7 @@ from typing import Literal, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from ncc.security import limited
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
 from ncc_server.auth import (
@@ -22,10 +22,14 @@ from ncc_server.auth import (
 )
 from ncc_server.models import (
     AccountInvite,
+    AgentPairing,
+    AgentToken,
     AuditEvent,
     DashboardSession,
+    FleetChatMessage,
     Node,
     TelegramLink,
+    TelegramLinkCode,
     User,
     utc_now,
 )
@@ -261,6 +265,49 @@ async def update_user(
     ))
     session.commit()
     return _response(user)
+
+
+@router.delete("/{user_id}", status_code=204, dependencies=[Depends(require_commander_access)])
+async def delete_user(
+    user_id: str,
+    identity: DashboardIdentity = Depends(require_dashboard_identity),
+    session: Session = Depends(database_session),
+) -> None:
+    """Remove an account for good; its devices must be reassigned or forgotten first.
+
+    Chat messages keep their sender name, used invites and audit entries stay,
+    and the audit records who was deleted, so the history remains readable.
+    """
+    user = session.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="user not found")
+    if user.id == identity.user_id:
+        raise HTTPException(status_code=409, detail="cannot delete your own account")
+    if user.active and user.role == "commander":
+        commanders = session.scalar(select(func.count()).select_from(User).where(User.active.is_(True), User.role == "commander")) or 0
+        if commanders <= 1:
+            raise HTTPException(status_code=409, detail="at least one active commander is required")
+    devices = session.scalar(select(func.count()).select_from(Node).where(Node.owner_user_id == user.id)) or 0
+    if devices:
+        raise HTTPException(status_code=409, detail=f"user still owns {devices} device(s); reassign or forget them first")
+    # SQLite does not enforce the foreign keys' ON DELETE rules, so clear references explicitly.
+    session.execute(delete(DashboardSession).where(DashboardSession.user_id == user.id))
+    session.execute(delete(TelegramLink).where(TelegramLink.user_id == user.id))
+    session.execute(delete(TelegramLinkCode).where(TelegramLinkCode.user_id == user.id))
+    session.execute(update(AccountInvite).where(AccountInvite.used_by == user.id).values(used_by=None))
+    session.execute(update(AgentToken).where(AgentToken.owner_user_id == user.id).values(owner_user_id=None))
+    session.execute(update(FleetChatMessage).where(FleetChatMessage.sender_user_id == user.id).values(sender_user_id=None))
+    # An open pairing approved by this friend would otherwise enroll an ownerless device.
+    session.execute(
+        update(AgentPairing).where(AgentPairing.owner_user_id == user.id, AgentPairing.claimed_at.is_(None),
+                                   AgentPairing.cancelled_at.is_(None)).values(cancelled_at=utc_now())
+    )
+    session.add(AuditEvent(
+        actor_type="dashboard-user", actor_id=identity.user_id, action="user.deleted",
+        details=json.dumps({"user_id": user.id, "username": user.username, "role": user.role}),
+    ))
+    session.delete(user)
+    session.commit()
 
 
 @router.post("/login", dependencies=[Depends(limited("dashboard-user-login", 10))])

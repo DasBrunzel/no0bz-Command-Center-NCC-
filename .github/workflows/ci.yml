@@ -10,8 +10,8 @@ jobs:
         python-version: ["3.10", "3.13"]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with: {python-version: "${{ matrix.python-version }}"}
       - run: python -m pip install -e .[dev]
       - run: ruff check backend tests scripts
@@ -20,10 +20,10 @@ jobs:
   frontend:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with: {version: 10}
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with: {node-version: 22, cache: pnpm, cache-dependency-path: frontend/pnpm-lock.yaml}
       - run: pnpm install --frozen-lockfile
         working-directory: frontend
@@ -52,8 +52,8 @@ jobs:
     env:
       NCC_SERVER_DATABASE_URL: postgresql+psycopg://ncc:ncc-ci-password@127.0.0.1:5432/ncc
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with: {python-version: "3.12"}
       - run: python -m pip install -e .[dev]
       - run: alembic upgrade head
@@ -62,8 +62,8 @@ jobs:
   audit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with: {python-version: "3.12"}
       - run: pip install pip-audit
       - run: pip-audit -r requirements.txt
@@ -73,7 +73,7 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Validate Linux service scripts
         if: runner.os == 'Linux'
         run: sh -n scripts/install_ncc_agent_service.sh scripts/install_ncc_server_service.sh scripts/uninstall_ncc_service.sh scripts/install_ncc_agent_tailscale_service.sh scripts/install_ncc_server_tailscale_service.sh
@@ -95,7 +95,7 @@ jobs:
   windows-agent-installer-build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v4
         with: {dotnet-version: '8.0.x'}
       - uses: dtolnay/rust-toolchain@stable
@@ -118,7 +118,7 @@ jobs:
     needs: windows-agent-installer-build
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v4
         with:
           name: ncc-agent-ci-setup
@@ -323,7 +323,7 @@ jobs:
     needs: windows-agent-installer-build
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v4
         with:
           name: ncc-agent-ci-setup
@@ -339,7 +339,7 @@ jobs:
     needs: windows-agent-installer-build
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v4
         with:
           name: ncc-agent-ci-setup

@@ -31,6 +31,9 @@ from ncc_server.schemas import (
     FleetAlertResponse,
     FleetGroupResponse,
     FleetLayoutPlacement,
+    FleetNetworkNode,
+    FleetNetworkResponse,
+    FleetNetworkSample,
     FleetNodeResponse,
     FleetSummaryResponse,
     FleetTelemetryPoint,
@@ -62,6 +65,96 @@ def create_fleet_group(session: Session, name: str) -> FleetGroupResponse:
     session.add(group)
     session.commit()
     return FleetGroupResponse(group_id=group.id, name=group.name, position=group.position)
+
+
+def rename_fleet_group(session: Session, group_id: str, name: str) -> FleetGroupResponse | None:
+    """Rename a group; default groups keep their id, so placement rules still apply."""
+    _ensure_default_fleet_groups(session)
+    group = session.get(FleetGroup, group_id)
+    if group is None:
+        return None
+    clash = session.scalar(select(FleetGroup.id).where(func.lower(FleetGroup.name) == name.lower(), FleetGroup.id != group_id))
+    if clash is not None:
+        raise ValueError("group name already exists")
+    if group.name != name:
+        session.add(AuditEvent(
+            actor_type="dashboard", action="fleet-group.renamed",
+            details=json.dumps({"group_id": group.id, "from": group.name, "to": name}, separators=(",", ":")),
+        ))
+        group.name = name
+        session.commit()
+    return FleetGroupResponse(group_id=group.id, name=group.name, position=group.position)
+
+
+def fleet_network(
+    session: Session, settings: ServerSettings, node_ids: set[str] | None, minutes: int, now: datetime | None = None,
+) -> FleetNetworkResponse:
+    """Sum live traffic of the visible online nodes and bucket the recent history.
+
+    Each bucket averages every node's readings first and then adds the nodes,
+    so a node that reports more often does not count more than once.
+    """
+    current = now or utc_now()
+    since = current - timedelta(minutes=minutes)
+    bucket_seconds = max(10, (minutes * 60) // 90)
+    query = select(Node)
+    if node_ids is not None:
+        query = query.where(Node.id.in_(node_ids))
+    nodes = {node.id: node for node in session.scalars(query).all()}
+    rows = session.execute(
+        select(TelemetryPoint.node_id, TelemetryPoint.recorded_at, TelemetryPoint.payload["network"])
+        .where(TelemetryPoint.node_id.in_(list(nodes)), TelemetryPoint.recorded_at >= since)
+        .order_by(TelemetryPoint.recorded_at)
+    ).all() if nodes else []
+
+    buckets: dict[int, dict[str, list[float]]] = {}
+    latest: dict[str, tuple[float, float]] = {}
+    for node_id, recorded_at, network in rows:
+        rates = _network_rates(network)
+        if rates is None:
+            continue
+        at = recorded_at.replace(tzinfo=timezone.utc) if recorded_at.tzinfo is None else recorded_at
+        index = int((at - since).total_seconds() // bucket_seconds)
+        entry = buckets.setdefault(index, {}).setdefault(node_id, [0.0, 0.0, 0.0])
+        entry[0] += rates[0]
+        entry[1] += rates[1]
+        entry[2] += 1
+        latest[node_id] = rates
+
+    history = []
+    for index in sorted(buckets):
+        per_node = buckets[index].values()
+        history.append(FleetNetworkSample(
+            at=since + timedelta(seconds=(index + 1) * bucket_seconds),
+            download_mbps=round(sum(value[0] / value[2] for value in per_node), 2),
+            upload_mbps=round(sum(value[1] / value[2] for value in per_node), 2),
+            nodes=len(buckets[index]),
+        ))
+
+    online = [node for node in nodes.values() if is_online(node, settings.node_offline_after_seconds)]
+    talkers = sorted(
+        (
+            FleetNetworkNode(node_id=node.id, display_name=node.display_name,
+                             download_mbps=round(latest[node.id][0], 2), upload_mbps=round(latest[node.id][1], 2))
+            for node in online if node.id in latest
+        ),
+        key=lambda item: item.download_mbps + item.upload_mbps, reverse=True,
+    )
+    return FleetNetworkResponse(
+        minutes=minutes, bucket_seconds=bucket_seconds, online_nodes=len(online),
+        download_mbps=round(sum(item.download_mbps for item in talkers), 2),
+        upload_mbps=round(sum(item.upload_mbps for item in talkers), 2),
+        nodes=talkers, history=history,
+    )
+
+
+def _network_rates(network: object) -> tuple[float, float] | None:
+    if not isinstance(network, dict):
+        return None
+    down, up = _number(network.get("download_mbps")), _number(network.get("upload_mbps"))
+    if down is None and up is None:
+        return None
+    return max(0.0, down or 0.0), max(0.0, up or 0.0)
 
 
 def list_physical_devices(session: Session) -> list[PhysicalDevice]:

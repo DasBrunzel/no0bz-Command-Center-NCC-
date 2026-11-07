@@ -25,8 +25,10 @@
   .layout-groups { display: grid; gap: var(--s-4); grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); }
   .layout-group {
     padding: var(--s-3); border-radius: var(--r-2); background: var(--c-panel);
-    & h3 { font-size: var(--fs-l); margin-block-end: var(--s-2); }
+    & h3 { font-size: var(--fs-l); margin: 0; }
   }
+  .layout-group-head, .layout-rename { align-items: center; gap: var(--s-1); margin-block-end: var(--s-2); }
+  .layout-rename .input { min-block-size: 2rem; }
   .layout-list { display: grid; gap: var(--s-1);
     & li { display: flex; align-items: center; gap: var(--s-1); font-size: var(--fs-s); font-weight: 500; }
   }

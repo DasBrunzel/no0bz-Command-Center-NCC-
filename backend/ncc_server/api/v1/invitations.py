@@ -56,6 +56,7 @@ async def create_invitation(
         payload.name,
         expires_at,
         actor_type="dashboard",
+        access_role=payload.access_role,
     )
     return AgentInvitationCreatedResponse(**_response(session, issued.record).model_dump(), token=issued.plaintext)
 
@@ -107,6 +108,7 @@ def _response(session: Session, record: AgentToken) -> AgentInvitationResponse:
     return AgentInvitationResponse(
         token_id=record.id,
         name=record.name,
+        access_role="beta_tester" if record.access_role == "beta_tester" else "commander",
         status=invitation_status,
         node_id=record.node_id,
         node_name=node.display_name if node is not None else None,

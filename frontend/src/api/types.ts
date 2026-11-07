@@ -153,6 +153,16 @@ export interface FleetGroup {
   position: number;
 }
 
+export interface FleetNetwork {
+  minutes: number;
+  bucket_seconds: number;
+  online_nodes: number;
+  download_mbps: number;
+  upload_mbps: number;
+  nodes: Array<{ node_id: string; display_name: string; download_mbps: number; upload_mbps: number }>;
+  history: Array<{ at: ISODate; download_mbps: number; upload_mbps: number; nodes: number }>;
+}
+
 export interface PhysicalDevice {
   device_id: string;
   display_name: string;
@@ -357,6 +367,7 @@ export interface ChatParticipant {
 export interface AgentInvitation {
   token_id: string;
   name: string;
+  access_role: AccessRole;
   status: "ready" | "bound" | "expired" | "revoked";
   node_id: string | null;
   node_name: string | null;
