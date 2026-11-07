@@ -19,12 +19,12 @@ Freunde sehen über `access.visible_node_ids` nur eigene Geräte (oder alle Stat
 
 ## Matrix
 
-✅ = im neuen UI erreichbar und geprüft · ➖ = bewusst nicht im Dashboard (Agent-API)
+✅ = im neuen UI erreichbar und geprüft (Code-Abgleich `src/api/endpoints.ts` ↔ Aufrufer, Playwright-Tests und Mock in `tests/mock/api.ts`) · ➖ = bewusst nicht im Dashboard (Agent-/Betriebs-API)
 
 | ✓ | Methode | Endpoint | Rolle | Zweck | UI-Ort |
 |---|---|---|---|---|---|
 | ✅ | GET | `/version` | öffentlich | Server-Version | Fußzeile der Navigation, Einstellungen › Über |
-| ✅ | GET | `/status/live` | öffentlich | Erreichbarkeit | Verbindungsprüfung beim Start („Server nicht erreichbar“) |
+| ✅ | GET | `/status/live` | öffentlich | Erreichbarkeit | Einstellungen › Über (Status-Lampe) |
 | ➖ | GET | `/status/ready` | öffentlich | DB-Bereitschaft | nur für Betrieb/Healthchecks |
 | ✅ | POST | `/admin-codes/redeem` | öffentlich | Login per 8-stelligem Code | Login › Admin-Code |
 | ✅ | POST | `/admin-codes/logout` | öffentlich (Cookie) | Abmelden | Navigation › Abmelden |
@@ -49,7 +49,7 @@ Freunde sehen über `access.visible_node_ids` nur eigene Geräte (oder alle Stat
 | ✅ | GET | `/fleet/summary` | angemeldet | Zahlen der Fleet | Lage › Kopf |
 | ✅ | GET | `/fleet/alerts?limit=` | angemeldet | Warnungen (aktiv + verlauf) | Lage › Störmelder, Warnungen-Popover, App-Badge |
 | ✅ | POST | `/fleet/alerts/clear` | Commander | Aktive Warnungen leeren | Lage › Störmelder › „Alle quittieren“ |
-| ✅ | GET | `/fleet/alert-policy` | angemeldet | Warnregeln lesen | Einstellungen › Warnregeln |
+| ✅ | GET | `/fleet/alert-policy` | angemeldet | Warnregeln lesen | Einstellungen › Warnregeln (für alle sichtbar, nur Commander speichern) |
 | ✅ | PUT | `/fleet/alert-policy` | Commander | Warnregeln speichern | Einstellungen › Warnregeln |
 | ✅ | GET | `/fleet/telegram` | Team | Server-Telegram-Einstellungen | Einstellungen › Telegram |
 | ✅ | PUT | `/fleet/telegram` | Commander | Speichern | Einstellungen › Telegram |
@@ -66,7 +66,7 @@ Freunde sehen über `access.visible_node_ids` nur eigene Geräte (oder alle Stat
 | ✅ | PUT | `/fleet/nodes/{id}/release` | Commander | Release zuweisen | Geräte › Detail › Updates (Releases › Zuweisung nutzt die Releases-Route) |
 | ✅ | PUT | `/fleet/nodes/{id}/update-channel` | Commander | Kanal setzen | Geräte › Detail › Updates |
 | ✅ | GET | `/fleet/nodes/{id}/telemetry?limit=&after=` | angemeldet (sichtbar) | Telemetrie-Verlauf, Cursor | Geräte › Detail › Verlauf (Charts) |
-| ✅ | GET | `/fleet/nodes/{id}/network/history?limit=` | angemeldet (sichtbar) | Netzwerk-Verlauf | Lage › Live-Verkehr, Geräte › Detail › Netzwerk |
+| ✅ | GET | `/fleet/nodes/{id}/network/history?limit=` | angemeldet (sichtbar) | Netzwerk-Verlauf | Geräte › Detail › Netzwerk (Lage › Live-Verkehr summiert `latest` aus `/fleet/nodes`) |
 | ✅ | GET | `/fleet/nodes/{id}/network/month` | angemeldet (sichtbar) | Monatsverbrauch | Geräte › Detail › Netzwerk |
 | ✅ | POST | `/fleet/network/reset` | Commander | Netzwerkzähler zurücksetzen | Geräte › Detail › Netzwerk |
 | ✅ | GET | `/fleet/groups` | angemeldet | Gruppen | Geräte (Gruppierung), Lage (Gleise) |

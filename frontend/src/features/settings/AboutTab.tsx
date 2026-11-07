@@ -1,4 +1,6 @@
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { api } from "../../api/endpoints";
 import { useVersion } from "../../api/queries";
 import { hasLegacyToken } from "../../api/client";
 import { Lamp } from "../../components/ui";
@@ -12,6 +14,7 @@ window.addEventListener("beforeinstallprompt", (event) => {
 
 export default function AboutTab() {
   const version = useVersion();
+  const live = useQuery({ queryKey: ["status", "live"], queryFn: api.live, refetchInterval: 30_000 });
   const [canInstall, setCanInstall] = useState(!!deferred);
   const standalone = window.matchMedia("(display-mode: standalone)").matches;
   useEffect(() => {
@@ -25,6 +28,7 @@ export default function AboutTab() {
         <div className="panel-head"><h2>no0bz Command Center</h2></div>
         <dl className="kv">
           <dt>Server</dt><dd>{version.data?.version ?? "…"}</dd>
+          <dt>Status</dt><dd className="status-label"><Lamp state={live.isError ? "stop" : live.data ? "go" : "off"} size="s" />{live.isError ? "antwortet nicht" : live.data ? "antwortet" : "wird geprüft"}</dd>
           <dt>API</dt><dd>{version.data?.api ?? "v1"}</dd>
           <dt>Dashboard</dt><dd>2.0 „Stellwerk“</dd>
           <dt>Anmeldung</dt><dd>{hasLegacyToken() ? "Dashboard-Token (nur im Speicher)" : "Sitzungs-Cookie (HttpOnly)"}</dd>

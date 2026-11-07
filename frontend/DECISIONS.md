@@ -60,6 +60,15 @@ Selbstprüfung gegen Template-Defaults und was ich daraufhin geändert habe:
 | D-11 | Dashboard-Token-Fallback nur **im Speicher** (Modulvariable), eingebbar unter „Alte Installation?“ im Login | Vorgabe: keine Secrets in `localStorage`. Nach Neuladen muss der Token erneut eingegeben werden; Cookie-Login ist der Normalfall | `sessionStorage` (ebenfalls Web Storage, würde XSS-lesbar bleiben) |
 | D-12 | 401-Behandlung: zentraler Fehlertyp `ApiError`; jede 401 außerhalb der Login-Requests setzt den Auth-Status auf „abgemeldet“, leert den Query-Cache und stoppt alles Polling (Queries sind `enabled` nur im angemeldeten Zustand) → keine Schleife | ein einziger Ort entscheidet über die Abmeldung | Retry-on-401 (Endlosschleifen-Risiko) |
 | D-13 | Rechte im UI über einen `useCan()`-Hook mit den Fähigkeiten aus `API-MATRIX.md` (commander, team, manage(node)) | eine Quelle der Wahrheit, testbar | verstreute Rollenvergleiche |
+| D-14 | Es gibt eine dritte Rolle **Freund** (`friend`, aus `auth.py`/`access.py`): sieht nur eigene Geräte, verwaltet sie selbst. Das UI blendet für Freunde Aufnahme, Releases, Konten und Server-Telegram aus | der Brief nennt nur Commander/Beta-Tester, das Backend kennt drei Rollen; Registrierung per Einladung erzeugt immer Freunde | Freunde wie Beta-Tester behandeln (würde 403 und fremde Geräte-Links erzeugen) |
+| D-15 | Beta-Tester sehen Verwaltungsaktionen **gesperrt mit Hinweis** (z. B. Gaming Mode, Kanal, Release), Aktionen ohne Lesewert (Code erstellen, Widerrufen, Anordnen) sind **ausgeblendet** | gesperrte Schalter erklären, warum etwas nicht geht; reine Schreibformulare sind nur Rauschen | alles ausblenden (Beta-Tester würden Funktionen nicht kennen) |
+| D-16 | Pairing-Freigabe in der Liste nur für Commander, über den Pairing-Link für jede Rolle | Backend erlaubt `approve` jeder Identität; der Link ist der vorgesehene Weg für Freunde/Beta-Tester, die Liste ist Verwaltung | Freigabe-Button für alle (widerspräche „keine Geräte verwalten“) |
+| D-17 | Hardware-Bilder aus `static/assets/hardware/` werden **nicht** übernommen, stattdessen typografische Hersteller-Plaketten (AMD/Intel/NVIDIA) im Emaille-Stil | Produktfotos/Logos Dritter passen nicht zum Stellwerk-Stil und sind lizenzrechtlich heikel; die Plakette ist lesbar und braucht 0 kB | Bilder nach `public/` kopieren |
+| D-18 | Chart-Palette: vier Serienfarben in fester Reihenfolge, mit dem dataviz-Validator geprüft (hell gegen `#f2f6f2`, dunkel gegen `#1d242a`: alle Prüfungen bestanden; hell: Orange 2,99:1 Kontrast → Legende + Tabellenansicht vorhanden). Signalfarben sind reserviert und nie Serienfarben | Lesbarkeit und Farbfehlsichtigkeit | – |
+| D-19 | Farbmischung (`color-mix`) in **OKLab**, nicht OKLCH | OKLCH interpoliert den Farbton: Signalgelb über dunklem Blau-Grau wurde im Dunkelmodus türkis | – |
+| D-20 | TanStack Query **5.106.1** statt 5.107.1 | pnpm 12 lehnt Pakete jünger als ein Tag ab (`minimumReleaseAge`). 5.107.1 erschien am 06.11.2026; statt die Supply-Chain-Regel per Ausnahme zu umgehen, wird die neueste regelkonforme Version derselben Major genutzt | Ausnahme in `pnpm-workspace.yaml` |
+| D-21 | Theme-Wahl (Automatisch/Emaille/Nachtschicht) in `localStorage` | reine Darstellungsvorliebe, kein Secret; Zugriff in try/catch | – |
+| D-22 | Tests gegen eine **schema-getreue Mock-API** (`tests/mock/api.ts`) per Playwright-Routing; derselbe Mock liefert über `tests/mock/serve.ts` den Build wie FastAPI aus (für Screenshots/Lighthouse) | kein laufendes Backend/Postgres in dieser Umgebung; Rechteprüfungen im Mock folgen `require_*_access` und `manageable_node` | MSW (zusätzliche Abhängigkeit im App-Bundle bzw. Worker) |
 
 ## 3. PWA unter den Grenzen des Backends
 
@@ -70,9 +79,41 @@ Selbstprüfung gegen Template-Defaults und was ich daraufhin geändert habe:
 | P-03 | SW-Strategie: App-Shell (`app.html`, JS/CSS/Fonts/Icons) precache mit Build-Hash-Liste; API-Requests werden **nie** gecacht (Telemetrie soll nicht veralten, Antworten tragen `no-store`) | Offline zeigt die Shell den Zustand „Server nicht erreichbar“ statt einer Browser-Fehlerseite | Stale-while-revalidate für API (würde veraltete Lage als aktuell zeigen) |
 | P-04 | App-Badge über `navigator.setAppBadge(aktiveWarnungen)`, wenn verfügbar | Progressive Enhancement; ohne API passiert nichts | – |
 
+**Geprüft:** `tests/pwa.spec.ts` installiert den Service Worker, schaltet das Netz ab und lädt `/assets/app.html` neu – die Shell erscheint mit „Server nicht erreichbar“.
+
 **Vorschlag ans Backend:** Ein `GET /sw.js` (oder der Header `Service-Worker-Allowed: /` auf `/assets/sw.js`) plus eine SPA-Fallback-Route würden `app.html` und Hash-Routing überflüssig machen.
 
-## 4. API-Vorschläge (nicht umgesetzt, Backend bleibt unverändert)
+## 4. Browser-Unterstützung und Fallbacks
+
+| Feature | Einsatz | Fallback |
+|---|---|---|
+| View Transitions | Routenwechsel, Geräteblock → Detailkopf (`view-transition-name` je Node) | ohne API sofortiger Wechsel |
+| `@starting-style`, `transition-behavior: allow-discrete` | Dialoge, Popover, Toasts, Störmelder-Kacheln, Chat-Nachrichten | ohne Unterstützung ohne Einblendung |
+| Scroll-driven Animations | Schatten der Meldeleiste beim Scrollen | ohne Unterstützung kein Schatten |
+| Container Queries | Blöcke im Gleisbild, Messkacheln, Tabellen-Spalten, Rangliste | – (alle Zielbrowser) |
+| `@property` | `--glow` der Lampen, `--value` der Messbalken (weich animierte Live-Werte) | Sprung statt Übergang |
+| Popover API + Anchor Positioning | Menüs (Gaming Mode, Mehr), Warnungs-Popover | ohne Anchor Positioning zentriert der Browser das Popover (UA-Standard) |
+| `<dialog>` | alle Dialoge, Klick auf Hintergrund schließt | – |
+| `light-dark()`, OKLCH, `color-mix()` | Token-System | – (alle Zielbrowser seit 2024) |
+| `appearance: base-select`, `field-sizing: content`, `interpolate-size` | Selects, Chat-Eingabe, Ausklapp-Höhen | normale Selects/Textareas |
+| Badging API | Zahl aktiver Warnungen am App-Symbol | nichts |
+| `prefers-reduced-motion` | setzt alle Motion-Tokens auf 0 ms, deaktiviert View Transitions und Blinken | – |
+
+## 5. Lighthouse (13.6.0, gegen `tests/mock/serve.ts`, Commander-Sitzung)
+
+| Seite | Performance | Barrierefreiheit | Best Practices | SEO |
+|---|---|---|---|---|
+| Lage, Desktop | 100 | 100 | 100 | 100 |
+| Spiele, Hardware, Desktop | 98–100 | 100 | 100 | 100 |
+| 13 weitere Ansichten (A11y/Best Practices) | – | 100 | 100 | – |
+| Lage, Mobil (ohne Kompression, wie FastAPI heute) | **83** | 100 | 100 | 100 |
+| Lage, Mobil (mit gzip) | 94 | 100 | 100 | 100 |
+
+**Begründete Abweichung:** Mobil bleibt Performance ohne Kompression unter 90. Ursache ist allein das LCP (4,7 s im simulierten langsamen 4G): FastAPIs `StaticFiles` liefert JS/CSS unkomprimiert aus (≈ 296 kB statt 92 kB für das Haupt-Bundle, davon ≈ 70 % React). Bereits umgesetzt: Code-Splitting pro Bereich, Lazy Loading von Charts/Markdown/Tabs, `modulepreload` für die Lage, Font-Preload, paralleles Vorladen der Lage-Daten während der Sitzungsprüfung, CLS 0. Mit gzip-Auslieferung (gemessen über `MOCK_GZIP=1`) erreicht dieselbe Seite 94. **Vorschlag ans Backend:** `app.add_middleware(GZipMiddleware, minimum_size=1024)` in `app.py`.
+
+## 6. API-Vorschläge (nicht umgesetzt, Backend bleibt unverändert)
+
+- **Kompression** statischer Dateien (siehe Abschnitt 5).
 
 - **Beta-Tester und Gaming Mode:** `manageable_node` lehnt Beta-Tester ab; sie sehen den Schalter daher gesperrt. Falls gewünscht, bräuchte es eine eigene Prüfung.
 - **Kein Endpoint für ausstehende Pairings abbrechen** (`cancelled` existiert als Status, aber keine Route). Das UI bietet daher kein „Ablehnen“ an.
