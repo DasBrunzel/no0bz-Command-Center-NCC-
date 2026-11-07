@@ -339,6 +339,7 @@ class GameResponse(BaseModel):
     developers: list[str]
     release_date: str | None
     has_artwork: bool
+    artwork_source: str | None = None
 
 
 class AgentReleaseManifestCreateRequest(BaseModel):

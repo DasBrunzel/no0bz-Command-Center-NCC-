@@ -143,7 +143,7 @@ async def _game_metadata_loop(database: Database, settings: ServerSettings) -> N
         # Start late so a short-lived process, such as a test, never goes online.
         await asyncio.sleep(20)
         try:
-            await refresh_game_metadata(database)
+            await refresh_game_metadata(database, steamgriddb_key=settings.steamgriddb_api_key.get_secret_value())
         except Exception as exc:
             logger.warning("Game metadata refresh failed: %s", exc)
         await asyncio.sleep(40)

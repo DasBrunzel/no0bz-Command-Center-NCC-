@@ -489,6 +489,7 @@ button.selected {
 .game-rank small { color: var(--muted); font-size: 12px; }
 .game-rank-time { text-align: right; }
 .game-rank .link-button { background: none; border: 0; color: var(--accent); font-size: 12px; padding: 4px; }
+.game-rank-actions { display: flex; flex-direction: column; align-items: flex-end; }
 .table-scroll { overflow-x: auto; }
 .game-hardware { width: 100%; border-collapse: collapse; font-size: 13px; }
 .game-hardware th { text-align: left; color: var(--muted); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
@@ -506,7 +507,7 @@ button.selected {
   .game-art.large { width: 100%; }
   .playtime-summary { grid-template-columns: repeat(2, 1fr); }
   .game-rank { grid-template-columns: 24px 56px minmax(0, 1fr) auto; }
-  .game-rank .rank-bar, .game-rank .link-button { display: none; }
+  .game-rank .rank-bar, .game-rank .link-button, .game-rank-actions { display: none; }
   .heatmap-grid { grid-template-columns: 22px repeat(24, 1fr); gap: 1px; }
   .stats-view-switch { align-self: flex-start; }
   .node-actions { flex-wrap: wrap; }

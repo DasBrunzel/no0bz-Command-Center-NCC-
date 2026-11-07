@@ -169,15 +169,71 @@ def correct_game_match(session: Session, game_id: str, steam_app_id: int | None)
     game.metadata_attempts = 0
     game.metadata_checked_at = None
     if steam_app_id is None:
-        game.store_name = game.description = game.release_date = game.header_content_type = None
-        game.header_image = None
+        game.store_name = game.description = game.release_date = None
         game.genres, game.developers = [], []
+        if game.artwork_source != "upload":
+            game.header_image = game.header_content_type = game.artwork_source = None
+        # Without Steam the SteamGridDB lookup may find a banner instead.
+        game.artwork_checked_at = None
     session.add(AuditEvent(
         actor_type="dashboard", actor_id=game.id, action="game.match.updated",
         details=json.dumps({"steam_app_id": steam_app_id}, separators=(",", ":")),
     ))
     session.commit()
     session.refresh(game)
+    return game
+
+
+ARTWORK_MAX_BYTES = 3 * 1024 * 1024
+
+
+def artwork_content_type(data: bytes) -> str | None:
+    """Return the image type from the file signature; the client header is ignored."""
+    if data.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if len(data) > 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+
+
+def set_custom_artwork(session: Session, game_id: str, data: bytes, actor_id: str) -> Game | None:
+    """Store a banner uploaded in the dashboard; it is never replaced automatically."""
+    content_type = artwork_content_type(data)
+    if content_type is None or len(data) > ARTWORK_MAX_BYTES:
+        raise ValueError("unsupported image")
+    game = session.get(Game, game_id)
+    if game is None:
+        return None
+    game.header_image, game.header_content_type, game.artwork_source = data, content_type, "upload"
+    session.add(AuditEvent(
+        actor_type="dashboard", actor_id=actor_id, action="game.artwork.uploaded",
+        details=json.dumps({"game_id": game.id, "bytes": len(data), "content_type": content_type}, separators=(",", ":")),
+    ))
+    session.commit()
+    session.refresh(game)
+    return game
+
+
+def remove_custom_artwork(session: Session, game_id: str, actor_id: str) -> Game | None:
+    """Drop an uploaded banner; Steam or SteamGridDB artwork is fetched again."""
+    game = session.get(Game, game_id)
+    if game is None:
+        return None
+    if game.artwork_source == "upload":
+        game.header_image = game.header_content_type = game.artwork_source = None
+        game.artwork_checked_at = None
+        if game.steam_app_id is not None:
+            game.match_state = "pending"
+            game.metadata_attempts = 0
+            game.metadata_checked_at = None
+        session.add(AuditEvent(
+            actor_type="dashboard", actor_id=actor_id, action="game.artwork.removed",
+            details=json.dumps({"game_id": game.id}, separators=(",", ":")),
+        ))
+        session.commit()
+        session.refresh(game)
     return game
 
 
@@ -225,6 +281,7 @@ def playtime_statistics(
             "title": game.title if game else None,
             "launcher": game.launcher if game else None,
             "has_artwork": bool(game and game.header_content_type),
+            "custom_artwork": bool(game and game.artwork_source == "upload"),
             "genres": list(game.genres or []) if game else [],
             "seconds": 0.0, "sessions": 0, "last_played_at": end, "hardware": {}, "energy_wh": 0.0,
         })

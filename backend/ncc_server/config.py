@@ -43,6 +43,8 @@ class ServerSettings(BaseSettings):
     release_feed_enabled: bool = True
     release_feed_repository: str = "DasBrunzel/no0bz-Command-Center-NCC-"
     release_feed_interval_seconds: int = Field(default=900, ge=60, le=86400)
+    # Optional key from steamgriddb.com for banners of games that are not on Steam.
+    steamgriddb_api_key: SecretStr = SecretStr("")
     chat_upload_dir: Path = Field(default_factory=lambda: ROOT / "ncc_chat_uploads")
 
 

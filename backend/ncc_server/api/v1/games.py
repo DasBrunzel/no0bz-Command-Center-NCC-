@@ -16,7 +16,14 @@ from ncc_server.auth import (
     require_dashboard_identity,
 )
 from ncc_server.fleet_service import fleet_node
-from ncc_server.game_service import correct_game_match, playtime_statistics, update_game_settings
+from ncc_server.game_service import (
+    ARTWORK_MAX_BYTES,
+    correct_game_match,
+    playtime_statistics,
+    remove_custom_artwork,
+    set_custom_artwork,
+    update_game_settings,
+)
 from ncc_server.hardware_stats import hardware_statistics
 from ncc_server.models import Game, GameSession
 from ncc_server.schemas import (
@@ -110,6 +117,47 @@ async def game_artwork(game_id: str, session: Session = Depends(database_session
     return Response(content=game.header_image, media_type=game.header_content_type)
 
 
+@router.put("/games/{game_id}/artwork", response_model=GameResponse, dependencies=[Depends(require_commander_access)])
+async def upload_game_artwork(
+    game_id: str,
+    request: Request,
+    identity: DashboardIdentity = Depends(require_dashboard_identity),
+    session: Session = Depends(database_session),
+) -> GameResponse:
+    """Store a JPEG, PNG or WebP banner sent as the raw request body."""
+    declared = request.headers.get("content-length")
+    if declared is not None and (not declared.isdigit() or int(declared) > ARTWORK_MAX_BYTES):
+        raise HTTPException(status_code=413, detail="image too large")
+    data = bytearray()
+    async for chunk in request.stream():
+        data.extend(chunk)
+        if len(data) > ARTWORK_MAX_BYTES:
+            raise HTTPException(status_code=413, detail="image too large")
+    try:
+        game = set_custom_artwork(session, game_id, bytes(data), _actor(identity))
+    except ValueError:
+        raise HTTPException(status_code=415, detail="use a JPEG, PNG or WebP image") from None
+    if game is None:
+        raise HTTPException(status_code=404, detail="game not found")
+    return _game_response(game)
+
+
+@router.delete("/games/{game_id}/artwork", response_model=GameResponse, dependencies=[Depends(require_commander_access)])
+async def delete_game_artwork(
+    game_id: str,
+    identity: DashboardIdentity = Depends(require_dashboard_identity),
+    session: Session = Depends(database_session),
+) -> GameResponse:
+    game = remove_custom_artwork(session, game_id, _actor(identity))
+    if game is None:
+        raise HTTPException(status_code=404, detail="game not found")
+    return _game_response(game)
+
+
+def _actor(identity: DashboardIdentity) -> str:
+    return identity.user_id or identity.username
+
+
 def _game_response(game: Game) -> GameResponse:
     return GameResponse(
         game_id=game.id,
@@ -124,4 +172,5 @@ def _game_response(game: Game) -> GameResponse:
         developers=list(game.developers or []),
         release_date=game.release_date,
         has_artwork=bool(game.header_content_type),
+        artwork_source=game.artwork_source,
     )

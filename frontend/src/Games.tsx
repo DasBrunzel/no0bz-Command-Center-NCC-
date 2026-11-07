@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Gamepad2, Trophy } from "lucide-react";
 import { Meter as ConceptMeter, SectionHead as ConceptSectionHead } from "./concept/components";
 
@@ -31,6 +31,7 @@ type GameEntry = {
   title: string | null;
   launcher: string | null;
   has_artwork: boolean;
+  custom_artwork?: boolean;
   genres: string[];
   seconds: number;
   sessions: number;
@@ -99,6 +100,24 @@ function useArtwork(gameId: string | null, hasArtwork: boolean, token: string) {
     return () => { current = false; };
   }, [gameId, hasArtwork, token]);
   return url;
+}
+
+const BANNER_WIDTH = 920;
+const BANNER_HEIGHT = 430;
+// Crops any picture to the Steam banner format, so every card looks the same
+// and the upload stays small.
+async function bannerFromFile(file: File): Promise<Blob> {
+  const bitmap = await createImageBitmap(file);
+  const canvas = document.createElement("canvas");
+  canvas.width = BANNER_WIDTH;
+  canvas.height = BANNER_HEIGHT;
+  const scale = Math.max(BANNER_WIDTH / bitmap.width, BANNER_HEIGHT / bitmap.height);
+  const width = bitmap.width * scale, height = bitmap.height * scale;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("CANVAS");
+  context.drawImage(bitmap, (BANNER_WIDTH - width) / 2, (BANNER_HEIGHT - height) / 2, width, height);
+  bitmap.close();
+  return new Promise((resolve, reject) => canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("ENCODE"))), "image/jpeg", 0.9));
 }
 
 function GameArt({ gameId, title, hasArtwork, token, size = "large" }: { gameId: string | null; title: string | null; hasArtwork: boolean; token: string; size?: "large" | "small" }) {
@@ -233,6 +252,9 @@ export function PlaytimeStatistics({ nodes, token, canManage }: { nodes: GameNod
   const [stats, setStats] = useState<PlaytimeStats | null>(null);
   const [failed, setFailed] = useState(false);
   const [revision, setRevision] = useState(0);
+  const [artRevision, setArtRevision] = useState(0);
+  const bannerInput = useRef<HTMLInputElement>(null);
+  const bannerGame = useRef<GameEntry | null>(null);
   useEffect(() => {
     let current = true;
     const load = async () => {
@@ -262,9 +284,39 @@ export function PlaytimeStatistics({ nodes, token, canManage }: { nodes: GameNod
       body: JSON.stringify({ steam_app_id: match ? Number(match[1]) : null }),
     });
     if (!response.ok) { window.alert("Die Zuordnung konnte nicht gespeichert werden."); return; }
-    artworkCache.delete(game.game_id);
     window.alert(match ? "Gespeichert. Cover und Infos werden in etwa einer Minute geladen." : "Gespeichert. Das Spiel wird ohne Steam-Infos angezeigt.");
+    refreshArtwork(game.game_id);
+  };
+
+  const refreshArtwork = (gameId: string) => {
+    artworkCache.delete(gameId);
+    setArtRevision((value) => value + 1);
     setRevision((value) => value + 1);
+  };
+  const chooseBanner = (game: GameEntry) => {
+    bannerGame.current = game;
+    bannerInput.current?.click();
+  };
+  const uploadBanner = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    const game = bannerGame.current;
+    if (!file || !game?.game_id) return;
+    let body: Blob;
+    try { body = await bannerFromFile(file); } catch { window.alert("Das Bild konnte nicht gelesen werden. Bitte ein JPG, PNG oder WebP wählen."); return; }
+    const response = await fetch(`/api/v1/fleet/games/${game.game_id}/artwork`, {
+      method: "PUT",
+      headers: { ...authHeaders(token), "Content-Type": "image/jpeg" },
+      body,
+    });
+    if (!response.ok) { window.alert("Das Banner konnte nicht gespeichert werden."); return; }
+    refreshArtwork(game.game_id);
+  };
+  const removeBanner = async (game: GameEntry) => {
+    if (!game.game_id || !window.confirm(`Eigenes Banner für „${game.title}“ entfernen? Danach wird wieder automatisch nach einem Banner gesucht.`)) return;
+    const response = await fetch(`/api/v1/fleet/games/${game.game_id}/artwork`, { method: "DELETE", headers: authHeaders(token) });
+    if (!response.ok) { window.alert("Das Banner konnte nicht entfernt werden."); return; }
+    refreshArtwork(game.game_id);
   };
 
   const windowsNodes = nodes.filter((node) => node.platform === "windows" && node.metadata.source !== "unraid-api");
@@ -285,7 +337,7 @@ export function PlaytimeStatistics({ nodes, token, canManage }: { nodes: GameNod
     </div>
     {failed && !stats && <div className="detail-card empty">Die Spielzeit-Statistik konnte nicht geladen werden.</div>}
     {!failed && !stats && <div className="detail-card empty">Spielzeit wird geladen …</div>}
-    {stats && stats.total_seconds === 0 && <div className="detail-card empty playtime-empty"><Gamepad2 size={34} /><h2>Noch keine Spielzeit erfasst</h2><p>Sobald ein Windows-Agent ein Spiel von Steam, Epic Games, GOG oder der Xbox-App erkennt, erscheint es hier.</p></div>}
+    {stats && stats.total_seconds === 0 && <div className="detail-card empty playtime-empty"><Gamepad2 size={34} /><h2>Noch keine Spielzeit erfasst</h2><p>Sobald ein Windows-Agent ein Spiel von Steam, Epic Games, GOG, Battle.net oder der Xbox-App erkennt, erscheint es hier.</p></div>}
     {stats && stats.total_seconds > 0 && <>
       <div className="stats-summary playtime-summary">
         <div><small>Gesamtspielzeit</small><strong>{playtimeShort(stats.total_seconds)}</strong><p>{PERIODS.find((period) => period.days === days)?.label}</p></div>
@@ -307,12 +359,17 @@ export function PlaytimeStatistics({ nodes, token, canManage }: { nodes: GameNod
         <ConceptSectionHead eyebrow="Bestenliste" title="Meistgespielte Spiele" aside={<Trophy size={18} />} />
         <div className="game-ranking">{stats.games.map((game, index) => <div className="game-rank" key={game.game_id || "presence"}>
           <span className="rank-number">{String(index + 1).padStart(2, "0")}</span>
-          <GameArt gameId={game.game_id} title={game.title} hasArtwork={game.has_artwork} token={token} size="small" />
+          <GameArt key={`art-${artRevision}`} gameId={game.game_id} title={game.title} hasArtwork={game.has_artwork} token={token} size="small" />
           <span className="game-rank-name"><b>{gameName(game.title)}</b><small>{[game.launcher ? LAUNCHERS[game.launcher] || game.launcher : null, ...game.genres.slice(0, 2)].filter(Boolean).join(" · ") || "Ohne Titel erfasst"}</small></span>
           <span className="rank-bar"><ConceptMeter value={(game.seconds / topSeconds) * 100} /></span>
           <span className="game-rank-time"><b>{playtime(game.seconds)}</b><small>{game.sessions} {game.sessions === 1 ? "Sitzung" : "Sitzungen"}</small></span>
-          {canManage && game.game_id && <button type="button" className="link-button" onClick={() => void correct(game)}>Zuordnung</button>}
+          {canManage && game.game_id && <span className="game-rank-actions">
+            <button type="button" className="link-button" onClick={() => void correct(game)}>Zuordnung</button>
+            <button type="button" className="link-button" onClick={() => chooseBanner(game)}>{game.custom_artwork ? "Banner ändern" : "Banner hochladen"}</button>
+            {game.custom_artwork && <button type="button" className="link-button" onClick={() => void removeBanner(game)}>Banner entfernen</button>}
+          </span>}
         </div>)}</div>
+        {canManage && <input ref={bannerInput} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(event) => void uploadBanner(event)} />}
       </div>
       <div className="stats-layout">
         <div className="detail-card">

@@ -13,7 +13,7 @@ from ncc_server.config import ServerSettings
 from ncc_server.database import Database
 from ncc_server.game_metadata import refresh_game_metadata
 from ncc_server.game_service import playtime_statistics
-from ncc_server.models import Base, Game, GameSession, Node, TelemetryPoint, utc_now
+from ncc_server.models import AuditEvent, Base, Game, GameSession, Node, TelemetryPoint, utc_now
 from pydantic import SecretStr
 from sqlalchemy import select
 
@@ -191,3 +191,101 @@ def test_unknown_games_are_marked_without_a_store_match(tmp_path: Path) -> None:
         assert game is not None and game.match_state == "none" and game.key == "name:homebrew"
         node = session.scalar(select(Node))
         assert node is not None and node.auto_gaming_until is not None
+
+
+WOW = {"title": "World of Warcraft Forever", "launcher": "battlenet", "app_id": "wowf", "executable": "Wow.exe"}
+PNG = b"\x89PNG\r\n\x1a\n" + b"banner-bytes"
+
+
+def _griddb_handler(calls: list[httpx.Request]) -> httpx.MockTransport:
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        if request.url.host == "store.steampowered.com":
+            return httpx.Response(200, json={"items": []})
+        if request.url.path.startswith("/api/v2/search/autocomplete/"):
+            return httpx.Response(200, json={"success": True, "data": [
+                {"id": 1, "name": "World of Warcraft"}, {"id": 5551, "name": "World of Warcraft: Forever"},
+            ]})
+        if request.url.path == "/api/v2/grids/game/5551":
+            return httpx.Response(200, json={"success": True, "data": [
+                {"id": 1, "score": 1, "url": "https://evil.example/banner.png"},
+                {"id": 2, "score": 9, "url": "https://cdn2.steamgriddb.com/grid/too-big.png", "thumb": "https://cdn2.steamgriddb.com/thumb/ok.webp"},
+            ]})
+        if request.url.path == "/grid/too-big.png":
+            return httpx.Response(200, content=b"x" * (3 * 1024 * 1024), headers={"content-type": "image/png"})
+        if request.url.path == "/thumb/ok.webp":
+            return httpx.Response(200, content=b"webp-bytes", headers={"content-type": "image/webp"})
+        return httpx.Response(404)
+    return httpx.MockTransport(handler)
+
+
+def test_games_without_steam_get_a_steamgriddb_banner(tmp_path: Path) -> None:
+    database, client, agent, _ = _setup(tmp_path)
+    calls: list[httpx.Request] = []
+    with client:
+        client.post("/api/v1/nodes/telemetry", headers=agent, json={"points": [_point(utc_now(), WOW)]})
+        # Without a key nothing is sent to SteamGridDB.
+        asyncio.run(refresh_game_metadata(database, _griddb_handler(calls)))
+        assert all(request.url.host == "store.steampowered.com" for request in calls)
+        assert asyncio.run(refresh_game_metadata(database, _griddb_handler(calls), steamgriddb_key="grid-key")) == 1
+        game = client.get("/api/v1/fleet/games", headers=DASHBOARD).json()[0]
+        assert game["has_artwork"] is True and game["artwork_source"] == "steamgriddb"
+        artwork = client.get(f"/api/v1/fleet/games/{game['game_id']}/artwork", headers=DASHBOARD)
+        assert artwork.content == b"webp-bytes"
+        grid_calls = [request for request in calls if request.url.host == "www.steamgriddb.com"]
+        assert grid_calls and all(request.headers["authorization"] == "Bearer grid-key" for request in grid_calls)
+        assert not any(request.url.host == "evil.example" for request in calls)
+        # Found banners are not looked up again.
+        before = len(calls)
+        assert asyncio.run(refresh_game_metadata(database, _griddb_handler(calls), steamgriddb_key="grid-key")) == 0
+        assert len(calls) == before
+
+
+def test_a_failed_steamgriddb_lookup_is_retried_after_the_usual_delay(tmp_path: Path) -> None:
+    database, client, agent, _ = _setup(tmp_path)
+    with client:
+        client.post("/api/v1/nodes/telemetry", headers=agent, json={"points": [_point(utc_now(), WOW)]})
+    with database.session() as session:
+        game = session.scalar(select(Game))
+        assert game is not None
+        game.match_state = "none"
+        session.commit()
+    asyncio.run(refresh_game_metadata(database, httpx.MockTransport(lambda request: httpx.Response(503)), steamgriddb_key="k"))
+    with database.session() as session:
+        game = session.scalar(select(Game))
+        assert game is not None and game.artwork_checked_at is not None and game.header_content_type is None
+        checked = game.artwork_checked_at.replace(tzinfo=timezone.utc) if game.artwork_checked_at.tzinfo is None else game.artwork_checked_at
+        assert checked < utc_now() - timedelta(days=6)
+
+
+def test_commanders_upload_and_remove_their_own_banner(tmp_path: Path) -> None:
+    database, client, agent, _ = _setup(tmp_path)
+    with client:
+        client.post("/api/v1/nodes/telemetry", headers=agent, json={"points": [_point(utc_now() - timedelta(seconds=30), WOW), _point(utc_now(), WOW)]})
+        game_id = client.get("/api/v1/fleet/games", headers=DASHBOARD).json()[0]["game_id"]
+        url = f"/api/v1/fleet/games/{game_id}/artwork"
+        assert client.put(url, content=PNG).status_code in {401, 403}
+        assert client.put(url, headers=DASHBOARD, content=b"<svg></svg>").status_code == 415
+        assert client.put(url, headers=DASHBOARD, content=b"\xff\xd8\xff" + b"x" * (3 * 1024 * 1024)).status_code == 413
+        assert client.put("/api/v1/fleet/games/missing/artwork", headers=DASHBOARD, content=PNG).status_code == 404
+        uploaded = client.put(url, headers={**DASHBOARD, "Content-Type": "image/jpeg"}, content=PNG)
+        assert uploaded.status_code == 200 and uploaded.json()["artwork_source"] == "upload"
+        artwork = client.get(url, headers=DASHBOARD)
+        assert artwork.content == PNG and artwork.headers["content-type"] == "image/png"
+        stats = client.get("/api/v1/fleet/games/stats", headers=DASHBOARD).json()
+        assert stats["games"][0]["custom_artwork"] is True
+        # Neither SteamGridDB nor a later Steam match replaces the upload.
+        for _ in range(2):
+            asyncio.run(refresh_game_metadata(database, _griddb_handler([]), steamgriddb_key="k"))
+        assert client.get(url, headers=DASHBOARD).content == PNG
+        client.patch(f"/api/v1/fleet/games/{game_id}", headers=DASHBOARD, json={"steam_app_id": None})
+        assert client.get(url, headers=DASHBOARD).content == PNG
+
+        removed = client.delete(url, headers=DASHBOARD)
+        assert removed.json()["has_artwork"] is False and removed.json()["artwork_source"] is None
+        assert client.get(url, headers=DASHBOARD).status_code == 404
+        # Without the upload SteamGridDB may fill in a banner again.
+        assert asyncio.run(refresh_game_metadata(database, _griddb_handler([]), steamgriddb_key="k")) == 1
+    with database.session() as session:
+        actions = [event.action for event in session.scalars(select(AuditEvent)).all()]
+        assert "game.artwork.uploaded" in actions and "game.artwork.removed" in actions

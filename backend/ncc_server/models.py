@@ -124,6 +124,10 @@ class Game(Base):
     release_date: Mapped[str | None] = mapped_column(String(64))
     header_image: Mapped[bytes | None] = deferred(mapped_column(LargeBinary))
     header_content_type: Mapped[str | None] = mapped_column(String(64))
+    # steam | steamgriddb | upload; an uploaded banner is never replaced automatically.
+    artwork_source: Mapped[str | None] = mapped_column(String(16))
+    # Last SteamGridDB lookup for a game without a Steam match.
+    artwork_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     metadata_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     metadata_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)

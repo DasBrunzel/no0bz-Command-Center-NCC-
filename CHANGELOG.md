@@ -2,6 +2,19 @@
 
 Alle wesentlichen Änderungen werden hier dokumentiert.
 
+## [Unreleased]
+
+- Commander können in der Spielzeit-Bestenliste für jedes Spiel ein eigenes
+  Banner hochladen (JPG, PNG oder WebP). Das Dashboard schneidet es auf das
+  Steam-Bannerformat 920×430 zu. Der Server prüft das Dateiformat an der
+  Signatur, nimmt höchstens 3 MB an und ersetzt ein hochgeladenes Banner nie
+  automatisch. „Banner entfernen“ stellt die automatische Suche wieder her.
+- Findet Steam ein Spiel nicht, sucht der Server bei SteamGridDB nach einem
+  Banner, aber nur bei exakt gleichem Namen und nur mit einem API-Key in
+  `NCC_SERVER_STEAMGRIDDB_API_KEY`. Ohne Key bleibt die Suche aus. Migration
+  `20261107_0026` merkt sich, woher ein Banner stammt.
+- Nur der Server; Agenten und Payload bleiben unverändert.
+
 ## [0.6.2] – 2026-11-07
 
 - Die Spielerkennung findet Battle.net-Spiele, etwa World of Warcraft
