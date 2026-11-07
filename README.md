@@ -1,29 +1,27 @@
 # no0bz Command Center (NCC)
 
-![Entwicklungsstand](https://img.shields.io/badge/Entwicklung-0.6.0--beta.8--dev.1-ff334f)
+![Version](https://img.shields.io/badge/Version-0.7.1-ff334f)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776ab)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-Real-Time System Monitor & Local Sync Hub (Python/FastAPI + React).
+Selbst gehostetes Monitoring für PCs, Server und Homelabs: ein dauerhaft
+laufender Server (Python/FastAPI, PostgreSQL), GUI-lose Windows- und
+Linux-Agenten, eine Unraid-API-Integration und ein gemeinsames Web-Dashboard.
+Keine externe Telemetrie, Zugriff lokal oder über Tailscale.
 
-> **NCC 0.6 befindet sich im kontrollierten Beta-Test.** Dieser Branch entwickelt
-> Dashboard und Server als `0.6.0-beta.8-dev.1`; der letzte veröffentlichte
-> Pre-Release ist `0.6.0-beta.7`. Die tatsächlich installierte Version eines
-> Agenten stammt aus seinem verifizierten Payload-Manifest und kann abweichen.
-> Der produktive Server akzeptiert 0.5- und 0.6-Agenten parallel. Ausgewählte
-> Windows- und Linux-Geräte laufen bereits mit NCC Core; weitere Geräte werden
-> einzeln migriert. NCC besteht aus einem dauerhaft laufenden Server,
-> GUI-losen Windows-/Linux-Agenten,
-> einer Unraid-API-Integration und einer gemeinsamen Fleet-Weboberfläche. Die
-> NCC-0.4-Starter bleiben ausschließlich als Kompatibilitätsschicht erhalten.
+> **Stand 0.7.1.** Server und Dashboard tragen `0.7.1`, Änderungen stehen im
+> [CHANGELOG](CHANGELOG.md). Agenten, NCC Core und Payload stehen bei `0.6.2`;
+> welche Version ein Gerät tatsächlich ausführt, zeigt das Dashboard aus
+> seinem signierten Payload-Manifest. Der Server akzeptiert 0.5- und
+> 0.6-Agenten parallel. Die NCC-0.4-Starter bleiben nur als
+> Kompatibilitätsschicht erhalten.
 
-## NCC-0.5-Server und Fleet-Dashboard (Beta)
+## Server
 
-Der Server ist eine separate, GUI-lose Anwendung. Er nimmt Telemetrie von Windows-
-und Linux-Agenten sowie der Unraid-API entgegen und stellt das Dashboard zentral
-über Tailscale oder lokal bereit. Der Server selbst kann bei Bedarf zusätzlich als
-normaler NCC-Agent aufgenommen werden. PostgreSQL, Migrationen und Server können mit
-Docker Compose gemeinsam gestartet werden:
+Der Server ist eine separate, GUI-lose Anwendung. Er nimmt Telemetrie von
+Windows- und Linux-Agenten sowie der Unraid-API entgegen und liefert das
+Dashboard aus. Er kann bei Bedarf zusätzlich selbst als Agent aufgenommen
+werden. PostgreSQL, Migrationen und Server starten gemeinsam mit Docker Compose:
 
 ```powershell
 $env:NCC_POSTGRES_PASSWORD = "ein-langes-eigenes-passwort"
@@ -32,70 +30,91 @@ docker compose up --build
 ```
 
 Danach steht das Dashboard unter <http://127.0.0.1:8350> bereit. Status und
-API-Dokumentation liegen unter `/api/v1/status/live` und `/api/docs`.
-Für den normalen Zugriff wird im Dashboard ein einmaliger achtstelliger Admin-Code
-erstellt. Nach dessen Eingabe erhält der Browser eine geschützte Sitzung. Der frühere
-Dashboard-Token ist nur noch ein technischer Rückfallzugang für bestehende
-Installationen und wird nicht für die tägliche Nutzung benötigt.
+API-Dokumentation liegen unter `/api/v1/status/live` und `/api/docs`; alle
+Dashboard-Endpoints mit ihren Rechten stehen in
+[`frontend/API-MATRIX.md`](frontend/API-MATRIX.md). Für den Dauerbetrieb siehe
+[Dauerbetrieb als Dienst](#dauerbetrieb-als-dienst), für das Update eines
+bestehenden Windows-Servers
+[`docs/deploy-0.7-horstserver.md`](docs/deploy-0.7-horstserver.md).
 
-### Geräteaufnahme per Browser-Pairing
+### Anmeldung und Rollen
 
-Neue Windows- und Linux-Agenten benötigen keinen kopierbaren Token. Der Installer
-erzeugt lokal eine geheime, 15 Minuten gültige Pairing-Anfrage und zeigt einen
-Browser-Link an. Auf dem Zielgerät diesen Link öffnen, mit einem achtstelligen
-Admin-Code anmelden und die Verbindung wird automatisch hergestellt. Das Dashboard
-zeigt dabei den Status **Wartet**, **Freigegeben** oder **Verbunden**.
+Man meldet sich mit einem persönlichen Konto (Benutzername und Passwort) oder
+einem einmaligen achtstelligen Admin-Code an; beides erzeugt eine
+HttpOnly-Browsersitzung. Der frühere Dashboard-Token ist nur noch ein
+technischer Rückfallzugang.
 
-Der interne Agent-Zugang bleibt ausschließlich zwischen Agent und Server. Wird ein
-Gerät später neu gekoppelt, bleibt seine Maschinen-ID erhalten und der alte Zugang
-wird widerrufen. Der Installer zeigt nach der Einrichtung den persönlichen
-Browser-Link für genau dieses Gerät an.
+| Rolle | Darf |
+|---|---|
+| **Commander** | alles: Geräte, Konten, Einladungen, Releases, Warnregeln, Telegram |
+| **Beta-Tester** | alles sehen, nichts ändern; nur den Gaming Mode schalten |
+| **Freund** | nur eigene Geräte sehen und verwalten, eigene Warnungen und Telegram-Chat |
 
-### Commander und Beta-Tester
+Commander verwalten Konten unter **Einstellungen › Konten & Einladungen**:
+Konten anlegen, Rollen ändern, deaktivieren und deaktivierte Konten endgültig
+löschen (nicht das eigene, nicht den letzten Commander, keine Konten mit
+Geräten). Freunde registrieren sich mit einem sieben Tage gültigen
+Einladungscode; Commander können ihnen die Statistik aller Geräte freigeben.
+Persönliche Konten ändern ihr Passwort unter **Mein Konto**, andere Sitzungen
+werden dabei abgemeldet. Anleitung für Freunde:
+[`docs/freunde-anleitung.md`](docs/freunde-anleitung.md).
 
-Bestehende Dashboard-Zugänge bleiben **Commander**. Beim Erstellen eines neuen
-achtstelligen Admin-Codes kann der Schalter **Beta-Tester** aktiviert werden. Dieser
-Zugang erhält im Dashboard ein Badge und darf Daten ansehen, aber keine neuen Codes
-erstellen sowie keine Geräte, Einladungen oder Zugänge löschen oder widerrufen.
+### Geräte aufnehmen
 
-Admin-Codes werden nur einmal angezeigt, als Hash gespeichert und erzeugen eine
-HttpOnly-Browsersitzung. Ein Widerruf beendet die zugehörige Sitzung.
+Neue Windows- und Linux-Agenten brauchen keinen kopierbaren Token. Der
+Installer erzeugt eine geheime, 15 Minuten gültige Kopplungsanfrage und zeigt
+einen Browser-Link. Wer den Link öffnet und sich anmeldet, gibt das Gerät frei;
+das Dashboard zeigt **Wartet**, **Freigegeben** oder **Verbunden**. Commander
+können eine Anfrage auch ablehnen. Gibt ein Freund frei, gehört das Gerät
+seinem Konto.
 
-Commander können unter **Einstellungen → Benutzerkonten** persönliche Konten
-für Commander und Beta-Tester anlegen, Rollen ändern und Konten deaktivieren.
-Die Anmeldung erfolgt dann mit Benutzername und Passwort; bestehende Admin-Codes
-bleiben gültig. Im Fleet Chat wird der angemeldete Name als Absender gespeichert.
-Persönliche Konten können ihr Passwort in den Einstellungen ändern. Dabei werden
-andere aktive Sitzungen dieses Kontos abgemeldet.
+Für Geräte ohne Kopplungslink erstellen Commander unter **Aufnahme** eine
+Agent-Einladung mit Gültigkeit und Rolle (Commander oder Beta-Tester); der
+Token wird genau einmal angezeigt und nur als Hash gespeichert. Wird ein Gerät
+später neu gekoppelt, bleibt seine Maschinen-ID erhalten und der alte Zugang
+wird widerrufen.
 
-### Dashboard, Fleet und Statistiken
+### Dashboard „Stellwerk“
 
-Das Dashboard nutzt das dunkle **Command Mint**-Design der „Alles im Blick“-Demo.
-Die Startseite priorisiert Warnungen, Fleet-Status und Live-Netzwerkverkehr. Der
-Fleet Explorer bündelt zugeordnete Dualboot-Profile, bietet Suche und Filter und
-führt zur Detailansicht der gewählten Node. Commander können OS-Profile einem
-vorhandenen physischen Gerät zuordnen, lösen und zwischen ihnen wechseln.
-Statistiken, Warnungszentrale und Fleet Chat
-verwenden dieselbe Oberfläche. Alle Werte stammen weiterhin aus den NCC-APIs;
-Gaming Mode, Umbenennen, Release-Zuweisung und Geräteverwaltung bleiben verfügbar.
+Das Dashboard (`frontend/`, React 19, TypeScript, Vite) ist hell und dunkel,
+auf dem Handy nutzbar und als App installierbar, mit Offline-Gerüst und
+Warnungszahl am App-Symbol. Die Bereiche:
 
-Der Fleet Chat zeigt Nachrichten nach Tagen getrennt, lädt ältere Beiträge bei
-Bedarf nach und markiert neue Nachrichten, solange der Verlauf nach oben gescrollt
-ist. Mehrzeilige Nachrichten lassen sich mit Umschalt+Enter schreiben. Das
-Dashboard fragt Live-Daten regelmäßig ab; Konto- und Einstellungsdaten werden
-seltener geladen und ausgeblendete Browser-Tabs pausieren die Abfragen.
+- **Lage:** Gleisbild aller Geräte nach Gruppen (Dualboot-PCs als Weiche),
+  Störmelder für aktive Warnungen und Live-Verkehr der ganzen Fleet mit
+  Verlauf der letzten 30 Minuten.
+- **Geräte:** Liste mit Suche und Filtern; Commander ordnen Geräte über
+  „Anordnen“ in Gruppen, legen Gruppen an und benennen sie um. Die
+  Detailansicht zeigt Übersicht, Sensoren, Netzwerk mit Monatsverbrauch,
+  Spiele, Updates und Verwaltung (Umbenennen, Rolle, Besitzer,
+  Dualboot-Zuordnung, Gaming Mode, Entfernen).
+- **Hardware:** Stunden-Statistik je Gerät oder Fleet: Auslastung,
+  Temperaturen, Leistung, Energie und Rekorde.
+- **Spiele:** Spielzeit mit Bestenliste, Verlauf, Wochentag-Uhrzeit-Heatmap
+  und letzten Sitzungen. Erkannt werden Steam- und Battle.net-Spiele; der
+  Gaming Mode dämpft währenddessen Last-Warnungen. Commander laden eigene
+  Banner hoch oder suchen sie bei SteamGridDB
+  (`NCC_SERVER_STEAMGRIDDB_API_KEY`).
+- **Chat:** Fleet-Chat mit Tagestrennung, Anhängen und sicher gerendertem
+  Markdown.
+- **Aufnahme** und **Releases** (Commander und Beta-Tester): Kopplungen,
+  Agent-Einladungen, Admin-Codes sowie signierte Payload-Releases und
+  Update-Kanäle.
+- **Einstellungen:** Mein Konto, Konten & Einladungen, Warnregeln, Telegram, Über.
 
-Die Seite **Statistiken** zeigt die Verfügbarkeit seit Aufnahme samt Uptime-Rekord,
-Monatsverkehr und einen Live-Gesamtverlauf für Up- und Download. Zugeordnete
-Dualboot-Profile erscheinen in „Netzwerk nach Gerät“ zusammengefasst. Rohdaten
-bleiben erhalten; die Monatsanzeige beginnt am Monatsersten neu. Für den
-Live-Verlauf überträgt `/api/v1/fleet/nodes/{node_id}/network/history` nur
-Netzwerkwerte und Zeitstempel statt vollständiger Telemetrie.
+Das Dashboard fragt Live-Daten regelmäßig ab und pausiert in ausgeblendeten
+Tabs. Entwicklung, Tests und Architekturentscheidungen:
+[`frontend/README.md`](frontend/README.md) und
+[`frontend/DECISIONS.md`](frontend/DECISIONS.md).
 
-Der Server überwacht zudem die **Agent-Gesundheit** unabhängig vom Zugriff auf das
-jeweilige Gerät. Warnungen informieren über fehlende frische Telemetrie, alte
-Agent-Versionen, wiederholte Doppelmeldungen und unplausible Netzwerkzähler. Sie
-erscheinen im Warnungszentrum und können über Telegram zugestellt werden.
+### Warnungen und Telegram
+
+Der Server überwacht Last, Temperaturen von CPU, GPU und jedem Laufwerk sowie
+die **Agent-Gesundheit** unabhängig vom Zugriff auf das Gerät: fehlende frische
+Telemetrie, alte Agent-Versionen, Doppelmeldungen und unplausible
+Netzwerkzähler. Warnungen erscheinen im Störmelder und können über Telegram
+zugestellt werden, auch pro Konto in einen eigenen Chat mit Wochenrückblick.
+Einrichtung: [`docs/telegram-alerts.md`](docs/telegram-alerts.md).
 
 ### Windows-Hardwaresensoren
 
@@ -126,11 +145,13 @@ exakte Größe, SHA-256 und eine Ed25519-Signatur eines lokal vertrauenswürdige
 öffentlichen Schlüssels. Ein privater Signaturschlüssel gehört niemals auf einen
 NCC-Server oder ein Zielgerät.
 
-Commander registrieren das Manifest eines Release-Artefakts unter
-**Einstellungen → Signierte Payload-Releases**. Anschließend wird im ausgewählten
-Node bewusst der Kanal **Beta** oder **Stable** gewählt und das konkrete Release
-freigegeben. Erst beim nächsten kontrollierten NccCore-Start lädt und aktiviert
-der Core dieses Release; schlägt dessen Health-Check fehl, bleibt die letzte
+Signierte Payload-Manifeste aus den GitHub-Releases registriert der Server
+alle 15 Minuten selbst, sofern ein vertrauenswürdiger Release-Schlüssel sie
+signiert hat; Commander können ein Manifest unter **Releases** auch von Hand
+registrieren. Jedes Gerät folgt im Kanal **Beta** oder **Stable** automatisch
+dem neuesten Release und geht dabei nie zurück; eine feste Zuweisung bleibt
+möglich. Erst beim nächsten kontrollierten NccCore-Start lädt und aktiviert
+der Core das Release; schlägt dessen Health-Check fehl, bleibt die letzte
 funktionierende Payload erhalten beziehungsweise wird zurückgerollt.
 
 Den öffentlichen Schlüssel eines eigenen Release-Signierers installiert man
@@ -147,12 +168,12 @@ release-2026 BASE64_ED25519_PUBLIC_KEY`. Für die erste Migration stehen
 `rollback_ncc_core_to_agent.ps1` bereit. Der Wechsel wird erst nach einem
 erfolgreichen Paralleltest ausgeführt; der 0.5-Agent bleibt bis dahin Rückfall.
 
-Falls ein bestehender Windows-NCC-Server die Release-Verteilung noch nicht
-bereitstellt, aktualisiert `update_ncc_server_release_distribution.ps1` nur den
-Server auf den 0.6-Branch. Es verlangt einen sauberen Git-Checkout, sichert
-`server.env` und PostgreSQL vor der Migration und prueft anschliessend den
-NccServer sowie die Release-Route. Agenten und ihre Konfiguration werden dabei
-nicht angefasst.
+Einen bestehenden Windows-NCC-Server aktualisiert
+`update_ncc_server_release_distribution.ps1 -Branch main`. Es verlangt einen
+sauberen Git-Checkout, sichert `server.env` und PostgreSQL vor der Migration,
+prüft jede ausgelieferte Dashboard-Datei gegen den Git-Stand und anschließend
+NccServer, Version und Release-Route. Agenten und ihre Konfiguration werden
+dabei nicht angefasst.
 
 Für den ersten dauerhaften Signierer auf einer vertrauenswürdigen Windows-
 Release-Workstation erzeugt `initialize_ncc_release_signer.ps1` einen
@@ -162,13 +183,11 @@ von OpenSSL abgefragt und niemals an NCC übergeben. Anschließend wird **nur** 
 ausgegebene öffentliche Schlüssel auf die jeweiligen NccCore-Installationen
 verteilt. Der private Schlüssel bleibt auf der Release-Workstation.
 
-Der [NCC 0.6.0-beta.7 Pre-Release](https://github.com/DasBrunzel/no0bz-Command-Center-NCC-/releases/tag/v0.6.0-beta.7)
-ist die zuletzt veröffentlichte Beta-Version. Welche signierte Payload ein
-Gerät tatsächlich ausführt, zeigt seine Agent-Version im Fleet Explorer.
-Jedes Payload-Manifest verweist ausschließlich auf HTTPS, enthält die exakte
-SHA-256-Prüfsumme sowie die Ed25519-Signatur mit `ncc-release-2026`. Es muss
-vor einer Node-Freigabe einmalig im Dashboard registriert werden. Das private
-PEM und seine Passphrase gehören weder in Git noch auf den NCC-Server.
+Welche signierte Payload ein Gerät tatsächlich ausführt, zeigt seine
+Agent-Version im Dashboard. Jedes Payload-Manifest verweist ausschließlich auf
+HTTPS, enthält die exakte SHA-256-Prüfsumme sowie die Ed25519-Signatur mit
+`ncc-release-2026`. Das private PEM und seine Passphrase gehören weder in Git
+noch auf den NCC-Server.
 
 Für ein vorhandenes Windows-Gerät mit NCC 0.5 baut
 `build_ncc_core_bootstrap.ps1` ein kompaktes Bootstrap-ZIP. Auf dem Zielgerät
@@ -181,13 +200,13 @@ NccCore gesund läuft. Für das unter `LocalSystem` laufende `pythonservice.exe`
 setzt der Bootstrap die erforderliche isolierte `PYTHONPATH`-Dienstumgebung.
 Die alte `agent.env` bleibt als datierte Sicherung erhalten.
 
-### Eigenständiger Windows-Agent-Installer (0.6-Entwicklung)
+### Eigenständiger Windows-Agent-Installer
 
 `scripts/build_ncc_agent_setup.ps1` erzeugt aus dem signierten Start-Payload
 eine eigenständige `setup.exe`. Ein Build-Befehl auf der Release-Workstation:
 
 ```powershell
-.\scripts\build_ncc_agent_setup.ps1 -Version 0.6.0-beta.8-dev.1 -PrivateKey "C:\Pfad\zum\release-private.pem" -ArtifactUrl "https://example.org/ncc-agent-setup-0.6.0-beta.8-dev.1-windows-x86_64.exe"
+.\scripts\build_ncc_agent_setup.ps1 -Version 0.6.2 -PrivateKey "C:\Pfad\zum\release-private.pem" -ArtifactUrl "https://example.org/ncc-agent-setup-0.6.2-windows-x86_64.exe"
 ```
 
 Auf der Build-Maschine werden .NET SDK, Rust, Inno Setup und OpenSSL benötigt;
@@ -198,7 +217,7 @@ bleibt auf der Build-Maschine. Das Update-Manifest muss über die konfigurierte
 HTTPS-Updatequelle veröffentlicht werden. Für eine stille Erstinstallation:
 
 ```powershell
-.\ncc-agent-setup-0.6.0-beta.8-dev.1-windows-x86_64.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SERVERURL=https://ncc.example.org
+.\ncc-agent-setup-0.6.2-windows-x86_64.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SERVERURL=https://ncc.example.org
 ```
 
 Der Installer erlaubt normalen Benutzern am Dienst ausschließlich
@@ -281,11 +300,6 @@ die Parallelphase kontrolliert. Der Befehl prüft den Core vor und nach dem
 Abschalten des alten Dienstes; bei einem Fehler wird der 0.5-Agent automatisch
 wiederhergestellt.
 
-Neben den Farbthemes stehen in den Einstellungen zusätzliche experimentelle
-Dashboard-Layouts bereit: **Orbit**, **Blueprint** und **Studio**. Die Auswahl
-wird nur im jeweiligen Browser gespeichert; die Mission-Control-Startseite bleibt
-die Standardansicht.
-
 ### Unraid
 
 Unraid wird ohne NCC-Agent über die offizielle Unraid-API integriert. NCC zeigt
@@ -347,21 +361,8 @@ ncc-doctor server --server-url http://100.100.100.10:8350 --tailscale --allow-in
 
 Alle Details stehen im [Phase-6-Bericht](docs/phase-6-services.md).
 
-NCC ist ein lokales, quelloffenes Monitoring-Dashboard für Power User, Gamer,
-Entwickler und Homelabs. Es sammelt Systemwerte über austauschbare Provider, streamt
-sie per WebSocket, hält eine lokale Historie und verbindet mehrere PCs ohne externe
-Telemetrie. Fehlende Hardware und optionale Tools werden als nicht verfügbar gemeldet.
-
 > Teile dieses Projekts entstanden mit KI-Unterstützung. Änderungen sollten wie jeder
 > andere Beitrag geprüft und auf der Zielhardware getestet werden.
-
-## Screenshot
-
-`docs/assets/dashboard.png` und `docs/assets/demo.gif` sind Platzhalter für einen
-Release-Screenshot und ein kurzes Demo-GIF. `NCC_DEMO=1` ist ausschließlich für
-Entwickler: Es erzeugt künstliche Testwerte, damit Screenshots keine echten System-
-oder Netzwerkdaten enthalten. Für Installation und normalen Betrieb wird
-`NCC_DEMO=1` nicht benötigt.
 
 ## Legacy-Schnellstart (NCC 0.4)
 
@@ -459,29 +460,31 @@ Eine Rotation macht den bisherigen Token sofort ungültig. Danach müssen die ne
 
 ## Funktionen
 
-- Zentraler Server für Windows-/Linux-Agenten und die Unraid-API
-- Echtzeit-CPU-, RAM-, Datenträger-, Netzwerk-, Akku-, GPU- und Prozessdaten
-- Fleet Navigator mit Gruppen, Drag-&-Drop-Sortierung, einklappbaren Bereichen und
-  benutzerdefinierten Gruppen
-- Statistikseite mit Fleet-Kapazität, Verfügbarkeit, Auslastungsrangliste,
-  Monatsverkehr und Live-Gesamtgraph
+- Zentraler Server für Windows-/Linux-Agenten und die Unraid-API, PostgreSQL mit Migrationen
+- Echtzeit-CPU-, RAM-, Datenträger-, Netzwerk-, Akku-, GPU-, Sensor- und Prozessdaten
+- Dashboard „Stellwerk“: hell und dunkel, mobil, als App installierbar
+- Gruppen mit eigener Reihenfolge, anlegen und umbenennen; Dualboot-Profile als ein Gerät
+- Live-Verkehr der ganzen Fleet, Netzwerkverlauf und Monatsverbrauch je Gerät
+- Hardware-Statistik pro Stunde, Spielzeit-Statistik mit Steam- und Battle.net-Erkennung
+- Warnungen für Last, Temperaturen und Agent-Gesundheit, Zustellung über Telegram
+- Rollen Commander, Beta-Tester und Freund mit serverseitigem Schutz
+- Browser-Pairing ohne kopierbare Tokens, Agent-Einladungen mit Rolle
+- Signierte, automatisch verteilte Payload-Updates mit Rollback (NCC Core)
+- Fleet-Chat mit Anhängen und sicher gerendertem Markdown
 - Unraid-Übersicht für Laufwerke, Temperaturen, VMs und Docker-Container
-- Browser-Pairing ohne kopierbare Agent-Tokens
-- Commander-/Beta-Tester-Rollen mit sichtbaren Badges und serverseitigem Schutz
-- Provider-Erkennung, Capability-Report, Timeouts, Cache und exponentieller Backoff
-- WebSocket-Livestream und gebündelte lokale DuckDB-Historie mit Memory-Fallback
-- Standalone-, Server- und Client-Modus mit Offline-Erkennung
-- abgesicherter Prozess-Kill mit Schutzliste und Audit-Log
-- lokaler Chat-/Prompt-/Datei-Hub mit Upload-Härtung
-- Fleet Chat mit Nachrichtenverlauf, Anhängen und sicher gerendertem Markdown
-- responsive React-Oberfläche mit SVG-Gauges, Hardwarelogos, Netzwerkverläufen und
-  einklappbarer Navigation
-- Farbthemes sowie drei vollständige alternative Layouts: Orbit, Blueprint und Studio
 
 ## Konfiguration
 
-Alle Werte liegen in `.env`. Die Vorlage [.env.example](.env.example) dokumentiert:
-`NCC_HOST`, `NCC_PORT`, `NCC_TOKEN`, `NCC_MODE`, `NCC_SERVER_URL`,
+Der Server liest `NCC_SERVER_*`-Werte, als Dienst unter Windows aus
+`%ProgramData%\no0bz\NCC\config\server.env`. Die wichtigsten stehen in
+[.env.example](.env.example): `NCC_SERVER_HOST`, `NCC_SERVER_PORT`,
+`NCC_SERVER_DATABASE_URL`, `NCC_SERVER_DASHBOARD_TOKEN` und
+`NCC_SERVER_NODE_OFFLINE_AFTER_SECONDS`; dazu optional
+`NCC_SERVER_STEAMGRIDDB_API_KEY` für die Bannersuche und die Telegram-Werte aus
+[`docs/telegram-alerts.md`](docs/telegram-alerts.md). Agenten nutzen
+[ncc-agent.env.example](ncc-agent.env.example).
+
+Die lokale 0.4-Anwendung liest `.env` mit `NCC_HOST`, `NCC_PORT`, `NCC_TOKEN`, `NCC_MODE`, `NCC_SERVER_URL`,
 `NCC_UPLOAD_MAX_MB`, `NCC_UPLOAD_TOTAL_MB`, `NCC_RETENTION_HOURS`, `NCC_INTERVAL`,
 `NCC_LHM_URL`, `NCC_DEMO` und `NCC_ALLOW_LOOPBACK_NO_TOKEN`.
 
@@ -524,7 +527,11 @@ erhöhten PowerShell mit dem ausschließlich auf HorstPC liegenden privaten
 Release-Schlüssel. So bleibt der Linux-Build reproduzierbar, ohne den privaten
 Schlüssel auf einen Agenten oder in WSL zu kopieren.
 
-## API
+## API der NCC-0.4-Kompatibilität
+
+Die Server-API `/api/v1` ist unter `/api/docs` dokumentiert, ihre Rechte in
+[`frontend/API-MATRIX.md`](frontend/API-MATRIX.md). Die folgende Tabelle gilt
+nur für die erhaltene lokale 0.4-Anwendung:
 
 | Methode | Pfad | Zweck | Schreibschutz |
 |---|---|---|---|
@@ -559,7 +566,7 @@ python -m pip install -e ".[dev]"
 pytest -q
 ruff check backend tests scripts
 mypy
-cd frontend && pnpm install && pnpm run build
+cd frontend && pnpm install && pnpm run build && pnpm test
 ```
 
 Die Datenbank schreibt in Batches von fünf Sekunden. Bei einem harten Absturz können
@@ -583,8 +590,9 @@ Weitere Dokumente: [Architektur](docs/architecture.md),
 
 NCC verwendet ab Version `0.3.0` [Semantic Versioning](https://semver.org/):
 `MAJOR.MINOR.PATCH`. Inkompatible Änderungen erhöhen MAJOR, neue kompatible
-Funktionen MINOR und kompatible Fehlerkorrekturen PATCH. Backend, Frontend,
-Dokumentation und Release-Tags tragen dieselbe Versionsnummer.
+Funktionen MINOR und kompatible Fehlerkorrekturen PATCH. Server, Dashboard und
+Release-Tags tragen dieselbe Versionsnummer; Agent, NCC Core und Payload haben
+einen eigenen Versionsstrang, weil sie getrennt signiert und verteilt werden.
 
 ## Lizenz
 
