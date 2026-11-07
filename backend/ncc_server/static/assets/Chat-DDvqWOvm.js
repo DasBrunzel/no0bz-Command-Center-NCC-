@@ -1,0 +1,1 @@
+import{t as e}from"./jsx-runtime-LKYXHABd.js";var t=e();function n({route:e}){return(0,t.jsx)(`p`,{children:e.raw})}export{n as default};

@@ -301,4 +301,20 @@
     &[data-vendor="intel"] { --vendor: oklch(50% 0.14 250); }
     &[data-vendor="nvidia"] { --vendor: oklch(52% 0.15 135); }
   }
+
+  /* Gaming Mode control (overview + node detail) */
+  .gaming-button.is-on { --bg: color-mix(in oklch, var(--c-shunt) 16%, var(--c-panel-raised)); --bd: var(--c-shunt); color: var(--c-shunt-ink); }
+  .menu-note { padding: var(--s-2) var(--s-3); font-size: var(--fs-xs); color: var(--c-ink-3); max-inline-size: 16rem; }
+
+  /* Filter row above lists and charts */
+  .filters {
+    display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: center; margin-block-end: var(--s-5);
+    & .select { min-inline-size: 11rem; }
+  }
+  .filters-search {
+    position: relative; flex: 1 1 18rem; max-inline-size: 28rem;
+    & .input { padding-inline-start: 2.25rem; }
+    & .input-icon { position: absolute; inset-block-start: 50%; translate: 0 -50%; inset-inline-start: 0.65rem; color: var(--c-ink-3); display: flex; }
+  }
+
 }

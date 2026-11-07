@@ -1,0 +1,1 @@
+@layer features{.hw-summary{gap:var(--s-5);display:grid}.hw-energy{gap:var(--s-5);grid-template-columns:12rem minmax(0,1fr);align-items:end;display:grid;@container (width<36rem){grid-template-columns:1fr}}.hw-big{font-family:var(--font-display);font-weight:650;font-size:var(--fs-3xl);line-height:1.1}[data-refreshing]{opacity:.7}}

@@ -289,3 +289,20 @@ export function PageHead({ title, lead, actions, children }: { title: ReactNode;
     </header>
   );
 }
+
+/* ── Period picker for statistics ─────────────────────────────────── */
+
+export function DaysPicker({ value, onChange }: { value: number; onChange: (days: number) => void }) {
+  const name = useId();
+  const options = [{ days: 7, label: "7 Tage" }, { days: 30, label: "30 Tage" }, { days: 90, label: "90 Tage" }, { days: 0, label: "Alles" }];
+  return (
+    <div className="segmented" role="radiogroup" aria-label="Zeitraum">
+      {options.map((option) => (
+        <label key={option.days}>
+          <input type="radio" name={name} checked={value === option.days} onChange={() => onChange(option.days)} />
+          <span>{option.label}</span>
+        </label>
+      ))}
+    </div>
+  );
+}

@@ -30,7 +30,7 @@ function appShell(): Plugin {
       copyFileSync(join(outDir, "index.html"), join(assets, "app.html"));
       const files = listFiles(assets)
         .map((file) => "/" + relative(outDir, file).split(sep).join("/"))
-        .filter((url) => !url.endsWith("/sw.js") && !url.endsWith(".map"));
+        .filter((url) => !url.endsWith("/sw.js") && !url.endsWith(".map") && !url.endsWith(".woff"));
       const hash = createHash("sha256");
       for (const url of files) hash.update(url).update(readFileSync(join(outDir, url)));
       const swPath = join(assets, "sw.js");

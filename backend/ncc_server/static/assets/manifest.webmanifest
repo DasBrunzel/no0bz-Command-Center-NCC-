@@ -1,0 +1,25 @@
+{
+  "id": "/",
+  "name": "no0bz Command Center",
+  "short_name": "NCC",
+  "description": "Fleet-Monitor für Gaming-PCs, Dualboot-Geräte und den Unraid-Server der no0bz.",
+  "lang": "de",
+  "dir": "ltr",
+  "start_url": "/assets/app.html",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "background_color": "#e3e9e1",
+  "theme_color": "#e3e9e1",
+  "categories": ["utilities", "games"],
+  "icons": [
+    { "src": "/assets/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Warnungen", "url": "/assets/app.html#/", "icons": [{ "src": "/assets/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Chat", "url": "/assets/app.html#/chat", "icons": [{ "src": "/assets/icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}
