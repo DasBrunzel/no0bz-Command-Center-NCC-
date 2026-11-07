@@ -51,7 +51,7 @@ type PlaytimeStats = {
   recent_sessions: { session_id: string; game_id: string | null; title: string | null; node_name: string; started_at: string; ended_at: string; seconds: number }[];
 };
 
-const LAUNCHERS: Record<string, string> = { steam: "Steam", epic: "Epic Games", gog: "GOG", xbox: "Xbox-App", other: "Andere" };
+const LAUNCHERS: Record<string, string> = { steam: "Steam", epic: "Epic Games", gog: "GOG", xbox: "Xbox-App", battlenet: "Battle.net", other: "Andere" };
 const WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 const PERIODS = [{ days: 7, label: "7 Tage" }, { days: 30, label: "30 Tage" }, { days: 365, label: "1 Jahr" }, { days: 0, label: "Gesamt" }];
 const authHeaders = (token: string): Record<string, string> => (token ? { "X-NCC-Dashboard-Token": token } : {});

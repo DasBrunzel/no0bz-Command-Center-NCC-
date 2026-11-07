@@ -32,7 +32,7 @@ ENERGY_GAP = timedelta(seconds=60)
 # The now-playing card disappears once no point arrived for this long.
 NOW_PLAYING_STALE = timedelta(seconds=90)
 GAME_TRACKING_LEVELS = ("off", "presence", "titles")
-LAUNCHERS = {"steam", "epic", "gog", "xbox"}
+LAUNCHERS = {"steam", "epic", "gog", "xbox", "battlenet"}
 
 
 @dataclass(slots=True)

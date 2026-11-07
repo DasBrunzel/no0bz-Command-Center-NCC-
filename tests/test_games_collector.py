@@ -7,6 +7,8 @@ from pathlib import Path
 from ncc.collectors.games import (
     GamesProvider,
     InstalledGame,
+    blizzard_game,
+    build_info_products,
     epic_games,
     match_process,
     parse_vdf_paths,
@@ -121,3 +123,60 @@ def test_provider_is_silent_without_a_game_and_off_windows() -> None:
     provider = GamesProvider(windows=True, library_loader=list, process_source=list, running_steam_app=lambda: None)
     assert provider.collect() == {}
     assert GamesProvider(windows=False).is_available() is False
+
+
+BUILD_INFO = (
+    "Branch!STRING:0|Active!DEC:1|Build Key!HEX:16|Version!STRING:0|Product!STRING:0\n"
+    "eu|1|5ada954223f7c409|1.60.1.70862|wowf\n"
+)
+
+
+def test_build_info_lists_only_active_products() -> None:
+    assert build_info_products(BUILD_INFO) == ["wowf"]
+    assert build_info_products(BUILD_INFO + "eu|0|abc|1.0|wow_classic\n" + "eu|1|def|2.0|wow\n") == ["wowf", "wow"]
+    assert build_info_products("") == []
+    assert build_info_products("Branch!STRING:0|Active!DEC:1\neu|1\n") == []
+
+
+def test_battlenet_games_are_found_through_their_build_info(tmp_path: Path) -> None:
+    wow = tmp_path / "World of Warcraft"
+    (wow / "_forever_").mkdir(parents=True)
+    (wow / "_classic_").mkdir()
+    (wow / ".build.info").write_text(BUILD_INFO, encoding="utf-8")
+    forever = blizzard_game(str(wow / "_forever_" / "Wow.exe"))
+    assert forever == InstalledGame("World of Warcraft Forever", "battlenet", str(wow), "wowf")
+    # The flavour folder wins over the first product in the file.
+    classic = blizzard_game(str(wow / "_classic_" / "WowClassic.exe"))
+    assert classic is not None and classic.title == "World of Warcraft Classic"
+    assert blizzard_game(str(wow / "World of Warcraft Launcher.exe")) is None
+    assert blizzard_game(str(wow / "_forever_" / "BlizzardError.exe")) is None
+    # An unknown product falls back to the install folder name.
+    other = tmp_path / "New Blizzard Game"
+    other.mkdir()
+    (other / ".build.info").write_text(BUILD_INFO.replace("wowf", "zzz"), encoding="utf-8")
+    assert blizzard_game(str(other / "game.exe")) == InstalledGame("New Blizzard Game", "battlenet", str(other), "zzz")
+    assert blizzard_game(str(tmp_path / "Elsewhere" / "app.exe")) is None
+
+
+def test_provider_reports_battlenet_games_and_caches_the_folder_lookup() -> None:
+    wow = InstalledGame("World of Warcraft Forever", "battlenet", os.path.normpath("/games/wow"), "wowf")
+    lookups: list[str] = []
+
+    def lookup(executable: str) -> InstalledGame | None:
+        lookups.append(executable)
+        return wow if "wow" in executable else None
+
+    provider = GamesProvider(
+        windows=True,
+        library_loader=list,
+        process_source=lambda: [
+            (os.path.normpath("/games/wow/_forever_/Wow.exe"), 4_000),
+            (os.path.normpath("/windows/explorer.exe"), 9_000),
+        ],
+        running_steam_app=lambda: None,
+        blizzard_lookup=lookup,
+    )
+    expected = {"game": {"title": "World of Warcraft Forever", "launcher": "battlenet", "app_id": "wowf", "executable": "Wow.exe"}}
+    assert provider.collect() == expected
+    assert provider.collect() == expected
+    assert len(lookups) == 2

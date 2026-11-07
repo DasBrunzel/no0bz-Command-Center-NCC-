@@ -42,9 +42,38 @@ EXCLUDED_STEAM_TITLE_PATTERN = re.compile(r"^(proton|steam linux runtime|steamwo
 EXCLUDED_EXECUTABLE_PATTERN = re.compile(
     r"(crash|report|launcher|setup|install|redist|vc_?redist|dxsetup|directx|"
     r"easyanticheat|battleye|beservice|eac_|update|patcher|uninst|unins\d*|"
-    r"helper|overlay|cefprocess|webhelper|unitycrashhandler)",
+    r"helper|overlay|cefprocess|webhelper|unitycrashhandler|blizzarderror)",
     re.IGNORECASE,
 )
+
+
+# Battle.net keeps no readable list of its installs, but every Blizzard game
+# folder holds a ".build.info" whose Product column names the game. A running
+# process is matched by looking for that file in the folders above it.
+BLIZZARD_TITLES = {
+    "wow": "World of Warcraft",
+    "wow_classic": "World of Warcraft Classic",
+    "wow_classic_era": "World of Warcraft Classic Era",
+    "wowf": "World of Warcraft Forever",
+    "wowt": "World of Warcraft PTR",
+    "wow_beta": "World of Warcraft Beta",
+    "pro": "Overwatch 2",
+    "fenris": "Diablo IV",
+    "d3": "Diablo III",
+    "osi": "Diablo II: Resurrected",
+    "hs_beta": "Hearthstone",
+    "hero": "Heroes of the Storm",
+    "s1": "StarCraft: Remastered",
+    "s2": "StarCraft II",
+    "w3": "Warcraft III: Reforged",
+    "rtro": "Blizzard Arcade Collection",
+}
+# World of Warcraft installs each flavour into its own subfolder.
+WOW_FLAVOURS = {
+    "_retail_": "wow", "_classic_": "wow_classic", "_classic_era_": "wow_classic_era",
+    "_forever_": "wowf", "_ptr_": "wowt", "_beta_": "wow_beta",
+}
+BLIZZARD_SEARCH_DEPTH = 3
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,6 +172,46 @@ def xbox_games(roots: Iterable[Path]) -> list[InstalledGame]:
     return games
 
 
+def build_info_products(text: str) -> list[str]:
+    """Return the active product codes from a Blizzard ``.build.info``."""
+    lines = [line for line in text.splitlines() if line.strip()]
+    if not lines:
+        return []
+    header = [column.split("!", 1)[0].strip().casefold() for column in lines[0].split("|")]
+    if "product" not in header:
+        return []
+    product, active = header.index("product"), header.index("active") if "active" in header else None
+    products: list[str] = []
+    for line in lines[1:]:
+        values = line.split("|")
+        if len(values) <= product or (active is not None and len(values) > active and values[active].strip() == "0"):
+            continue
+        if code := values[product].strip().casefold():
+            products.append(code)
+    return products
+
+
+def blizzard_game(executable: str) -> InstalledGame | None:
+    """Return the Battle.net game this executable belongs to, if any."""
+    if EXCLUDED_EXECUTABLE_PATTERN.search(os.path.basename(executable)):
+        return None
+    folder = Path(executable).parent
+    for root in [folder, *folder.parents][:BLIZZARD_SEARCH_DEPTH]:
+        info = root / ".build.info"
+        try:
+            if not info.is_file():
+                continue
+            products = build_info_products(info.read_text(encoding="utf-8", errors="ignore"))
+        except OSError:
+            return None
+        relative = folder.relative_to(root).parts
+        product = WOW_FLAVOURS.get(relative[0].casefold()) if relative else None
+        product = product or (products[0] if products else None)
+        title = BLIZZARD_TITLES.get(product or "") or root.name
+        return InstalledGame(title, "battlenet", str(root), product)
+    return None
+
+
 def match_process(executable: str, games: list[InstalledGame]) -> InstalledGame | None:
     """Return the game whose install folder contains this executable."""
     name = os.path.basename(executable)
@@ -169,13 +238,17 @@ class GamesProvider(SensorProvider):
         library_loader: Callable[[], list[InstalledGame]] | None = None,
         process_source: Callable[[], list[tuple[str, int]]] | None = None,
         running_steam_app: Callable[[], str | None] | None = None,
+        blizzard_lookup: Callable[[str], InstalledGame | None] | None = None,
         windows: bool | None = None,
     ) -> None:
         self._windows = platform.system() == "Windows" if windows is None else windows
         self._library_loader = library_loader or _windows_library
         self._process_source = process_source or _processes
         self._running_steam_app = running_steam_app or _running_steam_app_id
+        self._blizzard_lookup = blizzard_lookup or blizzard_game
         self._games: list[InstalledGame] = []
+        # Per process folder; cleared together with the library.
+        self._blizzard: dict[str, InstalledGame | None] = {}
         self._loaded_at = float("-inf")
 
     def is_available(self) -> bool:
@@ -190,10 +263,11 @@ class GamesProvider(SensorProvider):
         now = time.monotonic()
         if now - self._loaded_at >= LIBRARY_REFRESH_SECONDS:
             self._games = self._library_loader()
+            self._blizzard = {}
             self._loaded_at = now
         candidates: dict[InstalledGame, tuple[int, str]] = {}
         for executable, memory in self._process_source():
-            game = match_process(executable, self._games)
+            game = match_process(executable, self._games) or self._battlenet_game(executable)
             if game is not None and memory > candidates.get(game, (-1, ""))[0]:
                 candidates[game] = (memory, os.path.basename(executable))
         steam_app = self._running_steam_app()
@@ -209,6 +283,15 @@ class GamesProvider(SensorProvider):
         # one is usually a launcher left open in the background.
         game, (_, executable) = max(candidates.items(), key=lambda item: item[1][0])
         return {"game": _game_metric(game, executable)}
+
+
+    def _battlenet_game(self, executable: str) -> InstalledGame | None:
+        if EXCLUDED_EXECUTABLE_PATTERN.search(os.path.basename(executable)):
+            return None
+        folder = os.path.normcase(os.path.dirname(executable))
+        if folder not in self._blizzard:
+            self._blizzard[folder] = self._blizzard_lookup(executable)
+        return self._blizzard[folder]
 
 
 def _game_metric(game: InstalledGame, executable: str | None) -> dict[str, Any]:

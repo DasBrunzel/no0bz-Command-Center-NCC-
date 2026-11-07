@@ -2,8 +2,13 @@
 
 Alle wesentlichen Änderungen werden hier dokumentiert.
 
-## [Unveröffentlicht]
+## [0.6.2] – 2026-11-07
 
+- Die Spielerkennung findet Battle.net-Spiele, etwa World of Warcraft
+  (Retail, Classic, Forever), Diablo, Overwatch und StarCraft. Battle.net
+  führt keine lesbare Liste seiner Installationen, deshalb erkennt der Agent
+  ein laufendes Spiel an der `.build.info` im Spielordner. Der Gaming Mode
+  schaltet sich dabei wie bei Steam automatisch ein.
 - Geräte folgen automatisch dem neuesten registrierten Payload ihres Kanals
   und gehen dabei nie zurück. Eine feste Zuweisung bleibt möglich; ist sie
   älter als die laufende Version, hält der Server sie zurück, außer der
