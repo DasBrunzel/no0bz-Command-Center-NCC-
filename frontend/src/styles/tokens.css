@@ -55,16 +55,17 @@
     --c-on-caution: oklch(25% 0.03 255);
     --c-on-signal: oklch(98% 0.005 145);
 
-    /* Chart series (validated categorical order; data only, never text) */
-    --c-series-1: light-dark(oklch(52% 0.13 255), oklch(72% 0.12 255));
-    --c-series-2: light-dark(oklch(66% 0.15 55), oklch(76% 0.14 60));
-    --c-series-3: light-dark(oklch(55% 0.12 175), oklch(73% 0.11 180));
-    --c-series-4: light-dark(oklch(52% 0.16 330), oklch(72% 0.13 330));
+    /* Chart series: fixed categorical order, validated with the dataviz
+       validator (light vs #f2f6f2, dark vs #1d242a); data marks only, never text */
+    --c-series-1: light-dark(oklch(52% 0.13 255), oklch(63% 0.13 255));
+    --c-series-2: light-dark(oklch(66% 0.15 55), oklch(66% 0.14 62));
+    --c-series-3: light-dark(oklch(55% 0.12 175), oklch(58% 0.11 165));
+    --c-series-4: light-dark(oklch(52% 0.16 330), oklch(65% 0.14 340));
     --c-seq-low: light-dark(oklch(91% 0.03 255), oklch(28% 0.04 255));
     --c-seq-high: light-dark(oklch(42% 0.15 258), oklch(78% 0.12 255));
 
     --c-focus: light-dark(oklch(52% 0.17 262), oklch(84% 0.14 82));
-    --c-scrim: color-mix(in oklch, oklch(20% 0.03 255) 45%, transparent);
+    --c-scrim: color-mix(in oklab, oklch(20% 0.03 255) 45%, transparent);
 
     /* Typography (classical scale) */
     --font-text: "Barlow", "Segoe UI Variable Text", "Segoe UI", sans-serif;
@@ -100,8 +101,8 @@
     --r-round: 999px;
 
     /* Elevation: only dialogs and popovers float */
-    --shadow-float: 0 1px 0 color-mix(in oklch, var(--c-ink) 8%, transparent),
-      0 12px 32px -8px color-mix(in oklch, var(--c-ink) 28%, transparent);
+    --shadow-float: 0 1px 0 color-mix(in oklab, var(--c-ink) 8%, transparent),
+      0 12px 32px -8px color-mix(in oklab, var(--c-ink) 28%, transparent);
 
     /* Motion */
     --t-fast: 120ms;

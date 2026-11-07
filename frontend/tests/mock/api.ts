@@ -20,7 +20,7 @@ export const CREDENTIALS = {
 
 interface Session { userId: string | null; username: string; role: DashboardRole }
 
-export interface MockOptions { session?: DashboardRole | null; offline?: boolean }
+export interface MockOptions { session?: DashboardRole | null; offline?: boolean; empty?: boolean; failing?: RegExp }
 
 export function createMockApi(options: MockOptions = {}) {
   const data = createFixtures();
@@ -28,6 +28,12 @@ export function createMockApi(options: MockOptions = {}) {
   let session: Session | null = null;
   const log: Array<{ method: string; path: string; status: number }> = [];
   if (options.session) session = sessionFor(options.session);
+  if (options.empty) {
+    data.nodes = []; data.alerts = []; data.games = []; data.chat = []; data.physical = []; data.pairings = [];
+    data.agentInvitations = []; data.adminCodes = []; data.releases = []; data.invites = [];
+    data.stats = { ...data.stats, total_seconds: 0, session_count: 0, game_count: 0, longest_session: null, games: [], nodes: [], daily: [], recent_sessions: [] };
+    data.hardware = { ...data.hardware, hours_covered: 0, metrics: [], summary: {}, records: {}, daily: [], energy_wh: 0 };
+  }
 
   function sessionFor(role: DashboardRole): Session {
     const user = data.users.find((item) => item.role === role && item.active)!;
@@ -89,6 +95,7 @@ export function createMockApi(options: MockOptions = {}) {
 
   function route(method: string, path: string, params: URLSearchParams, body: Record<string, any>, request: MockRequest): MockResponse {
     if (options.offline) return { status: 503, json: { detail: "unavailable" } };
+    if (options.failing?.test(path) && session) return { status: 500, json: { detail: "Internal Server Error" } };
     // Public
     if (path === "/version") return ok({ version: "0.6.2", api: "v1" });
     if (path === "/status/live") return ok({ status: "ok", service: "ncc-server", version: "0.6.2" });

@@ -2,7 +2,7 @@
   /* ── Situation: the headline is the status report ────────────────── */
   .situation {
     display: grid; gap: var(--s-5); margin-block-end: var(--s-7);
-    & h1 { display: grid; gap: var(--s-1); font-size: clamp(2.5rem, 5.5vw, 4.25rem); line-height: 1; letter-spacing: -0.01em; }
+    & h1 { display: grid; gap: var(--s-1); font-size: clamp(2.25rem, 5.5vw, 4.25rem); line-height: 1; letter-spacing: -0.01em; }
     & .situation-sub { font-size: 0.62em; color: var(--c-ink-2); display: inline-flex; align-items: center; gap: 0.35em; }
     & .situation-sub::before {
       content: ""; inline-size: 0.5em; block-size: 0.5em; border-radius: var(--r-round); flex: none;
@@ -12,11 +12,12 @@
     & .situation-sub[data-tone="stop"] { --tone: var(--c-stop); color: var(--c-stop-ink); }
   }
   .situation-facts {
-    display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-6);
+    /* fixed grid: its height never depends on the values that load later */
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr)); gap: var(--s-3) var(--s-5);
     border-block-start: 1px solid var(--c-line); padding-block-start: var(--s-4);
     & div { display: grid; }
     & dt { font-size: var(--fs-xs); color: var(--c-ink-3); }
-    & dd { font-family: var(--font-display); font-weight: 600; font-size: var(--fs-xl); max-inline-size: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    & dd { font-family: var(--font-display); font-weight: 600; font-size: var(--fs-xl); line-height: 1.3; min-block-size: 1.3em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   }
 
   /* ── Trackboard ──────────────────────────────────────────────────── */
@@ -52,7 +53,7 @@
     transition: border-color var(--t-fast), translate var(--t-fast) var(--ease-out);
     &:has(.block-link:hover) { border-color: var(--c-ink-2); }
     &:has(.block-link:focus-visible) { outline: 3px solid var(--c-focus); outline-offset: 2px; }
-    &[data-state="off"] { background: color-mix(in oklch, var(--c-panel-raised) 55%, var(--c-panel)); border-style: dashed; }
+    &[data-state="off"] { background: color-mix(in oklab, var(--c-panel-raised) 55%, var(--c-panel)); border-style: dashed; }
     &[data-state="stop"] { border-color: var(--c-stop); box-shadow: inset 4px 0 0 var(--c-stop); }
     &[data-state="caution"] { box-shadow: inset 4px 0 0 var(--c-caution); }
     &[data-state="shunt"] { box-shadow: inset 4px 0 0 var(--c-shunt); }
@@ -107,14 +108,14 @@
   }
   .annunciator-window {
     display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--s-3); padding: var(--s-3);
-    border-radius: var(--r-2); background: color-mix(in oklch, var(--c-caution) 22%, var(--c-panel-raised));
-    border: 1px solid color-mix(in oklch, var(--c-caution) 60%, var(--c-line));
+    border-radius: var(--r-2); background: color-mix(in oklab, var(--c-caution) 22%, var(--c-panel-raised));
+    border: 1px solid color-mix(in oklab, var(--c-caution) 60%, var(--c-line));
     & .lamp { margin-block-start: 0.3rem; }
     & p { font-size: var(--fs-s); }
     & small { color: var(--c-ink-2); font-size: var(--fs-xs); }
     &[data-severity="critical"] {
-      background: color-mix(in oklch, var(--c-stop) 13%, var(--c-panel-raised));
-      border-color: color-mix(in oklch, var(--c-stop) 60%, var(--c-line));
+      background: color-mix(in oklab, var(--c-stop) 13%, var(--c-panel-raised));
+      border-color: color-mix(in oklab, var(--c-stop) 60%, var(--c-line));
     }
     @starting-style { opacity: 0; scale: 0.98; }
     transition: opacity var(--t-med), scale var(--t-med) var(--ease-out);

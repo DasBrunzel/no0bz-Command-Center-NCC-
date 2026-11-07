@@ -42,8 +42,41 @@ function appShell(): Plugin {
   };
 }
 
+/**
+ * The overview is the usual first view. Preload its chunk and the two fonts
+ * the headline needs, so the browser fetches them with the entry instead of
+ * after it (no waterfall).
+ */
+function preloadFirstView(): Plugin {
+  return {
+    name: "ncc-preload-first-view",
+    apply: "build",
+    transformIndexHtml: {
+      order: "post",
+      handler(html, context) {
+        type Chunk = { type: "chunk"; fileName: string; facadeModuleId: string | null; imports: string[]; isEntry: boolean };
+        const bundle = context.bundle as Record<string, { type: string }> | undefined;
+        if (!bundle) return html;
+        const chunks = Object.values(bundle).filter((item): item is Chunk => item.type === "chunk");
+        const overview = chunks.find((chunk) => chunk.facadeModuleId?.endsWith("features/overview/Overview.tsx"));
+        const modules = new Set<string>();
+        if (overview) {
+          modules.add(overview.fileName);
+          for (const name of overview.imports) if (!chunks.find((chunk) => chunk.fileName === name)?.isEntry) modules.add(name);
+        }
+        const fonts = Object.keys(bundle).filter((name) => /barlow-condensed-latin-700-normal.*\.woff2$|barlow-latin-400-normal.*\.woff2$/.test(name));
+        const tags = [
+          ...[...modules].filter((name) => !html.includes(name)).map((name) => `<link rel="modulepreload" crossorigin href="/${name}">`),
+          ...fonts.map((name) => `<link rel="preload" as="font" type="font/woff2" crossorigin href="/${name}">`),
+        ];
+        return html.replace("</head>", `    ${tags.join("\n    ")}\n  </head>`);
+      },
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), appShell()],
+  plugins: [react(), preloadFirstView(), appShell()],
   build: {
     outDir,
     emptyOutDir: true,

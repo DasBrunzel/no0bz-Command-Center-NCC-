@@ -55,8 +55,10 @@ export default function Games(_: { route: Route }) {
             {s.longest_session && (
               <div className="play-longest">
                 <dt>Längste Sitzung</dt>
-                <dd>{fmtDuration(s.longest_session.seconds)}</dd>
-                <small>{s.longest_session.title ?? "Unbekannt"} auf {s.longest_session.node_name ?? "?"}, <RelTime iso={s.longest_session.started_at} /></small>
+                <dd>
+                  {fmtDuration(s.longest_session.seconds)}
+                  <small>{s.longest_session.title ?? "Unbekannt"} auf {s.longest_session.node_name ?? "?"}, <RelTime iso={s.longest_session.started_at} /></small>
+                </dd>
               </div>
             )}
           </dl>
@@ -141,7 +143,7 @@ export default function Games(_: { route: Route }) {
       <section className="section mt-5" aria-labelledby="library-title">
         <div className="section-title">
           <h2 id="library-title">Bibliothek</h2>
-          <p>{library.data ? `${library.data.length} erkannte Spiele` : ""}{can.commander ? " · Banner und Steam-Zuordnung über das Spiel" : ""}</p>
+          <p>{[library.data ? `${library.data.length} erkannte Spiele` : null, can.commander ? "Banner und Steam-Zuordnung über das Spiel" : null].filter(Boolean).join(" · ")}</p>
         </div>
         {library.isPending ? <Loading /> : library.isError && !library.data ? (
           <ErrorState onRetry={() => void library.refetch()}>Die Spieleliste konnte nicht geladen werden.</ErrorState>

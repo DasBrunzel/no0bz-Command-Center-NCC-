@@ -41,7 +41,7 @@
   }
   .heatmap-cell {
     aspect-ratio: 1; border-radius: 2px;
-    background: color-mix(in oklch, var(--c-seq-high) calc(var(--v) * 100%), var(--c-seq-low));
+    background: color-mix(in oklab, var(--c-seq-high) calc(var(--v) * 100%), var(--c-seq-low));
     &[data-active] { outline: 2px solid var(--c-ink); outline-offset: 1px; }
   }
   .heatmap-day { font-size: var(--fs-xs); }

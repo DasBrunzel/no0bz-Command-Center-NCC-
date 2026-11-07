@@ -5,7 +5,7 @@
   .pairing-list {
     display: grid; gap: var(--s-2);
     & li { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3); border-radius: var(--r-2); background: var(--c-panel); }
-    & li[data-status="waiting"] { background: color-mix(in oklch, var(--c-caution) 18%, var(--c-panel)); }
+    & li[data-status="waiting"] { background: color-mix(in oklab, var(--c-caution) 18%, var(--c-panel)); }
     & b { display: block; }
     & small { color: var(--c-ink-3); font-size: var(--fs-xs); }
   }

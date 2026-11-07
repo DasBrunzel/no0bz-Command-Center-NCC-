@@ -1,0 +1,1 @@
+@layer features{.releases .section{margin-block:var(--s-5) 0}.feed-row{gap:var(--s-4);align-items:flex-start;display:flex;& .lamp{margin-block-start:.25rem}}.select-s{min-block-size:2rem;font-size:var(--fs-s);inline-size:auto;min-inline-size:9rem;padding-block:0}.textarea.code{font-family:var(--font-code);font-size:var(--fs-xs);max-block-size:22rem}}

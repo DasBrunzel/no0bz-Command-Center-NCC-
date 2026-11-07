@@ -205,8 +205,8 @@ function TrackArt() {
       <g className="signal" transform="translate(120 92)"><rect width="14" height="22" rx="3" /><circle cx="7" cy="7" r="3.5" className="lit-go" /></g>
       <g className="signal" transform="translate(330 32)"><rect width="14" height="22" rx="3" /><circle cx="7" cy="7" r="3.5" className="lit-shunt" /></g>
       <g className="signal" transform="translate(460 92)"><rect width="14" height="22" rx="3" /><circle cx="7" cy="7" r="3.5" className="lit-caution" /></g>
-      <text x="300" y="48" className="track-label">Windows</text>
-      <text x="300" y="146" className="track-label">CachyOS</text>
+      <text x="372" y="46" className="track-label">Windows</text>
+      <text x="300" y="148" className="track-label">CachyOS</text>
     </svg>
   );
 }

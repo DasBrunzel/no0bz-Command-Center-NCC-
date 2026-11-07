@@ -47,9 +47,9 @@
   .login-note {
     display: flex; gap: var(--s-2); align-items: flex-start; padding: var(--s-3) var(--s-4); border-radius: var(--r-2);
     font-size: var(--fs-s); font-weight: 500;
-    background: color-mix(in oklch, var(--c-shunt) 12%, transparent);
+    background: color-mix(in oklab, var(--c-shunt) 12%, transparent);
     & svg { flex: none; margin-block-start: 2px; }
-    &[data-tone="caution"] { background: color-mix(in oklch, var(--c-caution) 25%, transparent); }
+    &[data-tone="caution"] { background: color-mix(in oklab, var(--c-caution) 25%, transparent); }
   }
   .login-legacy {
     font-size: var(--fs-s); color: var(--c-ink-3);

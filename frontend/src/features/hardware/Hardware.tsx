@@ -29,7 +29,11 @@ export default function Hardware(_: { route: Route }) {
       ) : stats.isError && !stats.data ? (
         <ErrorState onRetry={() => void stats.refetch()}>Die Hardware-Statistik konnte nicht geladen werden.</ErrorState>
       ) : (
-        <section className="panel" data-refreshing={stats.isPlaceholderData || undefined}>
+        <section className="panel" data-refreshing={stats.isPlaceholderData || undefined} aria-labelledby="hw-period">
+          <div className="panel-head">
+            <h2 id="hw-period">{days ? `Letzte ${days} Tage` : "Gesamter Zeitraum"}</h2>
+            <p>{nodeId ? nodes.data?.find((node) => node.node_id === nodeId)?.display_name : "alle Geräte"}</p>
+          </div>
           <HardwareSummary stats={stats.data!} />
         </section>
       )}

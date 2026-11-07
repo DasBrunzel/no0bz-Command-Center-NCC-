@@ -22,8 +22,8 @@
   .node-alerts {
     display: grid; gap: var(--s-2); margin-block-end: var(--s-4);
     & li { display: flex; gap: var(--s-2); align-items: center; padding: var(--s-2) var(--s-3); border-radius: var(--r-2); font-size: var(--fs-s);
-      background: color-mix(in oklch, var(--c-caution) 22%, transparent); }
-    & li[data-severity="critical"] { background: color-mix(in oklch, var(--c-stop) 12%, transparent); }
+      background: color-mix(in oklab, var(--c-caution) 22%, transparent); }
+    & li[data-severity="critical"] { background: color-mix(in oklab, var(--c-stop) 12%, transparent); }
   }
 
   .stale-note { font-size: var(--fs-s); color: var(--c-caution-ink); font-weight: 600; }
@@ -88,10 +88,10 @@
 
   .now-playing {
     display: grid; grid-template-columns: minmax(10rem, 18rem) minmax(0, 1fr); gap: var(--s-5); align-items: center;
-    padding: var(--s-4); border-radius: var(--r-3); background: color-mix(in oklch, var(--c-shunt) 10%, var(--c-panel-raised)); border: 1px solid color-mix(in oklch, var(--c-shunt) 35%, var(--c-line));
+    padding: var(--s-4); border-radius: var(--r-3); background: color-mix(in oklab, var(--c-shunt) 10%, var(--c-panel-raised)); border: 1px solid color-mix(in oklab, var(--c-shunt) 35%, var(--c-line));
     & h2 { font-size: var(--fs-3xl); }
     @media (width < 40rem) { grid-template-columns: 1fr; }
   }
 
-  .danger-zone { border-color: color-mix(in oklch, var(--c-stop) 40%, var(--c-line)); }
+  .danger-zone { border-color: color-mix(in oklab, var(--c-stop) 40%, var(--c-line)); }
 }

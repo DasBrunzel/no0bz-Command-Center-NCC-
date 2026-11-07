@@ -6,7 +6,7 @@
   .artwork-thumb { inline-size: 6.5rem; flex: none; }
   .artwork-empty {
     display: grid; place-items: center;
-    background: repeating-linear-gradient(135deg, var(--c-panel-sunken) 0 10px, color-mix(in oklch, var(--c-panel-sunken) 85%, var(--c-ink) 6%) 10px 20px);
+    background: repeating-linear-gradient(135deg, var(--c-panel-sunken) 0 10px, color-mix(in oklab, var(--c-panel-sunken) 85%, var(--c-ink) 6%) 10px 20px);
     & span { font-family: var(--font-display); font-weight: 700; font-size: var(--fs-2xl); color: var(--c-ink-3); }
   }
   .artwork-thumb.artwork-empty span { font-size: var(--fs-m); }
@@ -18,7 +18,7 @@
     & div { display: grid; align-content: start; }
     & dt { font-size: var(--fs-s); color: var(--c-ink-3); }
     & dd { font-family: var(--font-display); font-weight: 650; font-size: var(--fs-4xl); line-height: 1.05; }
-    & small { font-size: var(--fs-xs); color: var(--c-ink-3); max-inline-size: 24ch; }
+    & small { display: block; font-family: var(--font-text); font-weight: 400; font-size: var(--fs-xs); line-height: 1.4; color: var(--c-ink-3); max-inline-size: 24ch; margin-block-start: var(--s-1); }
   }
 
   .ranking { display: grid; gap: var(--s-2); }
@@ -37,7 +37,7 @@
     & small { font-weight: 500; font-size: var(--fs-xs); color: var(--c-ink-3); } }
 
   .hbar {
-    block-size: 0.5rem; border-radius: var(--r-1); background: color-mix(in oklch, var(--c-ink) 7%, transparent); overflow: hidden;
+    block-size: 0.5rem; border-radius: var(--r-1); background: color-mix(in oklab, var(--c-ink) 7%, transparent); overflow: hidden;
     & span { display: block; block-size: 100%; background: var(--c-series-1); border-radius: 0 var(--r-1) var(--r-1) 0;
       transition: inline-size var(--t-slow) var(--ease-out); }
   }

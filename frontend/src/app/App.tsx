@@ -1,7 +1,7 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { describeError } from "../api/client";
-import { api } from "../api/endpoints";
+import { api, qk } from "../api/endpoints";
 import { createQueryClient } from "../api/queries";
 import { ToastProvider, useToast } from "../components/toast";
 import { Lamp } from "../components/ui";
@@ -11,6 +11,18 @@ import { AuthProvider, useAuth } from "./auth";
 import { Shell } from "./Shell";
 
 const queryClient = createQueryClient();
+
+/*
+ * Start the likely first view and its data while the session is checked, so
+ * nothing waits in a waterfall. A 401 here is harmless: the unauthorized
+ * handler ignores it until a session is running.
+ */
+if (!window.location.hash || window.location.hash === "#/") {
+  void import("../features/overview/Overview");
+  for (const [queryKey, queryFn] of [[qk.nodes, api.fleet.nodes], [qk.alerts, () => api.fleet.alerts(200)], [qk.groups, api.fleet.groups], [qk.physical, api.fleet.physicalDevices], [qk.summary, api.fleet.summary]] as const) {
+    void queryClient.prefetchQuery({ queryKey, queryFn: queryFn as () => Promise<unknown>, retry: false });
+  }
+}
 
 export function App() {
   return (

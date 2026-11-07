@@ -90,6 +90,7 @@ export function Shell() {
   return (
     <div className="app">
       <a className="skip-link" href="#main" onClick={(event) => { event.preventDefault(); document.getElementById("main")?.focus(); }}>Zum Inhalt springen</a>
+      <div className="rail-col">
       <nav className="rail" aria-label="Bereiche">
         <Link to="" className="brand" aria-label="no0bz Command Center – zur Lage">
           <span className="brand-mark">no<Lamp state={brandState} />bz</span>
@@ -125,6 +126,7 @@ export function Shell() {
           <p className="rail-version">Server {version.data?.version ?? "…"} · API {version.data?.api ?? "v1"}</p>
         </div>
       </nav>
+      </div>
 
       <div className="workspace">
         <header className="bar">

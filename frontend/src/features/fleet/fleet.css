@@ -2,7 +2,7 @@
   .fleet-table-panel { padding-block: var(--s-2); }
   .fleet-table {
     & tbody tr { cursor: pointer; }
-    & tbody tr:hover { background: color-mix(in oklch, var(--c-ink) 3.5%, transparent); }
+    & tbody tr:hover { background: color-mix(in oklab, var(--c-ink) 3.5%, transparent); }
     & tr[data-state="off"] td { color: var(--c-ink-3); }
     & tr[data-nested] td:first-child { padding-inline-start: var(--s-6); }
     & .machine-row { cursor: default; background: var(--c-panel-sunken);
