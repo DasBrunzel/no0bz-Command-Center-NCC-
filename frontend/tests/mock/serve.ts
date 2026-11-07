@@ -30,11 +30,11 @@ createServer(async (req, res) => {
     res.end(result.body ?? (result.json === undefined ? "" : JSON.stringify(result.json)));
     return;
   }
-  const file = url.pathname === "/" ? "index.html" : url.pathname.startsWith("/assets/") ? normalize(url.pathname.slice(1)) : null;
+  const file = url.pathname === "/" ? "index.html" : url.pathname === "/sw.js" ? "sw.js" : url.pathname.startsWith("/assets/") ? normalize(url.pathname.slice(1)) : null;
   if (!file || file.includes("..")) { res.writeHead(404, { "Content-Type": "application/json" }); res.end('{"detail":"Not Found"}'); return; }
   try {
     let data = await readFile(join(staticDir, file));
-    const headers: Record<string, string> = { "Content-Type": types[extname(file)] ?? "application/octet-stream", "Cache-Control": file.startsWith("assets/") && !file.endsWith("sw.js") ? "public, max-age=31536000, immutable" : "no-cache" };
+    const headers: Record<string, string> = { "Content-Type": types[extname(file)] ?? "application/octet-stream", "Cache-Control": file.startsWith("assets/") ? "public, max-age=31536000, immutable" : "no-cache" };
     if (process.env.MOCK_GZIP && /\.(js|css|html|svg|webmanifest)$/.test(file) && String(req.headers["accept-encoding"] ?? "").includes("gzip")) {
       data = gzipSync(data);
       headers["Content-Encoding"] = "gzip";

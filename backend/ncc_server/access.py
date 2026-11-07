@@ -47,3 +47,15 @@ def manageable_node(session: Session, identity: DashboardIdentity, node_id: str)
     if identity.is_friend and identity.user_id is not None and node.owner_user_id == identity.user_id:
         return node
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="commander access required")
+
+
+def gaming_mode_node(session: Session, identity: DashboardIdentity, node_id: str) -> Node:
+    """Gaming Mode only quiets load alerts, so beta testers may switch it too.
+
+    Commanders and beta testers switch it for every device they see; a friend
+    only for their own devices. Everything else stays with manageable_node.
+    """
+    node = visible_node(session, identity, node_id)
+    if identity.access_role in {"commander", "beta_tester"}:
+        return node
+    return manageable_node(session, identity, node_id)

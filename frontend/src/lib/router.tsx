@@ -45,7 +45,12 @@ export function useRoute(): Route {
   return useSyncExternalStore(subscribe, () => current);
 }
 
-type TransitionDocument = Document & { startViewTransition?: (callback: () => void) => { finished: Promise<void> } };
+interface ViewTransitionLike {
+  ready: Promise<void>;
+  finished: Promise<void>;
+  updateCallbackDone: Promise<void>;
+}
+type TransitionDocument = Document & { startViewTransition?: (callback: () => void) => ViewTransitionLike };
 
 export function withTransition(update: () => void): void {
   const doc = document as TransitionDocument;
@@ -54,7 +59,13 @@ export function withTransition(update: () => void): void {
     update();
     return;
   }
-  doc.startViewTransition(() => flushSync(update));
+  const transition = doc.startViewTransition(() => flushSync(update));
+  // A quick second navigation skips the running animation. The view has
+  // already updated, so the rejected promises carry no error worth reporting.
+  const ignore = () => undefined;
+  transition.ready.catch(ignore);
+  transition.finished.catch(ignore);
+  transition.updateCallbackDone.catch(ignore);
 }
 
 export function href(path: string): string {

@@ -5,13 +5,17 @@ test.use({ serviceWorkers: "allow" });
 
 test("PWA: Manifest, Service Worker und App-Shell offline", async ({ page, context }) => {
   const manifest = await (await page.request.get("/assets/manifest.webmanifest")).json();
-  expect(manifest.start_url).toBe("/assets/app.html");
+  expect(manifest.start_url).toBe("/");
+  expect(manifest.scope).toBe("/");
+  const worker = await page.request.get("/sw.js");
+  expect(worker.ok()).toBe(true);
+  expect(await worker.text()).toContain("ncc-shell-");
   expect(manifest.display).toBe("standalone");
   expect(manifest.icons.some((icon: { sizes: string }) => icon.sizes === "512x512")).toBe(true);
   for (const icon of manifest.icons as Array<{ src: string }>) expect((await page.request.get(icon.src)).ok()).toBe(true);
 
   await mockApi(page, { session: "commander" });
-  await page.goto("/assets/app.html");
+  await page.goto("/");
   await expect(page.getByRole("heading", { level: 1, name: /Geräten online/ })).toBeVisible();
   await page.evaluate(async () => { await navigator.serviceWorker.ready; });
   // Reload once so the page is controlled, then cut the network.

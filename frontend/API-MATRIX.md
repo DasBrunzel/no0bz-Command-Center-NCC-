@@ -1,4 +1,4 @@
-# API- und Rechte-Matrix
+# API- und Rechte-Matrix (Server 0.7.0)
 
 Quelle: `backend/ncc_server/api/v1/*.py`, `backend/ncc_server/auth.py`, `backend/ncc_server/access.py`, `backend/ncc_server/schemas.py`.
 Alle Pfade relativ zu `/api/v1`. UI-Orte sind Hash-Routen des neuen Frontends (siehe `DECISIONS.md`, D-04).
@@ -12,6 +12,7 @@ Alle Pfade relativ zu `/api/v1`. UI-Orte sind Hash-Routen des neuen Frontends (s
 | **Team** | Commander oder Beta-Tester, keine Freunde | `require_staff_access` |
 | **Commander** | nur Commander | `require_commander_access` |
 | **Verwalter** | Commander für jedes Gerät, Freund nur für eigene Geräte. Beta-Tester bekommen **403** | `access.manageable_node` |
+| **Gaming** | wie Verwalter, zusätzlich Beta-Tester für jedes sichtbare Gerät (ab 0.7) | `access.gaming_mode_node` |
 | **Konto** | angemeldet **und** persönliches Konto (keine Admin-Code-Sitzung) | `_personal_account` / `identity.user_id` |
 | **Agent** | nur Agenten-Token, kein Dashboard | `require_agent_token` |
 
@@ -26,6 +27,7 @@ Freunde sehen über `access.visible_node_ids` nur eigene Geräte (oder alle Stat
 | ✅ | GET | `/version` | öffentlich | Server-Version | Fußzeile der Navigation, Einstellungen › Über |
 | ✅ | GET | `/status/live` | öffentlich | Erreichbarkeit | Einstellungen › Über (Status-Lampe) |
 | ➖ | GET | `/status/ready` | öffentlich | DB-Bereitschaft | nur für Betrieb/Healthchecks |
+| ✅ | GET | `/sw.js` (außerhalb `/api`) | öffentlich | Service Worker, Scope `/` (0.7) | `app/pwa.ts` |
 | ✅ | POST | `/admin-codes/redeem` | öffentlich | Login per 8-stelligem Code | Login › Admin-Code |
 | ✅ | POST | `/admin-codes/logout` | öffentlich (Cookie) | Abmelden | Navigation › Abmelden |
 | ✅ | GET | `/admin-codes/access` | angemeldet | Rolle der Sitzung | Sitzungsprüfung (App-Start, 401-Erkennung) |
@@ -60,7 +62,7 @@ Freunde sehen über `access.visible_node_ids` nur eigene Geräte (oder alle Stat
 | ✅ | DELETE | `/fleet/nodes/{id}` | Commander | Node vergessen | Geräte › Detail › Verwaltung › Gefahrenzone |
 | ✅ | PATCH | `/fleet/nodes/{id}/role` | Commander | Zugriffsrolle des Agenten | Geräte › Detail › Verwaltung |
 | ✅ | PUT | `/fleet/nodes/{id}/owner` | Commander | Besitzer zuweisen | Geräte › Detail › Verwaltung |
-| ✅ | PUT | `/fleet/nodes/{id}/gaming-mode` | Verwalter | Gaming Mode (0–480 min) | Geräte › Detail (Kopf), Lage › Gleisbild-Popover |
+| ✅ | PUT | `/fleet/nodes/{id}/gaming-mode` | Gaming | Gaming Mode (0–480 min) | Geräte › Detail (Kopf), Lage › Gleisbild-Popover |
 | ✅ | PUT | `/fleet/nodes/{id}/sensor-labels` | Verwalter | Lüfter/Temperatur benennen | Geräte › Detail › Sensoren |
 | ✅ | POST | `/fleet/nodes/{id}/update-check` | Verwalter | Update-Prüfung anstoßen | Geräte › Detail › Updates |
 | ✅ | PUT | `/fleet/nodes/{id}/release` | Commander | Release zuweisen | Geräte › Detail › Updates (Releases › Zuweisung nutzt die Releases-Route) |
@@ -83,6 +85,9 @@ Freunde sehen über `access.visible_node_ids` nur eigene Geräte (oder alle Stat
 | ✅ | GET | `/fleet/games/{id}/artwork` | angemeldet | Banner | Spiele, Now-Playing |
 | ✅ | PUT | `/fleet/games/{id}/artwork` | Commander | Banner hochladen (roh, 920×430 zugeschnitten) | Spiele › Spiel-Dialog |
 | ✅ | DELETE | `/fleet/games/{id}/artwork` | Commander | Banner entfernen | Spiele › Spiel-Dialog |
+| ✅ | GET | `/fleet/games/{id}/artwork/candidates?query=` | Commander | SteamGridDB-Suche (0.7) | Spiele › Spiel-Dialog › Suchen |
+| ✅ | GET | `/fleet/games/{id}/artwork/candidates/{n}/preview` | Commander | Vorschau, vom Server geladen (0.7) | Spiele › Spiel-Dialog › Trefferliste |
+| ✅ | POST | `/fleet/games/{id}/artwork/candidates/{n}` | Commander | Treffer als Banner übernehmen (0.7) | Spiele › Spiel-Dialog › „Diesen Banner übernehmen“ |
 | ✅ | PUT | `/fleet/nodes/{id}/game-settings` | Verwalter | Spiel-Erfassung pro Node | Geräte › Detail › Spiele |
 | ✅ | GET | `/fleet/chat/messages?limit=&before=&after=` | angemeldet | Nachrichten (Cursor) | Chat |
 | ✅ | POST | `/fleet/chat/messages` | angemeldet | Nachricht (plain/markdown) | Chat › Eingabe |
@@ -91,6 +96,7 @@ Freunde sehen über `access.visible_node_ids` nur eigene Geräte (oder alle Stat
 | ✅ | GET | `/fleet/chat/participants` | angemeldet | Teilnehmer | Chat › Teilnehmer |
 | ✅ | GET | `/agent-pairings` | Team | Pairing-Anfragen | Aufnahme › Kopplungen |
 | ✅ | POST | `/agent-pairings/{id}/approve` | angemeldet | Anfrage freigeben | Pairing-Link `?pair=`, Aufnahme › Kopplungen (nur Commander) |
+| ✅ | POST | `/agent-pairings/{id}/cancel` | Commander | Anfrage ablehnen (0.7) | Aufnahme › Kopplungen › „Ablehnen“ |
 | ➖ | POST | `/agent-pairings/register` | öffentlich (Agent) | Agent meldet sich an | – |
 | ➖ | POST | `/agent-pairings/{id}/claim` | öffentlich (Agent-Secret) | Agent holt Token | – |
 | ✅ | GET | `/agent-invitations` | Team | Agent-Einladungen | Aufnahme › Agent-Einladungen |
@@ -108,4 +114,5 @@ Freunde sehen über `access.visible_node_ids` nur eigene Geräte (oder alle Stat
 ## Beta-Tester-Sicht (Kurzfassung)
 
 Sichtbar und aktiv: Lesen aller Bereiche außer Konten, Chat schreiben, Pairing-Link freigeben, eigenes Passwort/Telegram (nur mit persönlichem Konto).
-Ausgeblendet oder sichtbar gesperrt: Löschen, Widerrufen, Codes/Einladungen erstellen, Geräte verwalten (Umbenennen, Gaming Mode, Sensor-Namen, Update-Check, Spiel-Erfassung – alle `manageable_node` → 403), Gruppen/Anordnung, Dualboot, Releases zuweisen/anlegen, Warnregeln/Telegram speichern, Netzwerk-Reset, Spiele bearbeiten, Konten.
+Ab 0.7 zusätzlich aktiv: Gaming Mode für jedes Gerät.
+Ausgeblendet oder sichtbar gesperrt: Löschen, Widerrufen, Kopplungen ablehnen, Codes/Einladungen erstellen, Banner-Suche, Geräte verwalten (Umbenennen, Sensor-Namen, Update-Check, Spiel-Erfassung – alle `manageable_node` → 403), Gruppen/Anordnung, Dualboot, Releases zuweisen/anlegen, Warnregeln/Telegram speichern, Netzwerk-Reset, Spiele bearbeiten, Konten.

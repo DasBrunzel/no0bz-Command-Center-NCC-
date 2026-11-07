@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { copyFileSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, type Plugin } from "vite";
@@ -16,10 +16,8 @@ function listFiles(dir: string): string[] {
 }
 
 /**
- * FastAPI only serves "/", "/assets/*" and "/api/*". The installed PWA
- * therefore starts at /assets/app.html, which the service worker under
- * /assets/ may control (see DECISIONS.md, P-01/P-02). This plugin copies the
- * built index.html there and writes the precache list into sw.js.
+ * Writes the precache list (the page and every built asset) and a content
+ * hash into sw.js, which the server serves at /sw.js (DECISIONS.md, section 3).
  */
 function appShell(): Plugin {
   return {
@@ -27,13 +25,13 @@ function appShell(): Plugin {
     apply: "build",
     closeBundle() {
       const assets = join(outDir, "assets");
-      copyFileSync(join(outDir, "index.html"), join(assets, "app.html"));
       const files = listFiles(assets)
         .map((file) => "/" + relative(outDir, file).split(sep).join("/"))
-        .filter((url) => !url.endsWith("/sw.js") && !url.endsWith(".map") && !url.endsWith(".woff"));
+        .filter((url) => !url.endsWith(".map") && !url.endsWith(".woff"));
       const hash = createHash("sha256");
-      for (const url of files) hash.update(url).update(readFileSync(join(outDir, url)));
-      const swPath = join(assets, "sw.js");
+      for (const url of ["/index.html", ...files]) hash.update(url).update(readFileSync(join(outDir, url)));
+      files.unshift("/");
+      const swPath = join(outDir, "sw.js");
       const source = readFileSync(swPath, "utf8")
         .replace("self.__NCC_PRECACHE__", JSON.stringify(files))
         .replace("self.__NCC_VERSION__", JSON.stringify(hash.digest("hex").slice(0, 12)));

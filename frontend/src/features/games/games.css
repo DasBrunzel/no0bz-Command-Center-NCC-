@@ -61,4 +61,14 @@
 
   .game-dialog { display: grid; gap: var(--s-5); grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
     @media (width < 44rem) { grid-template-columns: 1fr; } }
+
+  .grid-search { display: flex; gap: var(--s-2); align-items: end; flex-wrap: wrap; }
+  .grid-results { display: grid; gap: var(--s-2); grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); max-block-size: 18rem; overflow-y: auto; padding: 2px; }
+  .grid-result {
+    display: grid; gap: var(--s-1); cursor: pointer; padding: var(--s-1); border-radius: var(--r-2); border: 2px solid transparent;
+    & img { inline-size: 100%; aspect-ratio: 920 / 430; object-fit: cover; border-radius: var(--r-1); background: var(--c-panel-sunken); }
+    & small { font-size: var(--fs-xs); color: var(--c-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    &[data-picked] { border-color: var(--c-ink); }
+    &:has(input:focus-visible) { outline: 3px solid var(--c-focus); }
+  }
 }

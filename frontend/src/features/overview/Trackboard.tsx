@@ -2,7 +2,7 @@ import type { CSSProperties } from "react";
 import type { FleetAlert, FleetGroup } from "../../api/types";
 import { Lamp, Meter, RelTime, useNow } from "../../components/ui";
 import { fmtTime } from "../../lib/format";
-import { cpuPercent, gamingUntil, gpuPercent, isUnraid, lampText, memPercent, nodeLamp, platformLabel, type Machine } from "../../lib/node";
+import { cpuPercent, gamingUntil, gpuPercent, groupLabel, isUnraid, lampText, memPercent, nodeLamp, platformLabel, type Machine } from "../../lib/node";
 import { Link } from "../../lib/router";
 
 export function transitionName(nodeId: string): string {
@@ -21,7 +21,7 @@ export function Trackboard({ machines, groups, alerts, onlineOnly }: Props) {
   const sorted = [...groups].sort((a, b) => a.position - b.position || a.name.localeCompare(b.name, "de"));
   const known = new Set(sorted.map((group) => group.group_id));
   const tracks = [
-    ...sorted.map((group) => ({ id: group.group_id, name: group.name })),
+    ...sorted.map((group) => ({ id: group.group_id, name: groupLabel(group) })),
     { id: "__other", name: "Weitere Geräte" },
   ];
   const visible = machines.filter((machine) => !onlineOnly || machine.profiles.some((node) => node.online));

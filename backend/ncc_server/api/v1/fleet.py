@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from ncc.security import limited
 from sqlalchemy.orm import Session
 
-from ncc_server.access import manageable_node, visible_node, visible_node_ids
+from ncc_server.access import gaming_mode_node, manageable_node, visible_node, visible_node_ids
 from ncc_server.alert_service import AlertNotification, get_alert_policy, update_alert_policy
 from ncc_server.auth import (
     DashboardIdentity,
@@ -324,7 +324,7 @@ async def set_gaming_mode(
     identity: DashboardIdentity = Depends(require_dashboard_identity),
     session: Session = Depends(database_session),
 ) -> FleetNodeResponse:
-    manageable_node(session, identity, node_id)
+    gaming_mode_node(session, identity, node_id)
     set_fleet_gaming_mode(session, node_id, payload.minutes)
     return _node_or_404(session, node_id, request)
 

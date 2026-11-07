@@ -1,11 +1,11 @@
-/* NCC service worker. Scope: /assets/ (see DECISIONS.md, P-02).
+/* NCC service worker, served by the server at /sw.js with scope "/".
  * Precaches the app shell; never caches /api responses. The build replaces
  * the two placeholders below with the asset list and a content hash. */
 
-const PRECACHE = ["/assets/AboutTab-DOjDiMV4.js","/assets/AlertPolicyTab-u6TAq2_D.js","/assets/app.html","/assets/Artwork-BlczMYd7.css","/assets/Artwork-DN8aNIl-.js","/assets/barlow-condensed-latin-600-normal-DepVgxBB.woff2","/assets/barlow-condensed-latin-700-normal-v1xN8_Wq.woff2","/assets/barlow-latin-400-normal-qiz4-Cze.woff2","/assets/barlow-latin-500-normal-BPAOfeC8.woff2","/assets/barlow-latin-600-normal-DILqtrty.woff2","/assets/barlow-latin-700-normal-A9pxMQ4z.woff2","/assets/charts-DITn2cUV.js","/assets/Chat-B-w-bLyX.css","/assets/Chat-BXaRRdyo.js","/assets/Enrollment-BY0YsQHW.js","/assets/Enrollment-DPlEWt__.css","/assets/Fleet-C0oi12Dm.css","/assets/Fleet-Cgn2DdpQ.js","/assets/Games-DvD--EdM.js","/assets/GamesTab-BrMy99be.js","/assets/Hardware-DFT3-hgq.js","/assets/HardwareSummary-BrinYIgh.js","/assets/HardwareSummary-CyE9ddjh.css","/assets/icons/icon-192.png","/assets/icons/icon-512.png","/assets/icons/icon.svg","/assets/icons/maskable-512.png","/assets/icons/maskable.svg","/assets/index-BtgUoMgV.js","/assets/index-D6d1q30Q.css","/assets/jsx-runtime-Wy9s6hX0.js","/assets/ManageTab-DAXOC35s.js","/assets/manifest.webmanifest","/assets/Markdown-CPhJbV3R.js","/assets/NetworkTab-XXW2pMGt.js","/assets/NodeDetail-BMUCg2ev.js","/assets/NodeDetail-YZx3lZv6.css","/assets/Overview-BRa25EpK.js","/assets/Overview-Clr3IGbv.css","/assets/Releases-Bm4fHI_e.css","/assets/Releases-Du5LMvbV.js","/assets/SensorsTab-nZCmbRi1.js","/assets/Settings-BfhOGZyg.css","/assets/Settings-CfSxlsoL.js","/assets/TelegramTab-D9Ca8RLX.js","/assets/Trackboard-COOzm0MO.js","/assets/UpdatesTab-CjvERV61.js","/assets/UsersTab-AAvk9Vkz.js"];
-const VERSION = "d3a115654ca6";
+const PRECACHE = ["/","/assets/AboutTab-C56aDZ_8.js","/assets/AlertPolicyTab-BxXkc_Ke.js","/assets/Artwork-BdKMuYBI.js","/assets/Artwork-B_JnqnBg.css","/assets/barlow-condensed-latin-600-normal-DepVgxBB.woff2","/assets/barlow-condensed-latin-700-normal-v1xN8_Wq.woff2","/assets/barlow-latin-400-normal-qiz4-Cze.woff2","/assets/barlow-latin-500-normal-BPAOfeC8.woff2","/assets/barlow-latin-600-normal-DILqtrty.woff2","/assets/barlow-latin-700-normal-A9pxMQ4z.woff2","/assets/charts-DITn2cUV.js","/assets/Chat-B-w-bLyX.css","/assets/Chat-CSQegEvO.js","/assets/Enrollment-DPlEWt__.css","/assets/Enrollment-fb8i27eG.js","/assets/Fleet-C0oi12Dm.css","/assets/Fleet-DAe1hguZ.js","/assets/Games-xXp1cGGY.js","/assets/GamesTab-cEVevPnd.js","/assets/Hardware-CUDIPq7E.js","/assets/HardwareSummary-CyE9ddjh.css","/assets/HardwareSummary-DEn18lgw.js","/assets/icons/icon-192.png","/assets/icons/icon-512.png","/assets/icons/icon.svg","/assets/icons/maskable-512.png","/assets/icons/maskable.svg","/assets/index-D6d1q30Q.css","/assets/index-DvYUXnCk.js","/assets/jsx-runtime-Wy9s6hX0.js","/assets/ManageTab-DoSf45Ub.js","/assets/manifest.webmanifest","/assets/Markdown-CPhJbV3R.js","/assets/NetworkTab-yScZnN61.js","/assets/NodeDetail-BpFTTDh3.js","/assets/NodeDetail-YZx3lZv6.css","/assets/Overview-BuezCA3x.js","/assets/Overview-Clr3IGbv.css","/assets/Releases-Bm4fHI_e.css","/assets/Releases-ByRK2_VD.js","/assets/SensorsTab-9dsjF4t9.js","/assets/Settings-BfhOGZyg.css","/assets/Settings-Bl1etX61.js","/assets/TelegramTab-F5lIrBXG.js","/assets/Trackboard-Fbyyftvk.js","/assets/UpdatesTab-njGOnl9P.js","/assets/UsersTab-BMIhOgW-.js"];
+const VERSION = "6bf9061e160c";
 const CACHE = `ncc-shell-${VERSION}`;
-const SHELL = "/assets/app.html";
+const SHELL = "/";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -32,6 +32,7 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
+          // Only the dashboard page itself is the shell (query and hash vary).
           if (response.ok && url.pathname === SHELL) {
             const copy = response.clone();
             caches.open(CACHE).then((cache) => cache.put(SHELL, copy));

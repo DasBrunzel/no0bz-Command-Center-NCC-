@@ -5,7 +5,7 @@ import { useCan } from "../../app/auth";
 import { Icon } from "../../components/Icon";
 import { Empty, ErrorState, Lamp, Loading, Meter, PageHead, Reading, RelTime } from "../../components/ui";
 import { plural } from "../../lib/format";
-import { cpuPercent, cpuTemp, down, gamingUntil, gpuPercent, gpuTemp, lampText, machinesOf, memPercent, nodeLamp, platformLabel, sortByLayout, up, type Machine } from "../../lib/node";
+import { cpuPercent, cpuTemp, down, gamingUntil, gpuPercent, gpuTemp, groupLabel, lampText, machinesOf, memPercent, nodeLamp, platformLabel, sortByLayout, up, type Machine } from "../../lib/node";
 import { Link, navigate, type Route } from "../../lib/router";
 import { transitionName } from "../overview/Trackboard";
 import { LayoutDialog } from "./LayoutDialog";
@@ -49,7 +49,7 @@ export default function Fleet({ route }: { route: Route }) {
   if (nodes.isPending) return <Loading label="Geräte werden geladen" />;
   if (nodes.isError && !nodes.data) return <ErrorState title="Server nicht erreichbar" onRetry={() => void nodes.refetch()}>Die Geräteliste kann gerade nicht geladen werden.</ErrorState>;
 
-  const groupName = (id: string) => groups.data?.find((item) => item.group_id === id)?.name ?? "Weitere";
+  const groupName = (id: string) => { const group = groups.data?.find((item) => item.group_id === id); return group ? groupLabel(group) : "Weitere"; };
   const total = nodes.data?.length ?? 0;
   const sortedGroups = [...(groups.data ?? [])].sort((a, b) => a.position - b.position);
 
@@ -85,7 +85,7 @@ export default function Fleet({ route }: { route: Route }) {
           <span className="visually-hidden">Gruppe</span>
           <select className="select" value={group} onChange={(event) => setGroup(event.target.value)}>
             <option value="">Alle Gruppen</option>
-            {sortedGroups.map((item) => <option key={item.group_id} value={item.group_id}>{item.name}</option>)}
+            {sortedGroups.map((item) => <option key={item.group_id} value={item.group_id}>{groupLabel(item)}</option>)}
           </select>
         </label>
       </div>

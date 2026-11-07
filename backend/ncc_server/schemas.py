@@ -342,6 +342,17 @@ class GameResponse(BaseModel):
     artwork_source: str | None = None
 
 
+class ArtworkCandidateResponse(BaseModel):
+    """A SteamGridDB banner the server found; the preview is served by NCC."""
+
+    index: int
+    game_name: str
+    width: int | None
+    height: int | None
+    style: str | None
+    preview_url: str
+
+
 class AgentReleaseManifestCreateRequest(BaseModel):
     """Manifest produced by build_ncc_payload.ps1; the binary stays at HTTPS URL."""
 

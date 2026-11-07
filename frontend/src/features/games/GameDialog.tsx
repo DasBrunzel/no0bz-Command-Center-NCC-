@@ -1,7 +1,8 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { api, qk } from "../../api/endpoints";
-import type { Game } from "../../api/types";
+import { ApiError, describeError } from "../../api/client";
+import type { ArtworkCandidate, Game } from "../../api/types";
 import { useCan } from "../../app/auth";
 import { Icon } from "../../components/Icon";
 import { useToast } from "../../components/toast";
@@ -77,6 +78,24 @@ export function GameDialog({ game, onClose }: { game: Game; onClose: () => void 
   };
 
   const gridSearch = `https://www.steamgriddb.com/search/grids?term=${encodeURIComponent(game.title)}`;
+  const [query, setQuery] = useState(game.title);
+  const [candidates, setCandidates] = useState<ArtworkCandidate[] | null>(null);
+  const [picked, setPicked] = useState<number | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [searching, setSearching] = useState(false);
+  const search = async () => {
+    setSearching(true);
+    setSearchError(null);
+    setPicked(null);
+    try {
+      setCandidates(await api.games.searchArtwork(game.game_id, query.trim() || undefined));
+    } catch (error) {
+      setCandidates(null);
+      setSearchError(error instanceof ApiError && error.status === 503 ? "SteamGridDB ist auf dem Server nicht eingerichtet (NCC_SERVER_STEAMGRIDDB_API_KEY). Lade ein Bild über den Link unten manuell hoch." : describeError(error));
+    } finally {
+      setSearching(false);
+    }
+  };
 
   return (
     <Dialog open wide onClose={onClose} title={game.title}>
@@ -105,10 +124,38 @@ export function GameDialog({ game, onClose }: { game: Game; onClose: () => void 
                   </>
                 )}
               </div>
+              <form className="grid-search" onSubmit={(event) => { event.preventDefault(); void search(); }}>
+                <label className="field grow">
+                  <span>Banner auf SteamGridDB suchen</span>
+                  <input className="input" maxLength={128} value={query} onChange={(event) => setQuery(event.target.value)} />
+                </label>
+                <button type="submit" className="btn" disabled={searching || !query.trim()}><Icon name="search" /> {searching ? "Sucht …" : "Suchen"}</button>
+              </form>
+              {searchError && <p className="form-error" role="alert">{searchError}</p>}
+              {candidates && (candidates.length === 0 ? (
+                <p className="form-hint">Keine Banner gefunden. Versuch einen anderen Namen.</p>
+              ) : (
+                <>
+                  <div className="grid-results" role="radiogroup" aria-label="Gefundene Banner">
+                    {candidates.map((item) => (
+                      <label key={item.index} className="grid-result" data-picked={picked === item.index || undefined}>
+                        <input type="radio" name="grid-candidate" className="visually-hidden" checked={picked === item.index} onChange={() => setPicked(item.index)} />
+                        <img src={item.preview_url} alt={`Banner ${item.index + 1} für ${item.game_name}`} loading="lazy" width={230} height={108} />
+                        <small>{item.game_name}{item.style ? ` · ${item.style}` : ""}</small>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="actions">
+                    <button type="button" className="btn btn-primary" disabled={busy || picked === null} onClick={() => picked !== null && void run(() => api.games.chooseArtwork(game.game_id, picked), "Banner von SteamGridDB übernommen.").then(() => setCandidates(null))}>
+                      <Icon name="check" /> Diesen Banner übernehmen
+                    </button>
+                  </div>
+                </>
+              ))}
               <p className="form-hint">
-                Das Bild wird hier auf 920 × 430 zugeschnitten. Passende Banner findest du bei{" "}
+                Eigene Bilder werden hier auf 920 × 430 zugeschnitten. Mehr Auswahl gibt es direkt bei{" "}
                 <a href={gridSearch} target="_blank" rel="noopener noreferrer">SteamGridDB <Icon name="external" size={14} style={{ display: "inline", verticalAlign: "-2px" }} /></a>
-                {" "}– herunterladen, hier hochladen.
+                {" "}– herunterladen, oben hochladen.
               </p>
             </div>
           ) : (
@@ -123,7 +170,7 @@ export function GameDialog({ game, onClose }: { game: Game; onClose: () => void 
             {game.developers.length > 0 && <><dt>Entwickler</dt><dd>{game.developers.join(", ")}</dd></>}
             {game.genres.length > 0 && <><dt>Genres</dt><dd>{game.genres.join(", ")}</dd></>}
             {game.release_date && <><dt>Erschienen</dt><dd>{game.release_date}</dd></>}
-            <dt>Banner</dt><dd>{game.has_artwork ? (game.artwork_source === "upload" ? "eigener Upload" : game.artwork_source === "steamgriddb" ? "SteamGridDB" : "Steam") : "keiner"}</dd>
+            <dt>Banner</dt><dd>{game.has_artwork ? (game.artwork_source === "upload" ? "von Hand gewählt" : game.artwork_source === "steamgriddb" ? "SteamGridDB" : "Steam") : "keiner"}</dd>
           </dl>
           {game.description && <p className="small ink-2">{game.description}</p>}
           {can.commander && (

@@ -15,6 +15,7 @@ from ncc_server.agent_tokens import issue_agent_token
 from ncc_server.auth import (
     DashboardIdentity,
     database_session,
+    require_commander_access,
     require_dashboard_identity,
     require_staff_access,
 )
@@ -50,14 +51,21 @@ async def register(
     if record is not None:
         if not hmac.compare_digest(record.secret_hash, secret_hash):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="pairing identifier is unavailable")
-        if record.cancelled_at is not None or record.claimed_at is not None:
+        if record.claimed_at is not None:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="pairing is no longer available")
-        if _as_utc(record.expires_at) <= now:
+        # A rejected request stays closed for one request lifetime, so it can
+        # no longer be approved by accident. Afterwards the agent, which keeps
+        # its installer-generated identity, may ask again like after expiry.
+        cancelled_at = record.cancelled_at
+        if cancelled_at is not None and _as_utc(cancelled_at) + PAIRING_LIFETIME > now:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="pairing is no longer available")
+        if cancelled_at is not None or _as_utc(record.expires_at) <= now:
             # The agent keeps its installer-generated pairing identity, so an
             # expired request is reopened instead of stranding the device. A
             # stale approval does not carry over; it needs a fresh approval.
             record.expires_at = now + PAIRING_LIFETIME
             record.approved_at = None
+            record.cancelled_at = None
             session.add(
                 AuditEvent(
                     actor_type="agent-pairing",
@@ -137,6 +145,32 @@ async def approve(
                     {"machine_id": record.machine_id, "access_role": access_role},
                     separators=(",", ":"),
                 ),
+            )
+        )
+        session.commit()
+    return _response(record)
+
+
+@router.post(
+    "/{pairing_id}/cancel",
+    response_model=AgentPairingResponse,
+    dependencies=[Depends(require_commander_access), Depends(limited("v1-agent-pairing-cancel", 30))],
+)
+async def cancel(pairing_id: str, session: Session = Depends(database_session)) -> AgentPairingResponse:
+    """Reject a request that has not been claimed yet; the agent cannot claim it any more."""
+    record = session.get(AgentPairing, pairing_id)
+    if record is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="pairing request not found")
+    if record.claimed_at is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="pairing was already claimed")
+    if record.cancelled_at is None:
+        record.cancelled_at = utc_now()
+        session.add(
+            AuditEvent(
+                actor_type="dashboard",
+                actor_id=record.id,
+                action="agent-pairing.cancelled",
+                details=json.dumps({"machine_id": record.machine_id}, separators=(",", ":")),
             )
         )
         session.commit()

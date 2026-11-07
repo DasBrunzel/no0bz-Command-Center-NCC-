@@ -61,7 +61,7 @@ Selbstprüfung gegen Template-Defaults und was ich daraufhin geändert habe:
 | D-12 | 401-Behandlung: zentraler Fehlertyp `ApiError`; jede 401 außerhalb der Login-Requests setzt den Auth-Status auf „abgemeldet“, leert den Query-Cache und stoppt alles Polling (Queries sind `enabled` nur im angemeldeten Zustand) → keine Schleife | ein einziger Ort entscheidet über die Abmeldung | Retry-on-401 (Endlosschleifen-Risiko) |
 | D-13 | Rechte im UI über einen `useCan()`-Hook mit den Fähigkeiten aus `API-MATRIX.md` (commander, team, manage(node)) | eine Quelle der Wahrheit, testbar | verstreute Rollenvergleiche |
 | D-14 | Es gibt eine dritte Rolle **Freund** (`friend`, aus `auth.py`/`access.py`): sieht nur eigene Geräte, verwaltet sie selbst. Das UI blendet für Freunde Aufnahme, Releases, Konten und Server-Telegram aus | der Brief nennt nur Commander/Beta-Tester, das Backend kennt drei Rollen; Registrierung per Einladung erzeugt immer Freunde | Freunde wie Beta-Tester behandeln (würde 403 und fremde Geräte-Links erzeugen) |
-| D-15 | Beta-Tester sehen Verwaltungsaktionen **gesperrt mit Hinweis** (z. B. Gaming Mode, Kanal, Release), Aktionen ohne Lesewert (Code erstellen, Widerrufen, Anordnen) sind **ausgeblendet** | gesperrte Schalter erklären, warum etwas nicht geht; reine Schreibformulare sind nur Rauschen | alles ausblenden (Beta-Tester würden Funktionen nicht kennen) |
+| D-15 | Beta-Tester sehen Verwaltungsaktionen **gesperrt mit Hinweis** (z. B. Kanal, Release, Spiel-Erfassung; den Gaming Mode dürfen sie ab 0.7), Aktionen ohne Lesewert (Code erstellen, Widerrufen, Anordnen) sind **ausgeblendet** | gesperrte Schalter erklären, warum etwas nicht geht; reine Schreibformulare sind nur Rauschen | alles ausblenden (Beta-Tester würden Funktionen nicht kennen) |
 | D-16 | Pairing-Freigabe in der Liste nur für Commander, über den Pairing-Link für jede Rolle | Backend erlaubt `approve` jeder Identität; der Link ist der vorgesehene Weg für Freunde/Beta-Tester, die Liste ist Verwaltung | Freigabe-Button für alle (widerspräche „keine Geräte verwalten“) |
 | D-17 | Hardware-Bilder aus `static/assets/hardware/` werden **nicht** übernommen, stattdessen typografische Hersteller-Plaketten (AMD/Intel/NVIDIA) im Emaille-Stil | Produktfotos/Logos Dritter passen nicht zum Stellwerk-Stil und sind lizenzrechtlich heikel; die Plakette ist lesbar und braucht 0 kB | Bilder nach `public/` kopieren |
 | D-18 | Chart-Palette: vier Serienfarben in fester Reihenfolge, mit dem dataviz-Validator geprüft (hell gegen `#f2f6f2`, dunkel gegen `#1d242a`: alle Prüfungen bestanden; hell: Orange 2,99:1 Kontrast → Legende + Tabellenansicht vorhanden). Signalfarben sind reserviert und nie Serienfarben | Lesbarkeit und Farbfehlsichtigkeit | – |
@@ -70,18 +70,17 @@ Selbstprüfung gegen Template-Defaults und was ich daraufhin geändert habe:
 | D-21 | Theme-Wahl (Automatisch/Emaille/Nachtschicht) in `localStorage` | reine Darstellungsvorliebe, kein Secret; Zugriff in try/catch | – |
 | D-22 | Tests gegen eine **schema-getreue Mock-API** (`tests/mock/api.ts`) per Playwright-Routing; derselbe Mock liefert über `tests/mock/serve.ts` den Build wie FastAPI aus (für Screenshots/Lighthouse) | kein laufendes Backend/Postgres in dieser Umgebung; Rechteprüfungen im Mock folgen `require_*_access` und `manageable_node` | MSW (zusätzliche Abhängigkeit im App-Bundle bzw. Worker) |
 
-## 3. PWA unter den Grenzen des Backends
+## 3. PWA
 
 | # | Entscheidung | Begründung | Verworfen |
 |---|---|---|---|
-| P-01 | Manifest, Icons und Service Worker liegen unter **`/assets/`** (`frontend/public/assets/…`) | FastAPI liefert außer `/`, `/assets/*` und `/api/*` nichts aus; `/manifest.webmanifest` oder `/sw.js` wären 404 | Dateien im Wurzelverzeichnis (nicht auslieferbar ohne Backend-Änderung) |
-| P-02 | Service Worker `/assets/sw.js` mit Scope `/assets/`; ein Build-Plugin legt zusätzlich **`/assets/app.html`** (Kopie von `index.html`) an. Das Manifest startet die installierte App unter `/assets/app.html` | Ein SW darf nur Seiten unterhalb seines eigenen Pfads steuern (ohne `Service-Worker-Allowed`-Header). So läuft die installierte App vollständig offline-fähig, ohne das Backend anzufassen. Die normale Seite `/` bleibt unverändert und registriert den SW trotzdem (er cached dann die Assets vor) | Workbox/vite-plugin-pwa (setzt `/sw.js` im Root voraus) |
-| P-03 | SW-Strategie: App-Shell (`app.html`, JS/CSS/Fonts/Icons) precache mit Build-Hash-Liste; API-Requests werden **nie** gecacht (Telemetrie soll nicht veralten, Antworten tragen `no-store`) | Offline zeigt die Shell den Zustand „Server nicht erreichbar“ statt einer Browser-Fehlerseite | Stale-while-revalidate für API (würde veraltete Lage als aktuell zeigen) |
-| P-04 | App-Badge über `navigator.setAppBadge(aktiveWarnungen)`, wenn verfügbar | Progressive Enhancement; ohne API passiert nichts | – |
+| P-01 | Service Worker unter **`/sw.js`** mit Scope `/`, vom Server ausgeliefert (`app.py`, ab 0.7) mit `Cache-Control: no-cache`; Manifest und Icons unter `/assets/` | ein Worker im Wurzelpfad steuert das ganze Dashboard; `no-cache` sorgt dafür, dass ein neuer Worker nach einem Update sofort ankommt | `/assets/sw.js` + `/assets/app.html` als Startseite (Zwischenstand vor 0.7, solange das Backend nichts im Root auslieferte; ältere Registrierungen unter `/assets/` meldet `pwa.ts` ab) |
+| P-02 | Ein Build-Plugin schreibt die Precache-Liste (`/` und alle Assets) und einen Inhalts-Hash in `sw.js` | jede Version hat ihren eigenen Cache, alte werden beim Aktivieren gelöscht | Workbox (schwere Abhängigkeit für 60 Zeilen) |
+| P-03 | Strategie: Seite network-first mit Offline-Kopie, gehashte Assets cache-first, `/api/` **nie** gecacht | Offline zeigt die Shell „Server nicht erreichbar“ statt einer Browser-Fehlerseite; Telemetrie veraltet nie unbemerkt | Stale-while-revalidate für API |
+| P-04 | App-Badge über `navigator.setAppBadge(aktiveWarnungen)`, wenn verfügbar | Progressive Enhancement | – |
+| P-05 | Hash-Routing bleibt | funktioniert ohne SPA-Fallback-Route und mit Lesezeichen aus allen Versionen | Pfad-Routing mit Catch-all im Backend (kein Mehrwert für ein internes Dashboard) |
 
-**Geprüft:** `tests/pwa.spec.ts` installiert den Service Worker, schaltet das Netz ab und lädt `/assets/app.html` neu – die Shell erscheint mit „Server nicht erreichbar“.
-
-**Vorschlag ans Backend:** Ein `GET /sw.js` (oder der Header `Service-Worker-Allowed: /` auf `/assets/sw.js`) plus eine SPA-Fallback-Route würden `app.html` und Hash-Routing überflüssig machen.
+**Geprüft:** `tests/pwa.spec.ts` (Mock) installiert den Worker, schaltet das Netz ab und lädt `/` neu – die Shell erscheint mit „Server nicht erreichbar“. `tests/live.spec.ts` prüft gegen den echten Server, dass `/sw.js` aktiv wird.
 
 ## 4. Browser-Unterstützung und Fallbacks
 
@@ -106,19 +105,30 @@ Selbstprüfung gegen Template-Defaults und was ich daraufhin geändert habe:
 | Lage, Desktop | 100 | 100 | 100 | 100 |
 | Spiele, Hardware, Desktop | 98–100 | 100 | 100 | 100 |
 | 13 weitere Ansichten (A11y/Best Practices) | – | 100 | 100 | – |
-| Lage, Mobil (ohne Kompression, wie FastAPI heute) | **83** | 100 | 100 | 100 |
-| Lage, Mobil (mit gzip) | 94 | 100 | 100 | 100 |
+| Lage, Mobil (mit gzip, Server ab 0.7) | 94 | 100 | 100 | 100 |
+| Lage, Mobil (ohne Kompression, Server bis 0.6) | 83 | 100 | 100 | 100 |
 
-**Begründete Abweichung:** Mobil bleibt Performance ohne Kompression unter 90. Ursache ist allein das LCP (4,7 s im simulierten langsamen 4G): FastAPIs `StaticFiles` liefert JS/CSS unkomprimiert aus (≈ 296 kB statt 92 kB für das Haupt-Bundle, davon ≈ 70 % React). Bereits umgesetzt: Code-Splitting pro Bereich, Lazy Loading von Charts/Markdown/Tabs, `modulepreload` für die Lage, Font-Preload, paralleles Vorladen der Lage-Daten während der Sitzungsprüfung, CLS 0. Mit gzip-Auslieferung (gemessen über `MOCK_GZIP=1`) erreicht dieselbe Seite 94. **Vorschlag ans Backend:** `app.add_middleware(GZipMiddleware, minimum_size=1024)` in `app.py`.
+Die Abweichung vor 0.7 lag allein am LCP: FastAPIs `StaticFiles` lieferte JS/CSS unkomprimiert (≈ 296 kB statt 91 kB). Seit 0.7 komprimiert `DashboardGZipMiddleware` die Dashboard-Dateien; der echte Server liefert das Haupt-Bundle mit 91 kB aus (per `curl` geprüft). Außerdem umgesetzt: Code-Splitting pro Bereich, Lazy Loading von Charts/Markdown/Tabs, `modulepreload` für die Lage, Font-Preload, paralleles Vorladen der Lage-Daten während der Sitzungsprüfung, CLS 0.
 
-## 6. API-Vorschläge (nicht umgesetzt, Backend bleibt unverändert)
+## 6. Backend-Änderungen in 0.7
 
-- **Kompression** statischer Dateien (siehe Abschnitt 5).
+Umgesetzt nach Abnahme der Vorschläge (Tests: `tests/test_dashboard_v2_server.py`):
 
-- **Beta-Tester und Gaming Mode:** `manageable_node` lehnt Beta-Tester ab; sie sehen den Schalter daher gesperrt. Falls gewünscht, bräuchte es eine eigene Prüfung.
-- **Kein Endpoint für ausstehende Pairings abbrechen** (`cancelled` existiert als Status, aber keine Route). Das UI bietet daher kein „Ablehnen“ an.
-- **SteamGridDB-Suche:** Der Server sucht Banner nur automatisch (mit API-Key). Es gibt keinen Endpoint für eine manuelle Suche. Das UI verlinkt deshalb die SteamGridDB-Suche zum Spiel in einem neuen Tab; das gefundene Bild wird über den Upload zugeschnitten und hochgeladen.
-- **Benutzer löschen:** existiert nicht; „Deaktivieren“ über `PATCH active=false`.
-- **Agent-Einladung Rolle:** `AgentInvitationCreateRequest` kennt keine Rolle; neue Agenten starten mit der Server-Vorgabe.
-- **Live-Netzwerk der ganzen Fleet:** kein Sammel-Endpoint. Das UI summiert die `latest.metrics.network`-Werte aus `/fleet/nodes` und hält einen kurzen Verlauf im Speicher.
-- `/fleet/games/stats` und `/fleet/hardware/stats` haben kein `response_model`; die Typen im Frontend sind aus `game_service.playtime_statistics` und `hardware_stats.hardware_statistics` abgeleitet.
+| Änderung | Entscheidung |
+|---|---|
+| gzip | nur für Dashboard-Dateien (`/`, `/assets/*`, `/sw.js`). API-Antworten bleiben unkomprimiert: einige tragen Einmal-Tokens neben Anfragedaten (BREACH-artige Angriffe), und kleine JSON-Antworten gewinnen kaum |
+| `/sw.js` | eigene Route, `no-cache` |
+| `index.html` | jetzt mit `Cache-Control: no-cache`. Beim Test gegen den echten Server zeigte der Browser nach einem Neubau die alte Seite aus seinem Heuristik-Cache – nach einem Update hätte sie auf gelöschte Assets gezeigt |
+| Pairing ablehnen | `POST /agent-pairings/{id}/cancel`, nur Commander. Eine abgelehnte Anfrage bleibt eine Anfragedauer (15 min) gesperrt und kann nicht mehr freigegeben werden; danach darf der Agent neu anfragen. Eine dauerhafte Sperre hätte Geräte nach einem Fehlklick unbrauchbar gemacht, weil der Agent seine Pairing-ID behält |
+| SteamGridDB-Suche | Server sucht, liefert Vorschau und Banner selbst (CSP `img-src 'self'` bleibt unverändert); Kandidaten-URLs bleiben 15 min im Server-Speicher, der Client wählt nur einen Index. Ein gewählter Banner wird wie ein Upload gespeichert (`artwork_source = "upload"`, Audit mit `origin: steamgriddb`) und nie automatisch ersetzt |
+| Gaming Mode für Beta-Tester | eigene Prüfung `access.gaming_mode_node`; alle anderen Rechte von `manageable_node` bleiben unverändert |
+| Paketdaten | `static/assets/**/*` statt fester Unterordner; sonst hätte das Update auf HorstServer an fehlenden `icons/` abgebrochen |
+
+Weiterhin offen (bewusst nicht umgesetzt):
+
+- **Benutzer löschen:** existiert nicht; „Deaktivieren“ über `PATCH active=false` genügt und erhält das Audit.
+- **Agent-Einladung mit Rolle:** `AgentInvitationCreateRequest` kennt keine Rolle; neue Agenten starten mit der Server-Vorgabe.
+- **Gruppen umbenennen:** keine Route. Das Dashboard zeigt die Standardgruppen (`PCS & LAPTOPS` …) lesbar an („PCs & Laptops“), ohne Daten zu ändern.
+- **Live-Netzwerk der ganzen Fleet:** kein Sammel-Endpoint; das UI summiert `latest.metrics.network` aus `/fleet/nodes`.
+- `/fleet/games/stats` und `/fleet/hardware/stats` haben kein `response_model`; die Frontend-Typen sind aus dem Service-Code abgeleitet.
+- Zeitstempel ohne Zeitzone (SQLite) liest der Client zentral als UTC (`client.ts`, `utcReviver`); Postgres liefert ohnehin `+00:00`.

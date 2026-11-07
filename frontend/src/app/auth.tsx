@@ -122,6 +122,8 @@ export interface Can {
   beta: boolean;
   personal: boolean;
   manage: (node: Pick<FleetNode, "owner_user_id"> | null | undefined) => boolean;
+  /** Gaming Mode: also beta testers (access.gaming_mode_node). */
+  gaming: (node: Pick<FleetNode, "owner_user_id"> | null | undefined) => boolean;
 }
 
 export function useCan(): Can {
@@ -129,6 +131,8 @@ export function useCan(): Can {
   return useMemo(() => {
     const role = identity?.role ?? "friend";
     const commander = role === "commander";
+    const manage = (node: Pick<FleetNode, "owner_user_id"> | null | undefined) =>
+      commander || (role === "friend" && !!identity?.userId && node?.owner_user_id === identity.userId);
     return {
       role,
       commander,
@@ -136,7 +140,8 @@ export function useCan(): Can {
       friend: role === "friend",
       beta: role === "beta_tester",
       personal: identity?.personal ?? false,
-      manage: (node) => commander || (role === "friend" && !!identity?.userId && node?.owner_user_id === identity.userId),
+      manage,
+      gaming: (node) => role === "beta_tester" || manage(node),
     };
   }, [identity]);
 }

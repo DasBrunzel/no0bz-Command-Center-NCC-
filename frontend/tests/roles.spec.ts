@@ -12,6 +12,7 @@ const COMMANDER_ACTIONS = [
   /Alle quittieren/, /^Anordnen$/, /Code erstellen/, /Einladung erstellen/, /Widerrufen/, /Entfernen/, /Freigeben/,
   /Manifest registrieren/, /Warnregeln speichern/, /Testnachricht senden/, /Gerät entfernen/, /Netzwerkzähler zurücksetzen/,
   /Umbenennen/, /Konto anlegen/, /Banner hochladen/, /Zuordnung speichern/, /^Festlegen$/, /Neues physisches Gerät/,
+  /Ablehnen/, /^Suchen$/, /Banner übernehmen/,
 ];
 
 async function enabledActions(page: Page): Promise<string[]> {
@@ -39,9 +40,14 @@ test("Beta-Tester: Badge sichtbar, keine aktive Aktion, die der Server ablehnt",
     await expect(page.locator("main")).not.toContainText("Lädt …");
     expect(await enabledActions(page), `auf ${path}`).toEqual([]);
   }
-  // Gaming Mode is visible but locked (manageable_node rejects beta testers).
+  // Gaming Mode is the one switch beta testers may use (access.gaming_mode_node).
   await page.goto("/#/geraete/n-kalle");
-  await expect(page.getByRole("button", { name: /Gaming Mode/ })).toBeDisabled();
+  await page.getByRole("button", { name: /^Gaming/ }).click();
+  await page.getByRole("menuitem", { name: "1 Stunde" }).click();
+  await expect(page.getByText(/Gaming Mode für Kalle-PC bis/)).toBeVisible();
+  // Rejecting pairings stays with commanders.
+  await page.goto("/#/aufnahme");
+  await expect(page.getByRole("button", { name: "Ablehnen" })).toHaveCount(0);
   // The commander-only settings tab does not exist for beta testers.
   await page.goto("/#/einstellungen/konten");
   await expect(page.getByRole("link", { name: "Konten & Einladungen" })).toHaveCount(0);
@@ -82,4 +88,22 @@ test("Freund sieht nur eigene Geräte und keine Team-Bereiche", async ({ page })
   await page.goto("/#/geraete/n-mia");
   await expect(page.getByRole("button", { name: /Gaming/ })).toBeEnabled();
   expect(mock.log.filter((entry) => entry.status === 403)).toEqual([]);
+});
+
+test("Commander lehnt eine Kopplung ab und wählt einen SteamGridDB-Banner", async ({ page }) => {
+  const mock = await mockApi(page, { session: "commander" });
+  await page.goto("/#/aufnahme");
+  const waiting = page.getByRole("listitem").filter({ hasText: "Jonas-PC" });
+  await waiting.getByRole("button", { name: "Ablehnen" }).click();
+  await expect(page.getByText(/Anfrage von Jonas-PC abgelehnt/)).toBeVisible();
+  expect(mock.data.pairings.find((item) => item.display_name === "Jonas-PC")?.status).toBe("cancelled");
+
+  await page.goto("/#/spiele");
+  await page.locator(".library").getByRole("button", { name: /World of Warcraft/ }).click();
+  const dialog = page.getByRole("dialog", { name: "World of Warcraft" });
+  await dialog.getByRole("button", { name: "Suchen" }).click();
+  await dialog.getByRole("radio", { name: /Banner 2/ }).check({ force: true });
+  await dialog.getByRole("button", { name: "Diesen Banner übernehmen" }).click();
+  await expect(page.getByText("Banner von SteamGridDB übernommen.")).toBeVisible();
+  expect(mock.log.some((entry) => entry.method === "POST" && entry.path.endsWith("/artwork/candidates/1"))).toBe(true);
 });

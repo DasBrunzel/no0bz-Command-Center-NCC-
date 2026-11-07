@@ -81,7 +81,18 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   if (options.raw) return response as T;
   if (response.status === 204) return undefined as T;
   const text = await response.text();
-  return (text ? JSON.parse(text) : undefined) as T;
+  return (text ? JSON.parse(text, utcReviver) : undefined) as T;
+}
+
+const NAIVE_DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/;
+
+/**
+ * The server works in UTC. Some databases (SQLite in development, older
+ * rows) return datetimes without an offset; JavaScript would read those as
+ * local time. Mark them as UTC once, here, for every response.
+ */
+function utcReviver(_key: string, value: unknown): unknown {
+  return typeof value === "string" && NAIVE_DATETIME.test(value) ? `${value}Z` : value;
 }
 
 async function readDetail(response: Response): Promise<string> {
@@ -125,6 +136,9 @@ export function describeError(error: unknown, fallback = "Das hat nicht geklappt
     "use a JPEG, PNG or WebP image": "Bitte ein JPEG-, PNG- oder WebP-Bild verwenden.",
     "node or compatible release not found": "Kein passendes Release für dieses Gerät gefunden.",
     "no Telegram chat linked": "Es ist noch kein Telegram-Chat verknüpft.",
+    "pairing was already claimed": "Das Gerät ist schon verbunden – entferne es bei Bedarf unter Geräte.",
+    "candidate not found": "Die Suche ist abgelaufen. Such bitte noch einmal.",
+    "preview not available": "Für diesen Banner gibt es keine Vorschau.",
   };
   if (known[error.detail]) return known[error.detail]!;
   if (error.status === 403) return "Dafür fehlen dir die Rechte.";

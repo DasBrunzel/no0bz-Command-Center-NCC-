@@ -198,8 +198,12 @@ def artwork_content_type(data: bytes) -> str | None:
     return None
 
 
-def set_custom_artwork(session: Session, game_id: str, data: bytes, actor_id: str) -> Game | None:
-    """Store a banner uploaded in the dashboard; it is never replaced automatically."""
+def set_custom_artwork(session: Session, game_id: str, data: bytes, actor_id: str, origin: str = "dashboard") -> Game | None:
+    """Store a banner chosen in the dashboard; it is never replaced automatically.
+
+    ``origin`` is "dashboard" for an uploaded file and "steamgriddb" for a
+    banner a commander picked from the search; both count as hand-picked.
+    """
     content_type = artwork_content_type(data)
     if content_type is None or len(data) > ARTWORK_MAX_BYTES:
         raise ValueError("unsupported image")
@@ -209,7 +213,7 @@ def set_custom_artwork(session: Session, game_id: str, data: bytes, actor_id: st
     game.header_image, game.header_content_type, game.artwork_source = data, content_type, "upload"
     session.add(AuditEvent(
         actor_type="dashboard", actor_id=actor_id, action="game.artwork.uploaded",
-        details=json.dumps({"game_id": game.id, "bytes": len(data), "content_type": content_type}, separators=(",", ":")),
+        details=json.dumps({"game_id": game.id, "bytes": len(data), "content_type": content_type, "origin": origin}, separators=(",", ":")),
     ))
     session.commit()
     session.refresh(game)

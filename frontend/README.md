@@ -1,4 +1,4 @@
-# NCC Dashboard v2 – „Stellwerk“
+# NCC Dashboard „Stellwerk“ (0.7)
 
 Web-Frontend des no0bz Command Center. React 19, TypeScript 7, Vite 8, TanStack Query 5, reines CSS. Das Backend (`backend/ncc_server`) bleibt unverändert; alle Daten kommen per Polling aus `/api/v1`.
 
@@ -27,7 +27,15 @@ pnpm test         # Playwright, braucht vorher pnpm build
 SCREENS=1 pnpm exec playwright test screens   # Screenshots nach test-results/screens
 ```
 
-FastAPI liefert `index.html` unter `/` und alles unter `/assets/`. Deshalb liegen Manifest, Icons und Service Worker in `public/assets/`, und der Build legt zusätzlich `assets/app.html` als Startseite der installierten PWA an (Details: `DECISIONS.md`, Abschnitt 3).
+FastAPI liefert `index.html` unter `/` (ohne Cache), alles unter `/assets/` und ab Server 0.7 den Service Worker unter `/sw.js`; Dashboard-Dateien kommen gzip-komprimiert. Manifest und Icons liegen in `public/assets/`, der Worker in `public/sw.js` (Details: `DECISIONS.md`, Abschnitt 3).
+
+Vor einem Live-Gang gegen einen echten Server prüfen (CSP, Konsolenfehler, 5xx, Service Worker):
+
+```bash
+LIVE_URL=http://127.0.0.1:8350 pnpm exec playwright test live
+```
+
+Ohne Loopback-Zugang zusätzlich `LIVE_TOKEN=<Dashboard-Token>` setzen.
 
 ## Struktur
 

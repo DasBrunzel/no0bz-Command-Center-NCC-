@@ -118,6 +118,19 @@ export function machinesOf(nodes: FleetNode[], devices: PhysicalDevice[] = []): 
   return machines;
 }
 
+/** The server's default groups have shouting placeholder names; show them in German. */
+const DEFAULT_GROUPS: Record<string, string> = {
+  "default-pcs-laptops": "PCs & Laptops",
+  "default-servers": "Server",
+  "default-mobile": "Mobil",
+  "default-friends": "Freunde",
+};
+
+export function groupLabel(group: { group_id: string; name: string }): string {
+  const fallback = DEFAULT_GROUPS[group.group_id];
+  return fallback && group.name === group.name.toUpperCase() ? fallback : group.name;
+}
+
 export function sortByLayout(a: FleetNode, b: FleetNode): number {
   return a.fleet_position - b.fleet_position || a.display_name.localeCompare(b.display_name, "de");
 }

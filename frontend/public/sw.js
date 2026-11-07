@@ -1,11 +1,11 @@
-/* NCC service worker. Scope: /assets/ (see DECISIONS.md, P-02).
+/* NCC service worker, served by the server at /sw.js with scope "/".
  * Precaches the app shell; never caches /api responses. The build replaces
  * the two placeholders below with the asset list and a content hash. */
 
 const PRECACHE = self.__NCC_PRECACHE__;
 const VERSION = self.__NCC_VERSION__;
 const CACHE = `ncc-shell-${VERSION}`;
-const SHELL = "/assets/app.html";
+const SHELL = "/";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -32,6 +32,7 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
+          // Only the dashboard page itself is the shell (query and hash vary).
           if (response.ok && url.pathname === SHELL) {
             const copy = response.clone();
             caches.open(CACHE).then((cache) => cache.put(SHELL, copy));

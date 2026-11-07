@@ -1,12 +1,15 @@
 /**
- * PWA glue. The service worker lives under /assets/ (FastAPI serves nothing
- * else at the root), so its scope is /assets/ and it controls the installed
- * app at /assets/app.html. See DECISIONS.md, P-01 – P-04.
+ * PWA glue. The server serves the worker at /sw.js, so it controls the whole
+ * dashboard. Workers from the 0.7 preview builds lived under /assets/ and are
+ * removed. See DECISIONS.md, section 3.
  */
 export function registerServiceWorker(): void {
   if (!import.meta.env.PROD || !("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/assets/sw.js", { scope: "/assets/" }).catch(() => undefined);
+    void navigator.serviceWorker.getRegistrations().then((registrations) => {
+      for (const registration of registrations) if (new URL(registration.scope).pathname.startsWith("/assets/")) void registration.unregister();
+    });
+    navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => undefined);
   });
 }
 

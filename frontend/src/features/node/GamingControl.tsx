@@ -19,7 +19,7 @@ export function GamingControl({ node, compact }: { node: FleetNode; compact?: bo
   const now = useNow();
   const [busy, setBusy] = useState(false);
   const until = gamingUntil(node, now);
-  const allowed = can.manage(node);
+  const allowed = can.gaming(node);
 
   const set = async (minutes: number) => {
     setBusy(true);
@@ -38,7 +38,7 @@ export function GamingControl({ node, compact }: { node: FleetNode; compact?: bo
   const label = until ? `Gaming bis ${fmtTime(until)}` : "Gaming Mode";
   if (!allowed) {
     return (
-      <button type="button" className={`btn ${compact ? "btn-s" : ""}`} disabled title={can.beta ? "Beta-Tester können den Gaming Mode nicht schalten." : "Nur Commander oder der Besitzer des Geräts."}>
+      <button type="button" className={`btn ${compact ? "btn-s" : ""}`} disabled title="Nur Commander, Beta-Tester oder der Besitzer des Geräts.">
         <Icon name="gamepad" /> {until ? label : "Gaming Mode"} <span className="visually-hidden">(gesperrt)</span>
       </button>
     );

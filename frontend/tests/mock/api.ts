@@ -174,6 +174,16 @@ export function createMockApi(options: MockOptions = {}) {
     if (path === "/fleet/games" && method === "GET") return ok(data.games);
     if (path === "/fleet/games/stats") return ok({ ...data.stats, days: Number(params.get("days") ?? 30) });
     if (path === "/fleet/hardware/stats") return ok({ ...data.hardware, days: Number(params.get("days") ?? 30) });
+    match = path.match(/^\/fleet\/games\/([^/]+)\/artwork\/candidates(?:\/(\d+)(\/preview)?)?$/);
+    if (match) {
+      const d = needCommander(); if (d) return d;
+      const game = data.games.find((item) => item.game_id === match![1]);
+      if (!game) return fail(404, "game not found");
+      if (!match[2]) return ok([0, 1, 2].map((index) => ({ index, game_name: game.title, width: 920, height: 430, style: index ? "alternate" : null, preview_url: `/api/v1/fleet/games/${game.game_id}/artwork/candidates/${index}/preview` })));
+      if (match[3]) return { status: 200, body: artworkSvg(`${game.title} ${Number(match[2]) + 1}`), contentType: "image/svg+xml" };
+      game.has_artwork = true; game.artwork_source = "upload";
+      return ok(game);
+    }
     match = path.match(/^\/fleet\/games\/([^/]+)(\/artwork)?$/);
     if (match) {
       const game = data.games.find((item) => item.game_id === match![1]);
@@ -211,6 +221,7 @@ export function createMockApi(options: MockOptions = {}) {
         if (sub === "/update-channel") { node.update_channel = body.channel; return empty(); }
         return ok(node);
       }
+      if (sub === "/gaming-mode" && role === "beta_tester") { node.gaming_mode_until = body.minutes ? iso(body.minutes * 60_000) : null; return ok(node); }
       if (!manageable(node)) return fail(403, "commander access required");
       if (sub === "" && method === "PATCH") { node.display_name = body.display_name; return ok(node); }
       if (sub === "/gaming-mode") { node.gaming_mode_until = body.minutes ? iso(body.minutes * 60_000) : null; return ok(node); }
@@ -249,6 +260,15 @@ export function createMockApi(options: MockOptions = {}) {
 
     // Enrollment
     if (path === "/agent-pairings" && method === "GET") { const d = needStaff(); if (d) return d; return ok(data.pairings); }
+    match = path.match(/^\/agent-pairings\/([^/]+)\/cancel$/);
+    if (match) {
+      const d = needCommander(); if (d) return d;
+      const pairing = data.pairings.find((item) => item.pairing_id === match![1]);
+      if (!pairing) return fail(404, "pairing request not found");
+      if (pairing.status === "claimed") return fail(409, "pairing was already claimed");
+      pairing.status = "cancelled";
+      return ok(pairing);
+    }
     match = path.match(/^\/agent-pairings\/([^/]+)\/approve$/);
     if (match) {
       const pairing = data.pairings.find((item) => item.pairing_id === match![1]);

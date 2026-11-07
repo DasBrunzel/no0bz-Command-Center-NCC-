@@ -5,7 +5,7 @@ import type { FleetGroup, FleetNode } from "../../api/types";
 import { Icon } from "../../components/Icon";
 import { useToast } from "../../components/toast";
 import { Dialog } from "../../components/ui";
-import { sortByLayout } from "../../lib/node";
+import { groupLabel, sortByLayout } from "../../lib/node";
 
 /** Commander only: move nodes between groups, reorder them, add groups. */
 export function LayoutDialog({ nodes, groups, onClose }: { nodes: FleetNode[]; groups: FleetGroup[]; onClose: () => void }) {
@@ -87,8 +87,8 @@ export function LayoutDialog({ nodes, groups, onClose }: { nodes: FleetNode[]; g
       <p className="form-hint">Jede Gruppe ist ein Gleis in der Lage. Die Reihenfolge hier ist die Reihenfolge auf dem Gleis.</p>
       <div className="layout-groups">
         {allGroups.map((group) => (
-          <section key={group.group_id} className="layout-group" aria-label={`Gruppe ${group.name}`}>
-            <h3>{group.name}</h3>
+          <section key={group.group_id} className="layout-group" aria-label={`Gruppe ${groupLabel(group)}`}>
+            <h3>{groupLabel(group)}</h3>
             {(order[group.group_id] ?? []).length === 0 ? (
               <p className="ink-3 small">Noch leer.</p>
             ) : (
@@ -101,7 +101,7 @@ export function LayoutDialog({ nodes, groups, onClose }: { nodes: FleetNode[]; g
                       <span className="grow">{node.display_name}</span>
                       <label className="visually-hidden" htmlFor={`group-${nodeId}`}>Gruppe für {node.display_name}</label>
                       <select id={`group-${nodeId}`} className="select layout-select" value={group.group_id} onChange={(event) => reassign(nodeId, group.group_id, event.target.value)}>
-                        {allGroups.map((option) => <option key={option.group_id} value={option.group_id}>{option.name}</option>)}
+                        {allGroups.map((option) => <option key={option.group_id} value={option.group_id}>{groupLabel(option)}</option>)}
                       </select>
                       <button type="button" className="btn btn-quiet btn-icon btn-s" onClick={() => move(group.group_id, index, -1)} disabled={index === 0} aria-label={`${node.display_name} nach vorne`}><Icon name="chevron" style={{ rotate: "-90deg" }} /></button>
                       <button type="button" className="btn btn-quiet btn-icon btn-s" onClick={() => move(group.group_id, index, 1)} disabled={index === list.length - 1} aria-label={`${node.display_name} nach hinten`}><Icon name="chevron" style={{ rotate: "90deg" }} /></button>

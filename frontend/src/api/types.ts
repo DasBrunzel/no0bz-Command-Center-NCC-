@@ -422,6 +422,15 @@ export interface AgentPairing {
   expires_at: ISODate;
 }
 
+export interface ArtworkCandidate {
+  index: number;
+  game_name: string;
+  width: number | null;
+  height: number | null;
+  style: string | null;
+  preview_url: string;
+}
+
 export interface ServerVersion {
   version: string;
   api: string;

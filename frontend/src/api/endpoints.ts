@@ -1,6 +1,6 @@
 import { request } from "./client";
 import type {
-  AccessRole, AccountInvite, AccountInviteCreated, AdminCode, AdminCodeCreated, AgentInvitation,
+  AccessRole, AccountInvite, ArtworkCandidate, AccountInviteCreated, AdminCode, AdminCodeCreated, AgentInvitation,
   AgentInvitationCreated, AgentPairing, AgentRelease, AlertPolicy, ChatMessage, ChatParticipant,
   DashboardAccess, DashboardRole, DashboardUser, FleetAlert, FleetGroup, FleetLayoutPlacement, FleetNode,
   FleetSummary, FleetTelemetryPoint, Game, GameTracking, HardwareStats, NetworkHistorySample,
@@ -86,6 +86,9 @@ export const api = {
     uploadArtwork: (gameId: string, image: Blob) =>
       request<Game>(`/fleet/games/${id(gameId)}/artwork`, { method: "PUT", body: image, headers: { "Content-Type": image.type || "image/jpeg" } }),
     removeArtwork: (gameId: string) => request<Game>(`/fleet/games/${id(gameId)}/artwork`, { method: "DELETE" }),
+    searchArtwork: (gameId: string, query?: string) =>
+      request<ArtworkCandidate[]>(`/fleet/games/${id(gameId)}/artwork/candidates${query ? `?query=${encodeURIComponent(query)}` : ""}`),
+    chooseArtwork: (gameId: string, index: number) => request<Game>(`/fleet/games/${id(gameId)}/artwork/candidates/${index}`, { method: "POST" }),
     setNodeSettings: (nodeId: string, game_tracking: GameTracking, auto_gaming_mode: boolean) =>
       request<FleetNode>(`/fleet/nodes/${id(nodeId)}/game-settings`, { method: "PUT", json: { game_tracking, auto_gaming_mode } }),
   },
@@ -108,6 +111,7 @@ export const api = {
   pairings: {
     list: () => request<AgentPairing[]>("/agent-pairings"),
     approve: (pairingId: string) => request<AgentPairing>(`/agent-pairings/${id(pairingId)}/approve`, { method: "POST" }),
+    cancel: (pairingId: string) => request<AgentPairing>(`/agent-pairings/${id(pairingId)}/cancel`, { method: "POST" }),
   },
 
   invitations: {

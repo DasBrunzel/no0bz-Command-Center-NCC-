@@ -46,6 +46,19 @@ function Pairings() {
   const open = list.filter((item) => item.status === "waiting" || item.status === "approved");
   const done = list.filter((item) => item.status !== "waiting" && item.status !== "approved").slice(0, 8);
 
+  const reject = async (pairing: AgentPairing) => {
+    setBusy(pairing.pairing_id);
+    try {
+      await api.pairings.cancel(pairing.pairing_id);
+      await client.invalidateQueries({ queryKey: qk.pairings });
+      toast.ok(`Anfrage von ${pairing.display_name} abgelehnt. Fragt das Gerät nach 15 Minuten erneut an, erscheint es wieder hier.`);
+    } catch (error) {
+      toast.fail(error);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const approve = async (pairing: AgentPairing) => {
     setBusy(pairing.pairing_id);
     try {
@@ -85,6 +98,9 @@ function Pairings() {
                 </div>
                 {pairing.status === "waiting" && can.commander && (
                   <button type="button" className="btn btn-primary btn-s" disabled={busy === pairing.pairing_id} onClick={() => void approve(pairing)}>Freigeben</button>
+                )}
+                {can.commander && (
+                  <button type="button" className="btn btn-quiet btn-s" disabled={busy === pairing.pairing_id} onClick={() => void reject(pairing)}>Ablehnen</button>
                 )}
                 {pairing.status === "waiting" && !can.commander && <span className="badge">Commander gibt frei</span>}
               </li>

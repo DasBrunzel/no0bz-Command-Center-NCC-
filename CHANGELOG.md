@@ -4,6 +4,55 @@ Alle wesentlichen Änderungen werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [0.7.0] – 2026-11-07
+
+### Added
+
+- Komplett neues Dashboard „Stellwerk“ (`frontend/`, React 19, TypeScript 7,
+  Vite 8, TanStack Query): Lage mit Gleisbild (Dualboot-PCs als Weiche),
+  Störmelder und Live-Verkehr, Geräteliste und Node-Detail mit Sensoren,
+  Netzwerk, Spielen, Updates und Verwaltung, Hardware-Statistik, Spielzeit mit
+  Rangliste und Heatmap, Fleet-Chat, Geräte aufnehmen, Releases und
+  Einstellungen. Hell und dunkel, mobil nutzbar, als App installierbar mit
+  Offline-Gerüst und Warnungszahl am App-Symbol. Entscheidungen und
+  Endpoint-Matrix stehen in `frontend/DECISIONS.md` und `frontend/API-MATRIX.md`.
+- `POST /api/v1/agent-pairings/{id}/cancel` (nur Commander): lehnt eine noch
+  nicht abgeholte Kopplungsanfrage ab. Sie lässt sich danach nicht mehr
+  freigeben; meldet sich der Agent nach Ablauf einer Anfragedauer (15 Minuten)
+  erneut, entsteht eine neue Anfrage, die wieder freigegeben werden muss.
+- Banner-Suche auf SteamGridDB für Commander:
+  `GET /api/v1/fleet/games/{id}/artwork/candidates`, Vorschau über
+  `…/candidates/{n}/preview` und Übernahme mit `POST …/candidates/{n}`. Der
+  Server lädt Vorschau und Banner selbst; das Dashboard bekommt nie fremde
+  Bild-URLs. Ein gewählter Banner gilt wie ein Upload und wird nie automatisch
+  ersetzt. Braucht `NCC_SERVER_STEAMGRIDDB_API_KEY`.
+- Der Server liefert den Service Worker unter `/sw.js` (Scope `/`, ohne Cache).
+
+### Changed
+
+- Beta-Tester dürfen den Gaming Mode für jedes sichtbare Gerät schalten. Er
+  dämpft nur Last-Warnungen; alle anderen Geräteaktionen bleiben bei
+  Commandern und Besitzern.
+- Dashboard-Dateien (`/`, `/assets/*`, `/sw.js`) werden gzip-komprimiert
+  ausgeliefert; das Haupt-Bundle schrumpft von 296 auf 91 kB. API-Antworten
+  bleiben unkomprimiert, weil manche Einmal-Tokens neben Anfragedaten tragen.
+- `index.html` wird mit `Cache-Control: no-cache` ausgeliefert, damit Browser
+  nach einem Update nie eine alte Seite mit gelöschten Asset-Namen laden.
+- Die Paketdaten nehmen alle Unterordner von `static/assets/` mit
+  (`static/assets/**/*`); bisher fehlten neue Ordner wie `icons/` nach
+  `pip install`. Die bisherigen Hardware-Bilder entfallen, das neue Dashboard
+  zeigt Herstellerschilder.
+
+### Verified
+
+- 171 Backend-Tests, ruff; 18 Playwright-Tests gegen eine schema-getreue
+  Mock-API und ein Rundgang mit `tests/live.spec.ts` gegen einen echten
+  NCC-Server (SQLite, simulierter Agent) ohne CSP-Verstoß, Konsolenfehler
+  oder 5xx. Lighthouse: Desktop 98–100 in allen Kategorien, mobil 94.
+- Server und Dashboard 0.7.0; Agenten, Core und Payload bleiben bei 0.6.2.
+
+### Ebenfalls in 0.7.0 (bisher unveröffentlicht)
+
 - Commander können in der Spielzeit-Bestenliste für jedes Spiel ein eigenes
   Banner hochladen (JPG, PNG oder WebP). Das Dashboard schneidet es auf das
   Steam-Bannerformat 920×430 zu. Der Server prüft das Dateiformat an der

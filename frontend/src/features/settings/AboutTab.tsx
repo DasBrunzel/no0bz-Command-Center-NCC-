@@ -30,7 +30,7 @@ export default function AboutTab() {
           <dt>Server</dt><dd>{version.data?.version ?? "…"}</dd>
           <dt>Status</dt><dd className="status-label"><Lamp state={live.isError ? "stop" : live.data ? "go" : "off"} size="s" />{live.isError ? "antwortet nicht" : live.data ? "antwortet" : "wird geprüft"}</dd>
           <dt>API</dt><dd>{version.data?.api ?? "v1"}</dd>
-          <dt>Dashboard</dt><dd>2.0 „Stellwerk“</dd>
+          <dt>Dashboard</dt><dd>„Stellwerk“ (mit Server 0.7)</dd>
           <dt>Anmeldung</dt><dd>{hasLegacyToken() ? "Dashboard-Token (nur im Speicher)" : "Sitzungs-Cookie (HttpOnly)"}</dd>
         </dl>
       </section>

@@ -10,6 +10,8 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from ncc.security import SECURITY_HEADERS
+from starlette.middleware.gzip import GZipMiddleware
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from ncc_server import __version__
 from ncc_server.alert_service import evaluate_alerts, mark_notified
@@ -25,6 +27,26 @@ from ncc_server.unraid_service import collect_unraid
 
 STATIC_DIR = Path(__file__).with_name("static")
 logger = logging.getLogger(__name__)
+
+
+class DashboardGZipMiddleware:
+    """Compress the dashboard files only.
+
+    StaticFiles sends JS and CSS uncompressed, which roughly triples the first
+    load on a phone. API responses stay uncompressed: some carry one-time
+    tokens next to request data, and compressing those invites BREACH-style
+    guessing for no real gain on small JSON bodies.
+    """
+
+    def __init__(self, app: ASGIApp, minimum_size: int = 1024) -> None:
+        self.app = app
+        self.gzip = GZipMiddleware(app, minimum_size=minimum_size)
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http" and not str(scope.get("path", "")).startswith("/api/"):
+            await self.gzip(scope, receive, send)
+        else:
+            await self.app(scope, receive, send)
 
 
 def create_app(
@@ -86,15 +108,26 @@ def create_app(
             response.headers["Cache-Control"] = "no-store"
         return response
 
+    application.add_middleware(DashboardGZipMiddleware)
     application.include_router(v1_router)
     if (STATIC_DIR / "assets").is_dir():
         application.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
+
+    @application.get("/sw.js", include_in_schema=False)
+    async def service_worker() -> Response:
+        """The dashboard's service worker; served at the root so its scope is "/"."""
+        worker = STATIC_DIR / "sw.js"
+        if not worker.is_file():
+            return JSONResponse({"detail": "Not Found"}, status_code=404)
+        return FileResponse(worker, media_type="text/javascript", headers={"Cache-Control": "no-cache"})
 
     @application.get("/", include_in_schema=False)
     async def root() -> Response:
         index = STATIC_DIR / "index.html"
         if index.is_file():
-            return FileResponse(index)
+            # Always revalidate the page: after an update it names new hashed
+            # assets, and a heuristically cached copy would load deleted ones.
+            return FileResponse(index, headers={"Cache-Control": "no-cache"})
         return JSONResponse(
             {"service": "ncc-server", "version": __version__, "api": "/api/v1"}
         )
