@@ -42,6 +42,7 @@ import de.no0bz.ncc.collect.CpuState
 import de.no0bz.ncc.collect.DeviceSnapshot
 import de.no0bz.ncc.collect.PowerSource
 import de.no0bz.ncc.collect.ThermalStatus
+import de.no0bz.ncc.service.LiveState
 import de.no0bz.ncc.ui.Format
 import de.no0bz.ncc.ui.components.BigValue
 import de.no0bz.ncc.ui.components.Lamp
@@ -53,11 +54,12 @@ import de.no0bz.ncc.ui.theme.LocalNccColors
 @Composable
 fun DashboardRoute(contentPadding: PaddingValues, viewModel: DashboardViewModel = viewModel()) {
     val snapshot by viewModel.snapshot.collectAsStateWithLifecycle()
-    DashboardScreen(snapshot, contentPadding)
+    val watched by LiveState.watched.collectAsStateWithLifecycle()
+    DashboardScreen(snapshot, contentPadding, watched)
 }
 
 @Composable
-fun DashboardScreen(snapshot: DeviceSnapshot?, contentPadding: PaddingValues) {
+fun DashboardScreen(snapshot: DeviceSnapshot?, contentPadding: PaddingValues, watched: Boolean = false) {
     val ncc = LocalNccColors.current
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         if (snapshot == null) {
@@ -69,7 +71,7 @@ fun DashboardScreen(snapshot: DeviceSnapshot?, contentPadding: PaddingValues) {
             contentPadding = contentPadding,
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item { Header(snapshot) }
+            item { Header(snapshot, watched) }
             item { MemoryPanel(snapshot) }
             item { StoragePanel(snapshot) }
             item { SocPanel(snapshot) }
@@ -80,12 +82,12 @@ fun DashboardScreen(snapshot: DeviceSnapshot?, contentPadding: PaddingValues) {
 }
 
 @Composable
-private fun Header(s: DeviceSnapshot) {
+private fun Header(s: DeviceSnapshot, watched: Boolean) {
     val ncc = LocalNccColors.current
     Column(Modifier.padding(horizontal = 4.dp, vertical = 4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("NCC · NODE", style = MaterialTheme.typography.titleSmall, color = ncc.ink3, modifier = Modifier.weight(1f))
-            LiveBadge()
+            LiveBadge(watched)
         }
         Text(
             s.device.name,
@@ -108,16 +110,21 @@ private fun Header(s: DeviceSnapshot) {
 }
 
 @Composable
-private fun LiveBadge() {
+private fun LiveBadge(watched: Boolean) {
     val ncc = LocalNccColors.current
     val pulse by rememberInfiniteTransition(label = "live").animateFloat(
         initialValue = 1f, targetValue = 0.35f,
         animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "pulse",
     )
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Lamp(ncc.go, lit = true, modifier = Modifier.alpha(pulse), size = 10.dp)
+        Lamp(if (watched) ncc.shunt else ncc.go, lit = true, modifier = Modifier.alpha(pulse), size = 10.dp)
         Spacer(Modifier.width(6.dp))
-        Text("LIVE · 1 s", style = MaterialTheme.typography.titleSmall, color = ncc.goInk)
+        // Blau = das NCC-Dashboard schaut gerade zu und bekommt die Werte live.
+        Text(
+            if (watched) "LIVE · DASHBOARD" else "LIVE · 1 s",
+            style = MaterialTheme.typography.titleSmall,
+            color = if (watched) ncc.shuntInk else ncc.goInk,
+        )
     }
 }
 

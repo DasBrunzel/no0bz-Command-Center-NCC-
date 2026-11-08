@@ -20,7 +20,10 @@ import de.no0bz.ncc.data.PairingState
 import de.no0bz.ncc.data.TelemetryLog
 import de.no0bz.ncc.net.ApiException
 import de.no0bz.ncc.net.HeartbeatRequest
+import de.no0bz.ncc.net.LiveSocket
 import de.no0bz.ncc.net.NccApi
+import de.no0bz.ncc.net.StreamEvent
+import de.no0bz.ncc.net.StreamProtocol
 import de.no0bz.ncc.net.TelemetryPoint
 import de.no0bz.ncc.pairing.PairingManager
 import kotlinx.coroutines.CoroutineScope
@@ -29,6 +32,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -52,6 +56,11 @@ class MonitorService : Service() {
     private lateinit var reader: DeviceReader
     private lateinit var conditions: Conditions
     private lateinit var log: TelemetryLog
+    private lateinit var alerts: AlertNotifier
+
+    private val socket = LiveSocket()
+    private var streamJob: Job? = null
+    private var liveJob: Job? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -59,6 +68,7 @@ class MonitorService : Service() {
         reader = DeviceReader(this)
         conditions = Conditions(this)
         log = logFor(this)
+        alerts = AlertNotifier(this, settings)
         createChannel()
     }
 
@@ -80,6 +90,7 @@ class MonitorService : Service() {
 
     override fun onDestroy() {
         scope.cancel()
+        LiveState.setConnected(false)
         super.onDestroy()
     }
 
@@ -92,6 +103,7 @@ class MonitorService : Service() {
                 return
             }
             runCatching { tick(forceUpload) }.onFailure { Log.w(TAG, "Messzyklus fehlgeschlagen", it) }
+            ensureStream(s.pairingState == PairingState.PAIRED)
             // Bis zum nächsten Intervall warten – oder früher, wenn „Jetzt hochladen“ gedrückt wird.
             forceUpload = withTimeoutOrNull(s.intervalSeconds * 1000L) { wake.receive() } ?: false
         }
@@ -129,6 +141,86 @@ class MonitorService : Service() {
         val pending = log.pendingCount()
         if (pending > 0) status += " · $pending im Puffer"
         notify(status)
+    }
+
+    /** Hält den Live-Kanal offen, solange das Gerät gekoppelt ist. */
+    private fun ensureStream(paired: Boolean) {
+        if (!paired) {
+            streamJob?.cancel()
+            streamJob = null
+            stopLive()
+            LiveState.setConnected(false)
+            return
+        }
+        if (streamJob?.isActive == true) return
+        streamJob = scope.launch { streamLoop() }
+    }
+
+    private suspend fun streamLoop() {
+        var backoffMs = 1_000L
+        while (scope.isActive) {
+            val s = settings.current()
+            val token = settings.token()
+            if (s.pairingState != PairingState.PAIRED || token == null) return
+            try {
+                socket.run(
+                    s.serverUrl,
+                    token,
+                    onOpen = { LiveState.setConnected(true) },
+                ) { event ->
+                    backoffMs = 1_000L
+                    handle(event)
+                }
+            } catch (e: ApiException) {
+                Log.w(TAG, "Live-Kanal abgelehnt", e)
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Log.i(TAG, "Live-Kanal getrennt: ${e.message}")
+            }
+            LiveState.setConnected(false)
+            stopLive()
+            delay(backoffMs)
+            backoffMs = (backoffMs * 2).coerceAtMost(60_000L)
+        }
+    }
+
+    private suspend fun handle(event: StreamEvent) {
+        when (event) {
+            is StreamEvent.ViewerPresent -> startLive(event.intervalMs)
+            StreamEvent.ViewerGone -> stopLive()
+            is StreamEvent.AlertSnapshot -> alerts.snapshot(event.alerts)
+            is StreamEvent.AlertNew -> alerts.opened(event.alert)
+            is StreamEvent.AlertResolved -> alerts.resolved(event.alert)
+            StreamEvent.Ping -> Unit
+        }
+    }
+
+    /** Stufe „Server live“: solange ein Dashboard zuschaut, alle [intervalMs] einen Messpunkt senden. */
+    private fun startLive(intervalMs: Long) {
+        LiveState.setWatched(true)
+        liveJob?.cancel()
+        liveJob = scope.launch {
+            while (isActive) {
+                val network = conditions.network()
+                val wifi = network?.type == "wifi" || network?.type == "ethernet"
+                if (!settings.current().liveWifiOnly || wifi) {
+                    val snapshot = reader.read()
+                    socket.send(
+                        StreamProtocol.liveMessage(
+                            Instant.ofEpochMilli(snapshot.recordedAtMillis).toString(),
+                            MetricsMapper.map(snapshot, network),
+                        ),
+                    )
+                }
+                delay(intervalMs)
+            }
+        }
+    }
+
+    private fun stopLive() {
+        liveJob?.cancel()
+        liveJob = null
+        LiveState.setWatched(false)
     }
 
     /** Lädt den Puffer in Paketen zu 100 Messpunkten hoch, bis er leer ist. */

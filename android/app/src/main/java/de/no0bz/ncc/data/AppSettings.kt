@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -44,6 +45,10 @@ data class Settings(
     val lastHeartbeatAt: Long?,
     val lastUploadAt: Long?,
     val lastError: String?,
+    /** Warnungen des NCC-Servers als Benachrichtigung zeigen. */
+    val alertsEnabled: Boolean,
+    /** Live-Streaming fürs Dashboard nur über WLAN/Ethernet. */
+    val liveWifiOnly: Boolean,
 )
 
 /** Einstellungen und Zustand der App, gespeichert in DataStore. Das Token liegt verschlüsselt. */
@@ -68,8 +73,15 @@ class AppSettings(context: Context) {
             lastHeartbeatAt = p[LAST_HEARTBEAT],
             lastUploadAt = p[LAST_UPLOAD],
             lastError = p[LAST_ERROR],
+            alertsEnabled = p[ALERTS_ENABLED] ?: true,
+            liveWifiOnly = p[LIVE_WIFI_ONLY] ?: false,
         )
     }
+
+    suspend fun seenAlerts(): Set<String> = store.data.first()[SEEN_ALERTS].orEmpty()
+    suspend fun setSeenAlerts(ids: Set<String>) = store.edit { it[SEEN_ALERTS] = ids }
+    suspend fun setAlertsEnabled(enabled: Boolean) = store.edit { it[ALERTS_ENABLED] = enabled }
+    suspend fun setLiveWifiOnly(enabled: Boolean) = store.edit { it[LIVE_WIFI_ONLY] = enabled }
 
     suspend fun current(): Settings = settings.first()
 
@@ -114,6 +126,7 @@ class AppSettings(context: Context) {
         it.remove(PAIRING_SECRET)
         it.remove(PAIRING_EXPIRES)
         it[PAIRING_STATE] = PairingState.UNPAIRED.name
+        it.remove(SEEN_ALERTS)
         if (reason != null) it[LAST_ERROR] = reason else it.remove(LAST_ERROR)
     }
 
@@ -142,6 +155,9 @@ class AppSettings(context: Context) {
         private val LAST_HEARTBEAT = longPreferencesKey("last_heartbeat_at")
         private val LAST_UPLOAD = longPreferencesKey("last_upload_at")
         private val LAST_ERROR = stringPreferencesKey("last_error")
+        private val ALERTS_ENABLED = booleanPreferencesKey("alerts_enabled")
+        private val LIVE_WIFI_ONLY = booleanPreferencesKey("live_wifi_only")
+        private val SEEN_ALERTS = stringSetPreferencesKey("seen_alerts")
 
         private val random = SecureRandom()
 

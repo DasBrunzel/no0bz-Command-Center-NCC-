@@ -32,6 +32,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -63,6 +64,10 @@ fun ConnectionRoute(
     val buffer by viewModel.buffer.collectAsStateWithLifecycle()
     val busy by viewModel.busy.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
+    val liveConnected by viewModel.liveConnected.collectAsStateWithLifecycle()
+    val watched by viewModel.watched.collectAsStateWithLifecycle()
+    val activeAlerts by viewModel.activeAlerts.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     val s = settings ?: return
 
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
@@ -86,6 +91,23 @@ fun ConnectionRoute(
                     onCancel = viewModel::cancelPairing,
                     onUnpair = viewModel::unpair,
                 )
+            }
+            if (s.pairingState == PairingState.PAIRED) {
+                item(key = "live") {
+                    LivePanel(
+                        s = s,
+                        connected = liveConnected,
+                        watched = watched,
+                        activeAlerts = activeAlerts,
+                        batteryUnrestricted = reach.batteryUnrestricted,
+                        onAlerts = viewModel::setAlertsEnabled,
+                        onWifiOnly = viewModel::setLiveWifiOnly,
+                        onBattery = {
+                            context.startActivity(viewModel.batteryOptimizationIntent())
+                            viewModel.refreshSoon()
+                        },
+                    )
+                }
             }
             item(key = "collection") {
                 CollectionPanel(
@@ -227,6 +249,80 @@ private fun NccField(label: String, value: String, onChange: (String) -> Unit, t
         ),
         modifier = Modifier.fillMaxWidth(),
     )
+}
+
+@Composable
+private fun LivePanel(
+    s: Settings,
+    connected: Boolean,
+    watched: Boolean,
+    activeAlerts: Int,
+    batteryUnrestricted: Boolean,
+    onAlerts: (Boolean) -> Unit,
+    onWifiOnly: (Boolean) -> Unit,
+    onBattery: () -> Unit,
+) {
+    val ncc = LocalNccColors.current
+    Panel("Live & Warnungen") {
+        LampRow(
+            "Live-Kanal",
+            when {
+                !s.serviceEnabled -> "aus (Überwachung ist aus)"
+                connected -> "verbunden"
+                else -> "verbindet …"
+            },
+            if (connected) ncc.go else ncc.caution,
+            s.serviceEnabled,
+        )
+        LampRow("Dashboard", if (watched) "schaut gerade zu" else "niemand schaut zu", ncc.shunt, watched)
+        LampRow(
+            "Aktive Warnungen",
+            if (activeAlerts == 0) "keine" else activeAlerts.toString(),
+            if (activeAlerts == 0) ncc.go else ncc.caution,
+            connected,
+        )
+        SwitchRow(
+            "Warnungen aufs Handy",
+            "Meldet Warnungen deines NCC-Servers als Benachrichtigung – zusätzlich zu Telegram.",
+            s.alertsEnabled,
+            onAlerts,
+        )
+        SwitchRow(
+            "Live nur im WLAN",
+            "Schaut jemand im Dashboard zu, sendet das Handy alle 2 s Messwerte – auf Wunsch nur im WLAN.",
+            s.liveWifiOnly,
+            onWifiOnly,
+        )
+        if (!batteryUnrestricted) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Lamp(ncc.caution, lit = true, size = 10.dp)
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    "Android darf NCC im Ruhezustand bremsen – Warnungen können sich dann verspäten.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = ncc.cautionInk,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            OutlinedButton(onClick = onBattery, modifier = Modifier.fillMaxWidth()) { Text("Akku-Optimierung für NCC abschalten") }
+        }
+    }
+}
+
+@Composable
+private fun SwitchRow(title: String, hint: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    val ncc = LocalNccColors.current
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f).padding(end = 12.dp)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge, color = ncc.ink)
+            Text(hint, style = MaterialTheme.typography.bodySmall, color = ncc.ink3)
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onChange,
+            colors = SwitchDefaults.colors(checkedTrackColor = ncc.go, checkedThumbColor = ncc.panelRaised),
+        )
+    }
 }
 
 @Composable

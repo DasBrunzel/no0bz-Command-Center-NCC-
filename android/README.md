@@ -51,4 +51,15 @@ HTTP ist nur für Tailscale-Adressen (100.64.0.0/10, `*.ts.net`) und lokale Test
 
 ![Verbindung auf dem Pixel](docs/screenshots/m2-pixel7pro-verbindung.png)
 
-**M3 – Live-Modus + Warnungen** 🚧 in Arbeit (siehe [Konzept](docs/KONZEPT.md#7-meilensteine))
+**M3 – Live-Modus + Warnungen** ✅ (End-to-End getestet: Pixel 7 Pro, lokaler Server, Dashboard im Browser)
+
+- Live-Kanal (WebSocket) zum Server, solange das Handy gekoppelt ist; Neuaufbau mit Backoff
+- Öffnet jemand das Handy im Dashboard, streamt es alle 2 s – sonst nicht (spart Akku und Daten)
+- NCC-Warnungen als Benachrichtigung, „Behoben“-Meldung, kein Doppelmelden nach Neuverbinden
+- Schalter „Warnungen aufs Handy“ und „Live nur im WLAN“, Hinweis auf die Akku-Optimierung
+- Dashboard: eigene Android-Ansicht (Akku, RAM, Speicher, Taktlast, Kerne je Cluster, Gerät) und
+  Schalter „Warnungen an gekoppelte NCC-Apps“ unter Einstellungen → Warnregeln
+
+![Android-Ansicht im Dashboard](docs/screenshots/m3-dashboard-android.jpg)
+
+Nächster Schritt: **M4 – Chat + Kamera** (siehe [Konzept](docs/KONZEPT.md#7-meilensteine)).

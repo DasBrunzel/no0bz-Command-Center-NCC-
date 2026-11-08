@@ -1,6 +1,11 @@
 package de.no0bz.ncc.ui.connection
 
 import android.app.Application
+import android.content.Intent
+import android.net.Uri
+import android.os.PowerManager
+import android.provider.Settings as AndroidSettings
+import de.no0bz.ncc.service.LiveState
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import de.no0bz.ncc.collect.DeviceReader
@@ -24,7 +29,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
-data class Reachability(val vpn: Boolean = false, val server: Boolean? = null)
+data class Reachability(val vpn: Boolean = false, val server: Boolean? = null, val batteryUnrestricted: Boolean = true)
 
 data class BufferInfo(val pending: Int = 0, val files: Int = 0, val bytes: Long = 0)
 
@@ -35,6 +40,11 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
     private val pairing = PairingManager(appSettings, reader)
     private val conditions = Conditions(application)
     private val log = MonitorService.logFor(application)
+    private val power = application.getSystemService(PowerManager::class.java)
+
+    val liveConnected: StateFlow<Boolean> = LiveState.connected
+    val watched: StateFlow<Boolean> = LiveState.watched
+    val activeAlerts: StateFlow<Int> = LiveState.activeAlerts
 
     val settings: StateFlow<Settings?> = appSettings.settings.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
@@ -69,7 +79,11 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
 
     private suspend fun refresh() {
         val url = appSettings.current().serverUrl
-        _reachability.value = Reachability(vpn = conditions.vpnActive(), server = NccApi(url).live())
+        _reachability.value = Reachability(
+            vpn = conditions.vpnActive(),
+            server = url.isNotBlank() && NccApi(url).live(),
+            batteryUnrestricted = power.isIgnoringBatteryOptimizations(app.packageName),
+        )
         _buffer.value = BufferInfo(log.pendingCount(), log.fileCount(), log.totalBytes())
     }
 
@@ -139,6 +153,22 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
 
     fun setUploadRule(rule: UploadRule) {
         viewModelScope.launch { appSettings.setUploadRule(rule) }
+    }
+
+    fun setAlertsEnabled(enabled: Boolean) {
+        viewModelScope.launch { appSettings.setAlertsEnabled(enabled) }
+    }
+
+    fun setLiveWifiOnly(enabled: Boolean) {
+        viewModelScope.launch { appSettings.setLiveWifiOnly(enabled) }
+    }
+
+    /** Öffnet den System-Dialog „Akku-Optimierung ignorieren?“ für NCC. */
+    fun batteryOptimizationIntent(): Intent =
+        Intent(AndroidSettings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${app.packageName}"))
+
+    fun refreshSoon() {
+        viewModelScope.launch { delay(1_000); refresh() }
     }
 
     fun uploadNow() {
