@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 class NodeEnrollmentRequest(BaseModel):
     machine_id: str = Field(min_length=8, max_length=128, pattern=r"^[A-Za-z0-9._:-]+$")
     display_name: str = Field(min_length=1, max_length=128)
-    platform: Literal["windows", "linux", "darwin"]
+    platform: Literal["windows", "linux", "darwin", "android"]
     agent_version: str = Field(min_length=1, max_length=32)
     metadata: dict[str, str | int | float | bool | None] = Field(
         default_factory=dict, max_length=64
