@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 class NodeEnrollmentRequest(BaseModel):
     machine_id: str = Field(min_length=8, max_length=128, pattern=r"^[A-Za-z0-9._:-]+$")
     display_name: str = Field(min_length=1, max_length=128)
-    platform: Literal["windows", "linux", "darwin"]
+    platform: Literal["windows", "linux", "darwin", "android"]
     agent_version: str = Field(min_length=1, max_length=32)
     metadata: dict[str, str | int | float | bool | None] = Field(
         default_factory=dict, max_length=64
@@ -79,6 +79,15 @@ class TelemetryBatchRequest(BaseModel):
 class TelemetryBatchResponse(BaseModel):
     accepted: int
     duplicates: int
+
+
+class NodeLiveResponse(BaseModel):
+    """Newest in-memory live sample of an app node (not stored in the database)."""
+
+    connected: bool
+    live: bool
+    recorded_at: str | None = None
+    metrics: dict[str, object] | None = None
 
 
 class FleetTelemetryPoint(BaseModel):
@@ -265,6 +274,7 @@ class AlertPolicyResponse(BaseModel):
     cpu_temperature_threshold: int = 90
     gpu_temperature_threshold: int = 85
     drive_temperature_threshold: int = 65
+    app_alerts_enabled: bool = True
 
 
 class AlertPolicyUpdateRequest(AlertPolicyResponse):

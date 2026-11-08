@@ -178,8 +178,12 @@ def _active_alerts(
     gaming_active = _gaming_mode_active(node)
     disks = metrics.get("disks")
     disk = max((_number(item.get("percent")) for item in disks if isinstance(item, dict)), default=0.0) if isinstance(disks, list) else 0.0
+    mobile = node.platform == "android"
     for kind, label, value, threshold in (("cpu", "CPU", cpu, policy.cpu_threshold), ("memory", "RAM", memory, policy.memory_threshold), ("gpu", "GPU", gpu, policy.gpu_threshold), ("disk", "Laufwerk", disk, policy.disk_threshold)):
         if gaming_active and kind in {"cpu", "gpu"}:
+            continue
+        if mobile and kind == "memory":
+            # Android keeps RAM full of cached apps by design; high use is normal.
             continue
         if value >= threshold:
             severity = "critical" if value >= min(100, threshold + 5) else "warning"
@@ -224,7 +228,10 @@ def _agent_health_alerts(
     if node.metadata_json.get("source") == "unraid-api":
         return
     now = utc_now()
-    if latest is None or _age_seconds(latest.recorded_at, now) > max(60, settings.heartbeat_interval_seconds * 3):
+    # Phones upload their buffered telemetry only under the owner's upload
+    # rule (e.g. Wi-Fi + charging), so a heartbeat without fresh telemetry is normal.
+    stale_telemetry = latest is None or _age_seconds(latest.recorded_at, now) > max(60, settings.heartbeat_interval_seconds * 3)
+    if stale_telemetry and node.platform != "android":
         alerts.append(
             (
                 "agent-no-telemetry",

@@ -15,6 +15,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    true,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, deferred, mapped_column, relationship
 
@@ -356,6 +357,8 @@ class AlertPolicy(Base):
     cpu_temperature_threshold: Mapped[int] = mapped_column(nullable=False, default=90)
     gpu_temperature_threshold: Mapped[int] = mapped_column(nullable=False, default=85)
     drive_temperature_threshold: Mapped[int] = mapped_column(nullable=False, default=65)
+    # Push alerts to connected NCC Android apps (in addition to Telegram).
+    app_alerts_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=true())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
 

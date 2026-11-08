@@ -34,6 +34,7 @@ class NodeNotApprovedError(Exception):
 # within a few milliseconds. A full second also catches normal, consecutive
 # agent samples on busy Windows hosts and produces false health alerts.
 TELEMETRY_DUPLICATE_WINDOW = timedelta(milliseconds=250)
+ANDROID_MAX_HEARTBEAT_SECONDS = 600
 
 
 def enroll_node(
@@ -211,6 +212,12 @@ def _offline_timeout(node: Node, default_seconds: int) -> int:
     # database write, otherwise it briefly oscillates between online/offline.
     if metadata.get("source") == "unraid-api":
         return max(default_seconds, 90)
+    if node.platform == "android":
+        # Phones choose their own heartbeat cadence (30 s – 5 min) to save
+        # battery and announce it in their metadata. Allow two missed beats.
+        interval = metadata.get("heartbeat_interval_seconds")
+        if isinstance(interval, (int, float)) and not isinstance(interval, bool):
+            return max(default_seconds, min(int(interval), ANDROID_MAX_HEARTBEAT_SECONDS) * 2 + 30)
     return default_seconds
 
 
