@@ -205,6 +205,35 @@ export interface AlertPolicy {
   cpu_temperature_threshold: number;
   gpu_temperature_threshold: number;
   drive_temperature_threshold: number;
+  /** Push alerts to connected NCC Android apps. */
+  app_alerts_enabled: boolean;
+}
+
+/** Android-specific part of an app node's metrics (see android/docs/KONZEPT.md). */
+export interface AndroidMetrics {
+  manufacturer?: string;
+  model?: string;
+  sdk?: number;
+  security_patch?: string;
+  emulator?: boolean;
+  soc?: string;
+  soc_code?: string;
+  architecture?: string;
+  ram_advertised_gb?: number;
+  clock_load?: number;
+  clusters?: Array<{ name: string; cores: number[]; max_mhz?: number }>;
+  cores?: Array<{ id: number; online: boolean; mhz?: number; clock_load?: number }>;
+  battery?: { temperature_c?: number; charging?: boolean; full?: boolean; source?: string; health?: string; voltage_mv?: number; cycles?: number };
+  thermal?: string;
+  network?: { type?: string; vpn?: boolean; unmetered?: boolean };
+}
+
+/** Newest in-memory live sample of an app node; asking also tells the phone someone is watching. */
+export interface NodeLive {
+  connected: boolean;
+  live: boolean;
+  recorded_at: ISODate | null;
+  metrics: Metrics | null;
 }
 
 export interface NetworkUsageSummary {

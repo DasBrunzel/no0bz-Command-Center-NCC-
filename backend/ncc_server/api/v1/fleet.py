@@ -61,6 +61,7 @@ from ncc_server.schemas import (
     FleetTelemetryPoint,
     NetworkHistorySample,
     NetworkUsageSummary,
+    NodeLiveResponse,
     NodeOwnerUpdateRequest,
     PhysicalDeviceCreateRequest,
     PhysicalDeviceResponse,
@@ -413,6 +414,27 @@ async def telemetry(
     if result is None:
         raise HTTPException(status_code=404, detail="node not found")
     return result
+
+
+@router.get("/nodes/{node_id}/live", response_model=NodeLiveResponse)
+async def node_live(
+    node_id: str,
+    request: Request,
+    identity: DashboardIdentity = Depends(require_dashboard_identity),
+    session: Session = Depends(database_session),
+) -> NodeLiveResponse:
+    """Newest live sample of an app node. Asking marks the node as watched,
+    which makes a connected phone stream every two seconds."""
+    visible_node(session, identity, node_id)
+    hub = request.app.state.live_hub
+    hub.touch_viewer(node_id)
+    point = hub.latest_live(node_id)
+    return NodeLiveResponse(
+        connected=hub.connected(node_id),
+        live=point is not None,
+        recorded_at=point.recorded_at if point else None,
+        metrics=point.metrics if point else None,
+    )
 
 
 @router.get("/nodes/{node_id}/network/history", response_model=list[NetworkHistorySample])

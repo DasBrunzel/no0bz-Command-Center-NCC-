@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    HTTP ist zugelassen, weil der NCC-Server über Tailscale (WireGuard-verschlüsselt) erreicht wird
+    und Tailscale-IPs (100.64.0.0/10) hier nicht als Bereich angegeben werden können.
+    Die App selbst erlaubt HTTP nur für Tailscale- und lokale Testadressen (ServerUrl.isTrustedPlainHost).
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

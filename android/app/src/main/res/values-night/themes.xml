@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ncc_panel">#151A20</color>
+
+    <style name="Theme.Ncc" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/ncc_panel</item>
+    </style>
+</resources>

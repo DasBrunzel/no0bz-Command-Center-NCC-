@@ -5,9 +5,10 @@ import { useCan } from "../../app/auth";
 import { Icon } from "../../components/Icon";
 import { ErrorState, Lamp, Loading, RelTime } from "../../components/ui";
 import { fmtDuration } from "../../lib/format";
-import { isUnraid, lampText, nodeLamp, platformLabel } from "../../lib/node";
+import { isAndroid, isUnraid, lampText, nodeLamp, platformLabel } from "../../lib/node";
 import { Link, href, navigate, type Route } from "../../lib/router";
 import { transitionName } from "../overview/Trackboard";
+import { AndroidLive } from "./AndroidLive";
 import { GamingControl } from "./GamingControl";
 import { OverviewTab } from "./OverviewTab";
 import "./node.css";
@@ -120,7 +121,7 @@ export default function NodeDetail({ route }: { route: Route }) {
       </nav>
 
       <Suspense fallback={<Loading />}>
-        {tab === "" && <OverviewTab node={data} />}
+        {tab === "" && (isAndroid(data) ? <AndroidLive node={data} /> : <OverviewTab node={data} />)}
         {tab === "sensoren" && <SensorsTab node={data} />}
         {tab === "netzwerk" && <NetworkTab node={data} />}
         {tab === "spiele" && <GamesTab node={data} />}
