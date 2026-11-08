@@ -3,7 +3,7 @@ import type {
   AccessRole, AccountInvite, ArtworkCandidate, AccountInviteCreated, AdminCode, AdminCodeCreated, AgentInvitation,
   AgentInvitationCreated, AgentPairing, AgentRelease, AlertPolicy, ChatMessage, ChatParticipant,
   DashboardAccess, DashboardRole, DashboardUser, FleetAlert, FleetGroup, FleetLayoutPlacement, FleetNetwork, FleetNode,
-  FleetSummary, FleetTelemetryPoint, Game, GameTracking, HardwareStats, NetworkHistorySample,
+  FleetSummary, FleetTelemetryPoint, Game, GameTracking, HardwareStats, NetworkHistorySample, NodeLive,
   NetworkUsageSummary, PhysicalDevice, PlaytimeStats, ReleaseFeedStatus, SensorRole, ServerVersion,
   TelegramAccount, TelegramLinkCode, TelegramSettings, TelegramSettingsUpdate, UpdateChannel,
 } from "./types";
@@ -71,6 +71,8 @@ export const api = {
       request<void>(`/fleet/nodes/${id(nodeId)}/update-channel`, { method: "PUT", json: { channel } }),
     telemetry: (nodeId: string, limit = 120, after?: string) =>
       request<FleetTelemetryPoint[]>(`/fleet/nodes/${id(nodeId)}/telemetry${query({ limit, after })}`),
+    /** Asking also tells a connected phone that someone is watching, so it streams. */
+    live: (nodeId: string) => request<NodeLive>(`/fleet/nodes/${id(nodeId)}/live`),
     networkHistory: (nodeId: string, limit = 48) => request<NetworkHistorySample[]>(`/fleet/nodes/${id(nodeId)}/network/history${query({ limit })}`),
     networkMonth: (nodeId: string) => request<NetworkUsageSummary>(`/fleet/nodes/${id(nodeId)}/network/month`),
     resetNetwork: () => request<void>("/fleet/network/reset", { method: "POST" }),
@@ -169,6 +171,7 @@ export const qk = {
   alertPolicy: ["fleet", "alert-policy"] as const,
   telegram: ["fleet", "telegram"] as const,
   telemetry: (nodeId: string) => ["fleet", "telemetry", nodeId] as const,
+  live: (nodeId: string) => ["fleet", "live", nodeId] as const,
   networkHistory: (nodeId: string) => ["fleet", "network-history", nodeId] as const,
   networkMonth: (nodeId: string) => ["fleet", "network-month", nodeId] as const,
   fleetNetwork: (minutes: number) => ["fleet", "network", minutes] as const,
@@ -200,5 +203,6 @@ export const POLL = {
   hardwareStats: 120_000,
   networkMonth: 300_000,
   telemetry: 10_000,
+  live: 2_000,
   admin: 30_000,
 } as const;

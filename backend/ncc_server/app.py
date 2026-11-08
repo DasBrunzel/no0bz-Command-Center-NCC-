@@ -14,12 +14,13 @@ from starlette.middleware.gzip import GZipMiddleware
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from ncc_server import __version__
-from ncc_server.alert_service import evaluate_alerts, mark_notified
+from ncc_server.alert_service import evaluate_alerts, get_alert_policy, mark_notified
 from ncc_server.api.v1 import router as v1_router
 from ncc_server.config import ServerSettings, get_server_settings
 from ncc_server.database import Database
 from ncc_server.game_metadata import refresh_game_metadata
 from ncc_server.hardware_stats import backfill_hardware_rollups
+from ncc_server.live_hub import LiveHub, active_app_alerts
 from ncc_server.release_feed import sync_release_feed
 from ncc_server.telegram import get_telegram_settings, send_telegram_alert, telegram_bot_available
 from ncc_server.telegram_bot import alert_recipients, poll_updates, send_weekly_recaps
@@ -55,12 +56,14 @@ def create_app(
 ) -> FastAPI:
     active_settings = settings or get_server_settings()
     active_database = database or Database(active_settings.database_url)
+    live_hub = LiveHub()
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         if active_settings.database_check_on_start:
             active_database.ping()
-        alert_task = asyncio.create_task(_alert_loop(active_database, active_settings))
+        alert_task = asyncio.create_task(_alert_loop(active_database, active_settings, live_hub))
+        viewer_task = asyncio.create_task(_viewer_expiry_loop(live_hub))
         unraid_task = asyncio.create_task(_unraid_loop(active_database, active_settings))
         game_task = asyncio.create_task(_game_metadata_loop(active_database, active_settings))
         rollup_task = asyncio.create_task(_rollup_backfill_loop(active_database))
@@ -73,6 +76,9 @@ def create_app(
             with suppress(asyncio.CancelledError):
                 await feed_task
             alert_task.cancel()
+            viewer_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await viewer_task
             unraid_task.cancel()
             game_task.cancel()
             rollup_task.cancel()
@@ -98,6 +104,7 @@ def create_app(
     )
     application.state.database = active_database
     application.state.server_settings = active_settings
+    application.state.live_hub = live_hub
 
     @application.middleware("http")
     async def security_headers(request, call_next):  # type: ignore[no-untyped-def]
@@ -138,12 +145,15 @@ def create_app(
 app = create_app()
 
 
-async def _alert_loop(database: Database, settings: ServerSettings) -> None:
+async def _alert_loop(database: Database, settings: ServerSettings, live_hub: LiveHub | None = None) -> None:
     while True:
         try:
             with database.session() as session:
                 notifications = evaluate_alerts(session, settings)
                 telegram_settings = get_telegram_settings(session)
+                if live_hub is not None:
+                    # Android apps get alerts independently of Telegram.
+                    live_hub.publish_alerts(active_app_alerts(session), get_alert_policy(session).app_alerts_enabled)
             for notification in notifications:
                 if not telegram_settings.enabled:
                     continue
@@ -158,6 +168,13 @@ async def _alert_loop(database: Database, settings: ServerSettings) -> None:
         except Exception as exc:
             logger.warning("Alert loop failed: %s", exc)
         await asyncio.sleep(30)
+
+
+async def _viewer_expiry_loop(live_hub: LiveHub) -> None:
+    """Tell phones when no dashboard is watching them any more."""
+    while True:
+        live_hub.expire_viewers()
+        await asyncio.sleep(5)
 
 
 async def _unraid_loop(database: Database, settings: ServerSettings) -> None:

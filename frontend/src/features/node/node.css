@@ -94,4 +94,18 @@
   }
 
   .danger-zone { border-color: color-mix(in oklab, var(--c-stop) 40%, var(--c-line)); }
+
+  /* Android app nodes */
+  .android-live-state { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); color: var(--c-ink-2); font-size: var(--fs-s); }
+  .android-cores { display: grid; gap: var(--s-4); }
+  .android-cluster { display: grid; gap: var(--s-1); }
+  .android-core {
+    display: grid; grid-template-columns: 3.5rem 1fr 5.5rem; align-items: center; gap: var(--s-3); font-size: var(--fs-s);
+    & .num { text-align: end; font-variant-numeric: tabular-nums; }
+  }
+  .android-facts {
+    display: grid; grid-template-columns: max-content 1fr; gap: var(--s-2) var(--s-4); font-size: var(--fs-s);
+    & > div { display: contents; }
+    & dt { color: var(--c-ink-3); }
+  }
 }

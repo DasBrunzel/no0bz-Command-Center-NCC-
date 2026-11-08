@@ -6,13 +6,15 @@ import { useCan } from "../../app/auth";
 import { useToast } from "../../components/toast";
 import { ErrorState, Loading } from "../../components/ui";
 
-const LOAD: Array<{ key: keyof AlertPolicy; label: string }> = [
+type ThresholdKey = { [K in keyof AlertPolicy]: AlertPolicy[K] extends number ? K : never }[keyof AlertPolicy];
+
+const LOAD: Array<{ key: ThresholdKey; label: string }> = [
   { key: "cpu_threshold", label: "CPU-Last" },
   { key: "memory_threshold", label: "Arbeitsspeicher" },
   { key: "gpu_threshold", label: "GPU-Last" },
   { key: "disk_threshold", label: "Laufwerk belegt" },
 ];
-const HEAT: Array<{ key: keyof AlertPolicy; label: string }> = [
+const HEAT: Array<{ key: ThresholdKey; label: string }> = [
   { key: "cpu_temperature_threshold", label: "CPU" },
   { key: "gpu_temperature_threshold", label: "GPU" },
   { key: "drive_temperature_threshold", label: "Laufwerke" },
@@ -45,7 +47,7 @@ export default function AlertPolicyTab() {
     }
   };
 
-  const slider = (key: keyof AlertPolicy, label: string, min: number, max: number, unit: string) => (
+  const slider = (key: ThresholdKey, label: string, min: number, max: number, unit: string) => (
     <label className="threshold" key={key}>
       <span className="threshold-label">{label}</span>
       <input
@@ -72,6 +74,19 @@ export default function AlertPolicyTab() {
       <section className="panel">
         <div className="panel-head"><h2>Temperatur</h2><p>meldet auch im Gaming Mode</p></div>
         <div className="stack">{HEAT.map((item) => slider(item.key, item.label, 40, 110, "°C"))}</div>
+      </section>
+      <section className="panel">
+        <div className="panel-head"><h2>Handy-App</h2><p>zusätzlich zu Telegram</p></div>
+        <label className="switch">
+          <input
+            type="checkbox"
+            checked={draft.app_alerts_enabled}
+            disabled={!can.commander}
+            onChange={(event) => setDraft({ ...draft, app_alerts_enabled: event.target.checked })}
+          />
+          Warnungen an gekoppelte NCC-Apps senden
+        </label>
+        <p className="form-hint mt-4">Die App muss verbunden sein und Warnungen in ihren Einstellungen erlauben. Commander-Handys bekommen alle Warnungen, andere nur die ihrer eigenen Geräte.</p>
       </section>
       <div className="actions settings-save">
         {can.commander ? (

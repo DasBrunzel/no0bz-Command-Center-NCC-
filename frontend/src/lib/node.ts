@@ -23,6 +23,10 @@ export function nodeLamp(node: FleetNode, alerts: FleetAlert[] = []): LampState 
   return "go";
 }
 
+export function isAndroid(node: FleetNode): boolean {
+  return node.platform === "android";
+}
+
 export function lampText(state: LampState): string {
   return { go: "Online", caution: "Warnung", stop: "Kritisch", shunt: "Gaming Mode", off: "Offline" }[state];
 }
@@ -40,6 +44,7 @@ export function platformLabel(node: FleetNode): string {
     return "Linux";
   }
   if (platform.startsWith("darwin")) return "macOS";
+  if (platform === "android") return "Android";
   return node.platform;
 }
 

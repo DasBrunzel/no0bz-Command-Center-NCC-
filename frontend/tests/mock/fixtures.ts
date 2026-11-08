@@ -181,7 +181,7 @@ export function createFixtures() {
     attachment: index === 60 ? { name: "screenshot.png", content_type: "image/png", size: 182_000, url: "/api/v1/fleet/chat/messages/m-060/attachment" } : null,
     created_at: iso((index - 64) * 7 * minute),
   }));
-  const policy: AlertPolicy = { cpu_threshold: 90, memory_threshold: 90, gpu_threshold: 95, disk_threshold: 90, cpu_temperature_threshold: 90, gpu_temperature_threshold: 85, drive_temperature_threshold: 65 };
+  const policy: AlertPolicy = { cpu_threshold: 90, memory_threshold: 90, gpu_threshold: 95, disk_threshold: 90, cpu_temperature_threshold: 90, gpu_temperature_threshold: 85, drive_temperature_threshold: 65, app_alerts_enabled: true };
   const telegram: TelegramSettings = { configured: true, enabled: true, warning_title: "⚠️ NCC-Warnung", critical_title: "🚨 NCC kritisch", resolved_title: "✅ NCC wieder ok", footer: "no0bz Command Center" };
   return { groups, nodes, physical, alerts, games, stats, hardware, users, invites, pairings, agentInvitations, adminCodes, releases, chat, policy, telegram };
 }

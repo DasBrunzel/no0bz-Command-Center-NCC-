@@ -81,6 +81,15 @@ class TelemetryBatchResponse(BaseModel):
     duplicates: int
 
 
+class NodeLiveResponse(BaseModel):
+    """Newest in-memory live sample of an app node (not stored in the database)."""
+
+    connected: bool
+    live: bool
+    recorded_at: str | None = None
+    metrics: dict[str, object] | None = None
+
+
 class FleetTelemetryPoint(BaseModel):
     point_id: str
     sample_id: str | None
@@ -265,6 +274,7 @@ class AlertPolicyResponse(BaseModel):
     cpu_temperature_threshold: int = 90
     gpu_temperature_threshold: int = 85
     drive_temperature_threshold: int = 65
+    app_alerts_enabled: bool = True
 
 
 class AlertPolicyUpdateRequest(AlertPolicyResponse):
