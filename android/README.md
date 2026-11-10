@@ -62,4 +62,17 @@ HTTP ist nur für Tailscale-Adressen (100.64.0.0/10, `*.ts.net`) und lokale Test
 
 ![Android-Ansicht im Dashboard](docs/screenshots/m3-dashboard-android.jpg)
 
-Nächster Schritt: **M4 – Chat + Kamera** (siehe [Konzept](docs/KONZEPT.md#7-meilensteine)).
+**M4 – Chat, Kamera und Flotte** ✅ (End-to-End im Emulator gegen einen lokalen NCC-Server getestet)
+
+- Tab „Chat“: derselbe Fleet-Chat wie im Dashboard – Text, Markdown, Anhänge ansehen und senden,
+  Zurückblättern, neue Nachrichten sofort über den Live-Kanal, Benachrichtigung bei geschlossenem Chat
+- Kamera: Foto mit der Kamera-App aufnehmen, wird verkleinert (max. 2560 px) und direkt hochgeladen;
+  die App braucht dafür keine Kamera-Berechtigung
+- Tab „Flotte“: alle Systeme mit Status, CPU, GPU, RAM, Laufwerk, Akku und Temperaturen
+  (Commander-Handys sehen alle Geräte, andere nur die eigenen)
+
+| Chat | Foto | Flotte |
+|---|---|---|
+| ![Chat](docs/screenshots/m4-chat.png) | ![Foto im Chat](docs/screenshots/m4-chat-foto.png) | ![Flotte](docs/screenshots/m4-flotte.png) |
+
+Nächster Schritt: **M5 – GPS-Heatmap** (siehe [Konzept](docs/KONZEPT.md#7-meilensteine)).

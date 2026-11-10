@@ -183,6 +183,17 @@ der Dashboard-Gruppe „Mobil“ (`default-mobile`). GPX-Upload folgt mit der He
   „Warnungen aufs Handy“ in der App. Beide müssen an sein.
 - Fernsteuerung per `config.update` folgt später (eigener Meilenstein).
 
+### 3.2c M4: Chat, Kamera und Flotte
+
+- **Chat-Zugang für die App**: `/api/v1/nodes/chat/*` (Agent-Token) – Nachrichten, Teilnehmer, Senden,
+  Upload, Anhang laden. Nachrichten tragen das Gerät als Absender (`sender_node_id`); gehört das Gerät
+  einem Dashboard-Konto, schreibt es in dessen Namen, sonst unter dem Gerätenamen.
+- Neue Nachrichten gehen als `chat.new` über den Live-Kanal an alle verbundenen Apps.
+- **Kamera**: statt CameraX startet die App die Kamera-App des Systems (weniger Code, keine
+  Kamera-Berechtigung nötig). Fotos werden auf max. 2560 px verkleinert und als JPEG hochgeladen.
+- **Flotte**: `GET /api/v1/nodes/fleet` liefert die Geräte, die das Handy sehen darf
+  (Commander: alle; Gerät eines Freundes: nur dessen eigene).
+
 ### 3.3 WebSocket-Nachrichten
 
 ```json
