@@ -10,6 +10,13 @@
     <!-- Privat verteilte App: darf direkt fragen, ob Android sie vom Akku-Sparen ausnimmt (Warnungen pünktlich). -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
+    <!-- Die App startet die Kamera-App des Systems; sie braucht selbst keine Kamera-Berechtigung. -->
+    <queries>
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
@@ -19,7 +26,9 @@
         android:theme="@style/Theme.Ncc">
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -34,6 +43,17 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Private Geräteüberwachung: sammelt Hardware-Messwerte im eingestellten Intervall für den eigenen NCC-Server." />
         </service>
+
+        <!-- Gibt Chat-Anhänge gezielt an die Kamera-App (Ziel) und an Betrachter (Öffnen) weiter. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
         <receiver
             android:name=".service.BootReceiver"

@@ -10,6 +10,7 @@ import de.no0bz.ncc.MainActivity
 import de.no0bz.ncc.R
 import de.no0bz.ncc.data.AppSettings
 import de.no0bz.ncc.net.AppAlert
+import de.no0bz.ncc.net.ChatMessage
 
 /**
  * Zeigt NCC-Warnungen als Benachrichtigung. Schon gemeldete Warnungen werden nach einem
@@ -29,6 +30,11 @@ class AlertNotifier(context: Context, private val settings: AppSettings) {
         manager.createNotificationChannel(
             NotificationChannel(CHANNEL_RESOLVED, "NCC-Warnungen behoben", NotificationManager.IMPORTANCE_LOW).apply {
                 description = "Meldet leise, wenn eine Warnung vorbei ist."
+            },
+        )
+        manager.createNotificationChannel(
+            NotificationChannel(CHANNEL_CHAT, "NCC-Chat", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "Neue Nachrichten im Fleet-Chat."
             },
         )
     }
@@ -69,6 +75,24 @@ class AlertNotifier(context: Context, private val settings: AppSettings) {
         LiveState.setActiveAlerts((seen - alert.alertId).size)
     }
 
+    /** Neue Chat-Nachricht von jemand anderem, während der Chat nicht offen ist. */
+    suspend fun chat(message: ChatMessage) {
+        if (!settings.current().chatNotifications) return
+        val text = message.body.ifBlank { message.attachment?.let { "📎 ${it.name}" } ?: "" }
+        manager.notify(
+            CHAT_NOTIFICATION_ID,
+            builder(CHANNEL_CHAT, MainActivity.OPEN_CHAT)
+                .setGroup(null)
+                .setContentTitle("💬 ${message.senderName}")
+                .setContentText(text)
+                .setStyle(Notification.BigTextStyle().bigText(text))
+                .setCategory(Notification.CATEGORY_MESSAGE)
+                .build(),
+        )
+    }
+
+    fun clearChat() = manager.cancel(CHAT_NOTIFICATION_ID)
+
     private fun post(alert: AppAlert) {
         val title = if (alert.critical) "🔴 Kritisch · ${alert.nodeName}" else "⚠️ Warnung · ${alert.nodeName}"
         manager.notify(
@@ -82,9 +106,12 @@ class AlertNotifier(context: Context, private val settings: AppSettings) {
         )
     }
 
-    private fun builder(channel: String): Notification.Builder {
+    private fun builder(channel: String, action: String? = null): Notification.Builder {
         val open = PendingIntent.getActivity(
-            app, 1, Intent(app, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            app,
+            if (action == null) 1 else 2,
+            Intent(app, MainActivity::class.java).setAction(action).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         return Notification.Builder(app, channel)
             .setSmallIcon(R.drawable.ic_stat_ncc)
@@ -96,6 +123,8 @@ class AlertNotifier(context: Context, private val settings: AppSettings) {
     companion object {
         private const val CHANNEL_ALERTS = "alerts"
         private const val CHANNEL_RESOLVED = "alerts_resolved"
+        private const val CHANNEL_CHAT = "chat"
+        private const val CHAT_NOTIFICATION_ID = 2
         private const val GROUP = "ncc_alerts"
         private const val RESOLVED_VISIBLE_MS = 60 * 60 * 1000L
 

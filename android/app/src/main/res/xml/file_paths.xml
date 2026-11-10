@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Nur die Chat-Ordner im Cache: Kamera-Ziel/ausgehende Anhänge und heruntergeladene Anhänge. -->
+<paths>
+    <cache-path name="chat_out" path="chat-out/" />
+    <cache-path name="chat_in" path="chat-in/" />
+</paths>

@@ -16,6 +16,7 @@ import de.no0bz.ncc.R
 import de.no0bz.ncc.collect.DeviceReader
 import de.no0bz.ncc.collect.MetricsMapper
 import de.no0bz.ncc.data.AppSettings
+import de.no0bz.ncc.data.ChatStore
 import de.no0bz.ncc.data.PairingState
 import de.no0bz.ncc.data.TelemetryLog
 import de.no0bz.ncc.net.ApiException
@@ -191,6 +192,11 @@ class MonitorService : Service() {
             is StreamEvent.AlertSnapshot -> alerts.snapshot(event.alerts)
             is StreamEvent.AlertNew -> alerts.opened(event.alert)
             is StreamEvent.AlertResolved -> alerts.resolved(event.alert)
+            is StreamEvent.ChatNew -> {
+                ChatStore.append(listOf(event.message))
+                val own = event.message.senderNodeId == settings.current().nodeId
+                if (!own && !ChatStore.visible) alerts.chat(event.message)
+            }
             StreamEvent.Ping -> Unit
         }
     }

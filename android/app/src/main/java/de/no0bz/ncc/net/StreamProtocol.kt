@@ -32,6 +32,7 @@ sealed interface StreamEvent {
     data class AlertSnapshot(val alerts: List<AppAlert>) : StreamEvent
     data class AlertNew(val alert: AppAlert) : StreamEvent
     data class AlertResolved(val alert: AppAlert) : StreamEvent
+    data class ChatNew(val message: ChatMessage) : StreamEvent
     data object Ping : StreamEvent
 }
 
@@ -52,6 +53,7 @@ object StreamProtocol {
             )
             "alert.new" -> StreamEvent.AlertNew(NccApi.json.decodeFromJsonElement(message["alert"]!!))
             "alert.resolved" -> StreamEvent.AlertResolved(NccApi.json.decodeFromJsonElement(message["alert"]!!))
+            "chat.new" -> StreamEvent.ChatNew(NccApi.json.decodeFromJsonElement(message["message"]!!))
             "ping" -> StreamEvent.Ping
             else -> null
         }
