@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from ncc.security import limited
@@ -17,6 +19,7 @@ from ncc_server.chat_service import (
     list_chat_messages,
     list_chat_participants,
 )
+from ncc_server.models import FleetChatMessage
 from ncc_server.schemas import (
     FleetChatMessageCreateRequest,
     FleetChatMessageResponse,
@@ -48,15 +51,18 @@ async def participants(identity: DashboardIdentity = Depends(require_dashboard_i
 @router.post("/messages", response_model=FleetChatMessageResponse, status_code=201)
 async def send_message(
     payload: FleetChatMessageCreateRequest,
+    request: Request,
     identity: DashboardIdentity = Depends(require_dashboard_identity),
     session: Session = Depends(database_session),
 ) -> FleetChatMessageResponse:
-    return create_chat_message(
+    message = create_chat_message(
         session,
         identity=identity,
         body=payload.body,
         body_format=payload.body_format,
     )
+    publish_chat_message(request, message)
+    return message
 
 
 @router.post("/uploads", response_model=FleetChatMessageResponse, status_code=201)
@@ -70,7 +76,7 @@ async def send_attachment(
 ) -> FleetChatMessageResponse:
     if body_format not in {"plain", "markdown"}:
         raise HTTPException(status_code=422, detail="unsupported message format")
-    return create_chat_message(
+    message = create_chat_message(
         session,
         identity=identity,
         body=body,
@@ -78,6 +84,8 @@ async def send_attachment(
         attachment=file,
         settings=request.app.state.server_settings,
     )
+    publish_chat_message(request, message)
+    return message
 
 
 @router.get("/messages/{message_id}/attachment")
@@ -85,7 +93,15 @@ async def attachment(message_id: str, session: Session = Depends(database_sessio
     result = find_chat_attachment(session, message_id)
     if result is None:
         raise HTTPException(status_code=404, detail="attachment not found")
-    message, path = result
+    return attachment_response(*result)
+
+
+def publish_chat_message(request: Request, message: FleetChatMessageResponse) -> None:
+    """Tell connected NCC apps about a new chat message right away."""
+    request.app.state.live_hub.publish_chat(message.model_dump(mode="json"))
+
+
+def attachment_response(message: FleetChatMessage, path: Path) -> FileResponse:
     if not path.is_file():
         raise HTTPException(status_code=404, detail="attachment file not found")
     # The uploader chooses the declared type. Only types the dashboard previews
