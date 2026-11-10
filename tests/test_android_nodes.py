@@ -110,7 +110,7 @@ def test_android_node_uses_its_announced_heartbeat_interval() -> None:
 
 
 def test_android_machine_id_lands_in_mobile_group() -> None:
-    node = Node(machine_id="android-3f2a9c1e5b7d4f60", display_name="Bruno", platform="android", metadata_json={})
+    node = Node(machine_id="android-3f2a9c1e5b7d4f60", display_name="Mein Handy", platform="android", metadata_json={})
     assert default_group_for(node) == "default-mobile"
 
 
