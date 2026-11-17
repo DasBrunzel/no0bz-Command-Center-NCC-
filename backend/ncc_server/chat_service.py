@@ -82,11 +82,14 @@ def create_chat_message(
     body_format: str,
     attachment: UploadFile | None = None,
     settings: ServerSettings | None = None,
+    sender_node_id: str | None = None,
 ) -> FleetChatMessageResponse:
     body = body.rstrip()
     if not body and attachment is None:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="message is empty")
     message = FleetChatMessage(
+        # Set when an app node (the Android app) wrote the message.
+        sender_node_id=sender_node_id,
         sender_user_id=identity.user_id,
         sender_name=identity.username,
         body=body,

@@ -49,6 +49,8 @@ data class Settings(
     val alertsEnabled: Boolean,
     /** Live-Streaming fürs Dashboard nur über WLAN/Ethernet. */
     val liveWifiOnly: Boolean,
+    /** Neue Chat-Nachrichten als Benachrichtigung zeigen. */
+    val chatNotifications: Boolean,
 )
 
 /** Einstellungen und Zustand der App, gespeichert in DataStore. Das Token liegt verschlüsselt. */
@@ -75,6 +77,7 @@ class AppSettings(context: Context) {
             lastError = p[LAST_ERROR],
             alertsEnabled = p[ALERTS_ENABLED] ?: true,
             liveWifiOnly = p[LIVE_WIFI_ONLY] ?: false,
+            chatNotifications = p[CHAT_NOTIFICATIONS] ?: true,
         )
     }
 
@@ -82,6 +85,7 @@ class AppSettings(context: Context) {
     suspend fun setSeenAlerts(ids: Set<String>) = store.edit { it[SEEN_ALERTS] = ids }
     suspend fun setAlertsEnabled(enabled: Boolean) = store.edit { it[ALERTS_ENABLED] = enabled }
     suspend fun setLiveWifiOnly(enabled: Boolean) = store.edit { it[LIVE_WIFI_ONLY] = enabled }
+    suspend fun setChatNotifications(enabled: Boolean) = store.edit { it[CHAT_NOTIFICATIONS] = enabled }
 
     suspend fun current(): Settings = settings.first()
 
@@ -157,6 +161,7 @@ class AppSettings(context: Context) {
         private val LAST_ERROR = stringPreferencesKey("last_error")
         private val ALERTS_ENABLED = booleanPreferencesKey("alerts_enabled")
         private val LIVE_WIFI_ONLY = booleanPreferencesKey("live_wifi_only")
+        private val CHAT_NOTIFICATIONS = booleanPreferencesKey("chat_notifications")
         private val SEEN_ALERTS = stringSetPreferencesKey("seen_alerts")
 
         private val random = SecureRandom()

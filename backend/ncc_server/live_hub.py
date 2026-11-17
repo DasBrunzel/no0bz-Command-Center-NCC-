@@ -164,6 +164,13 @@ class LiveHub:
                 if _allowed(subscriber, alert):
                     subscriber.put({"type": "alert.resolved", "alert": alert.public()})
 
+    # ── chat ─────────────────────────────────────────────────────────────
+
+    def publish_chat(self, message: dict[str, Any]) -> None:
+        """Push a new Fleet chat message to every connected app."""
+        for subscriber in self._all_subscribers():
+            subscriber.put({"type": "chat.new", "message": message})
+
     # ── helpers ──────────────────────────────────────────────────────────
 
     def _broadcast(self, node_id: str, message: dict[str, Any]) -> None:
