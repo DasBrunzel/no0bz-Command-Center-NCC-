@@ -103,6 +103,12 @@
     display: grid; grid-template-columns: 3.5rem 1fr 5.5rem; align-items: center; gap: var(--s-3); font-size: var(--fs-s);
     & .num { text-align: end; font-variant-numeric: tabular-nums; }
   }
+  .location-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-3); }
+  .location-map {
+    height: min(70vh, 36rem); border-radius: var(--r-3); border: 1px solid var(--c-line); overflow: hidden;
+    background: var(--c-panel-sunken);
+    & .leaflet-control-attribution { font-size: var(--fs-xs); }
+  }
   .android-facts {
     display: grid; grid-template-columns: max-content 1fr; gap: var(--s-2) var(--s-4); font-size: var(--fs-s);
     & > div { display: contents; }

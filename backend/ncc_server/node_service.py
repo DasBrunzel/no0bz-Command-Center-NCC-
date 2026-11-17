@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from ncc_server.game_service import prepare_game_metric, record_game_point
 from ncc_server.hardware_stats import record_hardware_point
+from ncc_server.location_service import take_location
 from ncc_server.models import AgentToken, AuditEvent, Node, PhysicalDevice, TelemetryPoint, utc_now
 from ncc_server.schemas import (
     NodeEnrollmentRequest,
@@ -167,6 +168,8 @@ def store_telemetry(
             continue
         # Strip or reduce game data per the node's privacy level before it is stored.
         reported_game = prepare_game_metric(node, point.metrics)
+        # GPS fixes never stay in telemetry; they go to the opt-in location history.
+        location = take_location(node, point.metrics, point.recorded_at)
         try:
             with session.begin_nested():
                 session.add(
@@ -186,6 +189,13 @@ def store_telemetry(
             accepted += 1
             if reported_game is not None:
                 record_game_point(session, node, point.recorded_at, reported_game, point.metrics)
+            if location is not None:
+                try:
+                    with session.begin_nested():
+                        session.add(location)
+                        session.flush()
+                except IntegrityError:
+                    pass  # same fix already stored
             record_hardware_point(session, node, point.recorded_at, point.metrics)
     now = utc_now()
     node.last_seen_at = now

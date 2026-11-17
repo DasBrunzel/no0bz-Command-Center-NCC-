@@ -44,6 +44,8 @@ class HeartbeatResponse(BaseModel):
     next_heartbeat_seconds: int
     # 0.5 agents ignore unknown fields; 0.6 payloads hand it to the service host.
     update_check_requested: bool = False
+    # The Android app records GPS fixes only while this is on.
+    location_tracking: bool = False
 
 
 class TelemetryPointRequest(BaseModel):
@@ -79,6 +81,21 @@ class TelemetryBatchRequest(BaseModel):
 class TelemetryBatchResponse(BaseModel):
     accepted: int
     duplicates: int
+
+
+class LocationHeatmapResponse(BaseModel):
+    """GPS history of a node condensed to ~11 m cells: [latitude, longitude, count]."""
+
+    days: int
+    points: int
+    stored_points: int
+    first_at: datetime | None
+    last_at: datetime | None
+    cells: list[list[float]]
+
+
+class LocationTrackingRequest(BaseModel):
+    enabled: bool
 
 
 class NodeLiveResponse(BaseModel):
@@ -156,6 +173,7 @@ class FleetNodeResponse(BaseModel):
     auto_gaming_until: datetime | None = None
     game_tracking: Literal["off", "presence", "titles"] = "titles"
     auto_gaming_mode: bool = True
+    location_tracking: bool = False
     now_playing: NowPlayingResponse | None = None
     sensor_labels: dict[str, SensorLabel] = Field(default_factory=dict)
     owner_user_id: str | None = None

@@ -46,6 +46,10 @@ class ServerSettings(BaseSettings):
     # Optional key from steamgriddb.com for banners of games that are not on Steam.
     steamgriddb_api_key: SecretStr = SecretStr("")
     chat_upload_dir: Path = Field(default_factory=lambda: ROOT / "ncc_chat_uploads")
+    # Map tiles for the dashboard's location heatmap are fetched by the server and
+    # cached, because the dashboard's CSP only loads images from its own origin.
+    map_tile_url: str = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+    map_tile_cache_dir: Path = Field(default_factory=lambda: ROOT / "ncc_map_tiles")
 
 
 @lru_cache

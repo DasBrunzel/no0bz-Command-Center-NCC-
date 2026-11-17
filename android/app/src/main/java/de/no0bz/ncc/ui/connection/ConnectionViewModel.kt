@@ -5,7 +5,15 @@ import android.content.Intent
 import android.net.Uri
 import android.os.PowerManager
 import android.provider.Settings as AndroidSettings
+import androidx.core.content.FileProvider
+import de.no0bz.ncc.collect.LocationAccess
+import de.no0bz.ncc.collect.LocationReader
+import de.no0bz.ncc.data.GpxExport
 import de.no0bz.ncc.service.LiveState
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.time.LocalDate
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import de.no0bz.ncc.collect.DeviceReader
@@ -161,6 +169,75 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
 
     fun setLiveWifiOnly(enabled: Boolean) {
         viewModelScope.launch { appSettings.setLiveWifiOnly(enabled) }
+    }
+
+    private val locationReader = LocationReader(application)
+    private val _locationAccess = MutableStateFlow(locationReader.access())
+    val locationAccess: StateFlow<LocationAccess> = _locationAccess.asStateFlow()
+
+    fun refreshLocationAccess() {
+        _locationAccess.value = locationReader.access()
+    }
+
+    /** Schaltet den Standortverlauf am Server (maßgeblich) und lokal um. */
+    fun setLocationTracking(enabled: Boolean) {
+        refreshLocationAccess()
+        viewModelScope.launch {
+            _busy.value = true
+            try {
+                val s = appSettings.current()
+                val token = appSettings.token() ?: throw IllegalStateException("Nicht gekoppelt.")
+                val confirmed = NccApi(s.serverUrl).setLocationTracking(token, enabled)
+                appSettings.setLocationTracking(confirmed)
+                // Dienst neu anmelden, damit er (mit Berechtigung) als Standort-Dienst läuft.
+                if (s.serviceEnabled) MonitorService.start(app, MonitorService.ACTION_RESCHEDULE)
+                _message.value = if (confirmed) {
+                    if (locationReader.access().background) "Standortverlauf ist an." else
+                        "Standortverlauf ist an. Ohne „Immer zulassen“ kommen Standorte nur, solange die App offen ist."
+                } else "Standortverlauf ist aus."
+            } catch (e: Exception) {
+                _message.value = PairingManager.describe(e)
+            } finally {
+                _busy.value = false
+            }
+        }
+    }
+
+    /** GPX der letzten [days] Tage aus den lokalen Logs; null, wenn darin keine Standorte sind. */
+    suspend fun exportGpx(days: Long): File? = withContext(Dispatchers.IO) {
+        val result = GpxExport.fromLogs(log.recentFiles(days), defaultDeviceName)
+        if (result.points == 0) return@withContext null
+        val dir = File(app.cacheDir, "export").apply { mkdirs() }
+        File(dir, "ncc-standorte-${LocalDate.now()}.gpx").apply { writeText(result.gpx) }
+    }
+
+    fun shareIntent(file: File): Intent {
+        val uri = FileProvider.getUriForFile(app, "${app.packageName}.files", file)
+        val send = Intent(Intent.ACTION_SEND)
+            .setType("application/gpx+xml")
+            .putExtra(Intent.EXTRA_STREAM, uri)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        return Intent.createChooser(send, "GPX teilen")
+    }
+
+    fun showMessage(text: String) {
+        _message.value = text
+    }
+
+    fun deleteServerLocations() {
+        viewModelScope.launch {
+            _busy.value = true
+            try {
+                val s = appSettings.current()
+                val token = appSettings.token() ?: throw IllegalStateException("Nicht gekoppelt.")
+                val deleted = NccApi(s.serverUrl).deleteLocations(token)
+                _message.value = "$deleted Standortpunkte auf dem Server gelöscht."
+            } catch (e: Exception) {
+                _message.value = PairingManager.describe(e)
+            } finally {
+                _busy.value = false
+            }
+        }
     }
 
     /** Öffnet den System-Dialog „Akku-Optimierung ignorieren?“ für NCC. */

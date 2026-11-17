@@ -54,6 +54,12 @@ class TelemetryLog(
 
     suspend fun fileCount(): Int = mutex.withLock { logFiles().size }
 
+    /** Logdateien der letzten [days] Tage (für den GPX-Export). */
+    suspend fun recentFiles(days: Long): List<File> = mutex.withLock {
+        val oldest = LocalDate.now(zone).minusDays(days - 1).toString()
+        logFiles().filter { it.name.removeSuffix(".jsonl") >= oldest }
+    }
+
     private fun readBatch(max: Int): Batch? {
         var cursor = readCursor()
         val points = mutableListOf<TelemetryPoint>()

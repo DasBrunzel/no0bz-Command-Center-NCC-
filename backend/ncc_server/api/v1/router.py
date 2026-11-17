@@ -9,6 +9,9 @@ from ncc_server.api.v1.chat import router as chat_router
 from ncc_server.api.v1.fleet import router as fleet_router
 from ncc_server.api.v1.games import router as games_router
 from ncc_server.api.v1.invitations import router as invitations_router
+from ncc_server.api.v1.locations import dashboard_router as location_dashboard_router
+from ncc_server.api.v1.locations import map_router
+from ncc_server.api.v1.locations import node_router as location_node_router
 from ncc_server.api.v1.node_chat import fleet_router as node_fleet_router
 from ncc_server.api.v1.node_chat import router as node_chat_router
 from ncc_server.api.v1.nodes import router as nodes_router
@@ -19,6 +22,9 @@ router = APIRouter(prefix="/api/v1")
 router.include_router(nodes_router)
 router.include_router(node_chat_router)
 router.include_router(node_fleet_router)
+router.include_router(location_node_router)
+router.include_router(location_dashboard_router)
+router.include_router(map_router)
 router.include_router(fleet_router)
 router.include_router(games_router)
 router.include_router(chat_router)

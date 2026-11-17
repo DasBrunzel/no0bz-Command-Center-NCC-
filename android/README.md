@@ -75,4 +75,17 @@ HTTP ist nur für Tailscale-Adressen (100.64.0.0/10, `*.ts.net`) und lokale Test
 |---|---|---|
 | ![Chat](docs/screenshots/m4-chat.png) | ![Foto im Chat](docs/screenshots/m4-chat-foto.png) | ![Flotte](docs/screenshots/m4-flotte.png) |
 
-Nächster Schritt: **M5 – GPS-Heatmap** (siehe [Konzept](docs/KONZEPT.md#7-meilensteine)).
+**M5 – GPS-Heatmap** ✅ (End-to-End im Emulator mit abgespielter Route und im Dashboard geprüft)
+
+- Standortverlauf ist standardmäßig **aus**; einschaltbar in der App (Tab „Verbindung“) und im Dashboard
+  (Gerät → „Standort“). Beide zeigen denselben Schalter; eine Änderung im Dashboard erreicht das Handy sofort.
+- Die App fragt die Berechtigungen schrittweise ab („beim Verwenden“, danach „immer“) und hängt den
+  Standort nur bei eingeschaltetem Verlauf an die Messwerte. Der Server nimmt ihn heraus und speichert
+  ihn getrennt, bis du ihn löschst.
+- Dashboard: Karte mit Heatmap, Zeitraum 7/30/90 Tage oder alles, GPX-Download, Verlauf löschen.
+  Kartenkacheln laufen über den NCC-Server (mit Zwischenspeicher).
+- App: GPX der letzten 30 Tage aus den lokalen Logs teilen, Verlauf auf dem Server löschen.
+
+![Heatmap im Dashboard](docs/screenshots/m5-dashboard-heatmap.jpg)
+
+Nächster Schritt: **M6 – Feinschliff** (Updates über NCC-Releases, Widgets, Quick-Settings-Kachel).

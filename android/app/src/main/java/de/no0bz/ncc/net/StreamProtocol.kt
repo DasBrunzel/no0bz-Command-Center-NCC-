@@ -8,6 +8,7 @@ import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 
@@ -33,6 +34,8 @@ sealed interface StreamEvent {
     data class AlertNew(val alert: AppAlert) : StreamEvent
     data class AlertResolved(val alert: AppAlert) : StreamEvent
     data class ChatNew(val message: ChatMessage) : StreamEvent
+    /** Einstellung wurde im Dashboard geändert (null = nicht enthalten). */
+    data class ConfigUpdate(val locationTracking: Boolean?) : StreamEvent
     data object Ping : StreamEvent
 }
 
@@ -54,6 +57,7 @@ object StreamProtocol {
             "alert.new" -> StreamEvent.AlertNew(NccApi.json.decodeFromJsonElement(message["alert"]!!))
             "alert.resolved" -> StreamEvent.AlertResolved(NccApi.json.decodeFromJsonElement(message["alert"]!!))
             "chat.new" -> StreamEvent.ChatNew(NccApi.json.decodeFromJsonElement(message["message"]!!))
+            "config.update" -> StreamEvent.ConfigUpdate(message["location_tracking"]?.jsonPrimitive?.booleanOrNull)
             "ping" -> StreamEvent.Ping
             else -> null
         }

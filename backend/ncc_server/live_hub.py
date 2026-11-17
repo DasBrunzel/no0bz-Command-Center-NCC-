@@ -164,6 +164,12 @@ class LiveHub:
                 if _allowed(subscriber, alert):
                     subscriber.put({"type": "alert.resolved", "alert": alert.public()})
 
+    # ── remote settings ──────────────────────────────────────────────────
+
+    def send_config(self, node_id: str, changes: dict[str, Any]) -> None:
+        """Push changed settings (e.g. location tracking) to the node's app right away."""
+        self._broadcast(node_id, {"type": "config.update", **changes})
+
     # ── chat ─────────────────────────────────────────────────────────────
 
     def publish_chat(self, message: dict[str, Any]) -> None:

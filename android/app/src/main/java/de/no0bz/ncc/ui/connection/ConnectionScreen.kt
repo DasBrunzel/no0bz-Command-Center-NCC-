@@ -1,5 +1,16 @@
 package de.no0bz.ncc.ui.connection
 
+import android.Manifest
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -108,6 +119,9 @@ fun ConnectionRoute(
                         },
                     )
                 }
+            }
+            if (s.pairingState == PairingState.PAIRED) {
+                item(key = "location") { LocationPanel(s, busy, viewModel) }
             }
             item(key = "collection") {
                 CollectionPanel(
@@ -306,6 +320,91 @@ private fun LivePanel(
             }
             OutlinedButton(onClick = onBattery, modifier = Modifier.fillMaxWidth()) { Text("Akku-Optimierung für NCC abschalten") }
         }
+    }
+}
+
+@Composable
+private fun LocationPanel(s: Settings, busy: Boolean, viewModel: ConnectionViewModel) {
+    val ncc = LocalNccColors.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val access by viewModel.locationAccess.collectAsStateWithLifecycle()
+    var confirmDelete by remember { mutableStateOf(false) }
+
+    // Android verlangt zwei Schritte: erst „beim Verwenden“, danach getrennt „immer“ (Hintergrund).
+    val background = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        viewModel.setLocationTracking(true)
+    }
+    val foreground = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+        viewModel.refreshLocationAccess()
+        if (result.values.any { it }) {
+            background.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+        } else {
+            viewModel.showMessage("Ohne Standort-Berechtigung kann NCC keinen Verlauf aufzeichnen.")
+        }
+    }
+    LaunchedEffect(Unit) { viewModel.refreshLocationAccess() }
+
+    Panel("Standort & Heatmap") {
+        SwitchRow(
+            "Standortverlauf aufzeichnen",
+            "Hängt bei jeder Messung den Standort an. Dein NCC-Server zeichnet daraus eine Heatmap im Dashboard. Auch dort umschaltbar.",
+            s.locationTracking,
+        ) { enable ->
+            when {
+                !enable -> viewModel.setLocationTracking(false)
+                !access.any -> foreground.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+                !access.background -> background.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                else -> viewModel.setLocationTracking(true)
+            }
+        }
+        LampRow(
+            "Standort-Berechtigung",
+            when {
+                access.precise -> "genau"
+                access.approximate -> "ungefähr"
+                else -> "keine"
+            },
+            if (access.precise) ncc.go else if (access.approximate) ncc.caution else ncc.unlit,
+            access.any,
+        )
+        LampRow("Im Hintergrund", if (access.background) "immer erlaubt" else "nur bei geöffneter App", if (access.background) ncc.go else ncc.caution, access.any)
+        if (s.locationTracking && !access.background) {
+            OutlinedButton(
+                onClick = {
+                    context.startActivity(
+                        Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Standort „Immer zulassen“ in den Einstellungen") }
+        }
+        OutlinedButton(
+            onClick = {
+                scope.launch {
+                    val file = viewModel.exportGpx(days = 30)
+                    if (file == null) viewModel.showMessage("In den lokalen Logs der letzten 30 Tage sind keine Standorte.")
+                    else context.startActivity(viewModel.shareIntent(file).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text("GPX der letzten 30 Tage teilen") }
+        OutlinedButton(onClick = { confirmDelete = true }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+            Text("Verlauf auf dem Server löschen", color = ncc.stopInk)
+        }
+    }
+
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("Standortverlauf löschen?") },
+            text = { Text("Alle Standortpunkte dieses Geräts werden auf dem NCC-Server gelöscht. Das lässt sich nicht rückgängig machen. Die lokalen Logdateien auf dem Handy bleiben.") },
+            confirmButton = {
+                TextButton(onClick = { confirmDelete = false; viewModel.deleteServerLocations() }) { Text("Endgültig löschen", color = ncc.stopInk) }
+            },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Abbrechen") } },
+        )
     }
 }
 

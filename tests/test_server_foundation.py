@@ -59,6 +59,7 @@ def test_foundation_metadata_contains_persistent_entities() -> None:
         "game_sessions",
         "games",
         "hardware_hourly",
+        "location_points",
         "nodes",
         "physical_devices",
         "telemetry_points",

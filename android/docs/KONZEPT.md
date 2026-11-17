@@ -194,6 +194,20 @@ der Dashboard-Gruppe „Mobil“ (`default-mobile`). GPX-Upload folgt mit der He
 - **Flotte**: `GET /api/v1/nodes/fleet` liefert die Geräte, die das Handy sehen darf
   (Commander: alle; Gerät eines Freundes: nur dessen eigene).
 
+### 3.2d M5: GPS-Heatmap
+
+- **Schalter** `nodes.location_tracking` (Standard aus, Migration 0028). App: `PUT /api/v1/nodes/location-tracking`;
+  Dashboard: `PUT /api/v1/fleet/nodes/{id}/location-tracking` – geht per `config.update` sofort ans Handy.
+  Jedes Lebenszeichen meldet den aktuellen Stand zurück; der Server ist maßgeblich.
+- **Erfassung**: Die App hängt bei jeder Messung `location {lat, lon, accuracy_m}` an, nur wenn der Schalter an ist.
+  Sie nimmt einen höchstens 15 s alten Standort oder ortet neu (fused → GPS → Netzwerk, je 10 s).
+- **Speicherung**: Der Server entfernt den Standort **immer** aus den Telemetriedaten und speichert ihn nur bei
+  eingeschaltetem Schalter in `location_points` (Genauigkeit > 250 m und unmögliche Werte werden verworfen).
+  Keine automatische Löschung; „Verlauf löschen“ in App und Dashboard entfernt alles.
+- **Dashboard**: `GET …/locations?days=` liefert ~11-m-Zellen mit Anzahl; Heatmap mit Leaflet 1.9.4 und eigener
+  Heat-Ebene; `GET …/locations.gpx` für den Export. Kacheln über `/api/v1/map/tiles/…` (30 Tage Cache,
+  Quelle einstellbar mit `NCC_SERVER_MAP_TILE_URL`), weil das Dashboard nur Bilder vom eigenen Server lädt.
+
 ### 3.3 WebSocket-Nachrichten
 
 ```json

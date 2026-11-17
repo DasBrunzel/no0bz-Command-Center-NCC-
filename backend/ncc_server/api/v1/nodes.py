@@ -90,6 +90,7 @@ async def heartbeat(
         server_time=now,
         next_heartbeat_seconds=settings.heartbeat_interval_seconds,
         update_check_requested=update_check_requested,
+        location_tracking=node.location_tracking,
     )
 
 
