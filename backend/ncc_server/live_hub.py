@@ -170,6 +170,11 @@ class LiveHub:
         """Push changed settings (e.g. location tracking) to the node's app right away."""
         self._broadcast(node_id, {"type": "config.update", **changes})
 
+    def publish_app_update(self, release: dict[str, Any]) -> None:
+        """Tell every connected app that a newer APK is available."""
+        for subscriber in self._all_subscribers():
+            subscriber.put({"type": "app.update", "release": release})
+
     # ── chat ─────────────────────────────────────────────────────────────
 
     def publish_chat(self, message: dict[str, Any]) -> None:

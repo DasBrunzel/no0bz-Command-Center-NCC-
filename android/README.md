@@ -88,4 +88,30 @@ HTTP ist nur für Tailscale-Adressen (100.64.0.0/10, `*.ts.net`) und lokale Test
 
 ![Heatmap im Dashboard](docs/screenshots/m5-dashboard-heatmap.jpg)
 
-Nächster Schritt: **M6 – Feinschliff** (Updates über NCC-Releases, Widgets, Quick-Settings-Kachel).
+**M6 – Updates, Widget, Kachel, Fernsteuerung** ✅ (Release-Build mit R8 im Emulator gegen einen lokalen Server geprüft)
+
+- **Updates über den NCC-Server**: APK im Dashboard unter „Releases → Android-App“ hochladen; die App meldet
+  „NCC x.y ist verfügbar“, lädt die Datei, prüft Größe und SHA-256 und öffnet den Android-Installer.
+- **Homescreen-Widget**: Flotte online, aktive Warnungen, eigener Akku und Verbindungsstatus
+  (Tab „Verbindung“ → „Widget auf den Startbildschirm“).
+- **Schnelleinstellungs-Kachel** „NCC“: Überwachung an/aus mit Warnungen bzw. Flottenstand als Untertitel.
+- **Fernsteuerung im Dashboard** (Gerät → Android): Messintervall und Upload-Regel; die App übernimmt sie sofort.
+
+### Release-Schlüssel und Release-Build
+
+Updates installiert Android nur, wenn sie mit **demselben Schlüssel** signiert sind. Einmalig:
+
+```powershell
+cd android
+.\scripts\new-release-key.ps1          # legt %USERPROFILE%\.ncc\ncc-release.jks an, fragt das Passwort ab
+```
+
+Den Schlüssel und das Passwort sicher aufbewahren (z. B. im Passwort-Manager) – ohne sie gibt es keine Updates mehr.
+Für jede neue Version `versionCode`/`versionName` in `app/build.gradle.kts` erhöhen, dann:
+
+```powershell
+.\scripts\build-release.ps1            # Tests + signierte APK in android\dist\, zeigt den SHA-256
+```
+
+Die APK aus `android\dist\` im Dashboard unter „Releases → Android-App“ hochladen. Ein Wechsel von der
+Debug-Version auf die erste Release-Version braucht einmal Deinstallieren und neu Koppeln.

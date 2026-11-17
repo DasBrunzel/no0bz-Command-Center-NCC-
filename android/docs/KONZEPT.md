@@ -113,8 +113,9 @@ Zusätzlich sinnvoll (günstig mitzunehmen): Netzwerktyp (WLAN/Mobil), WLAN-Sign
 
 ### 2.8 Updates
 
-- Optional: App-Updates über den bestehenden `releases`-Mechanismus des NCC-Servers.
-  Die App lädt die APK und Android fragt nur „Installieren?“.
+- Umgesetzt in M6: Die APK wird im Dashboard unter „Releases → Android-App“ hochgeladen; die App wird
+  sofort benachrichtigt, lädt sie, prüft Größe und SHA-256 und Android fragt nur „Installieren?“.
+  Android installiert nur Updates mit derselben Signatur (eigener Release-Schlüssel, siehe README).
 
 ---
 
@@ -208,6 +209,19 @@ der Dashboard-Gruppe „Mobil“ (`default-mobile`). GPX-Upload folgt mit der He
   Heat-Ebene; `GET …/locations.gpx` für den Export. Kacheln über `/api/v1/map/tiles/…` (30 Tage Cache,
   Quelle einstellbar mit `NCC_SERVER_MAP_TILE_URL`), weil das Dashboard nur Bilder vom eigenen Server lädt.
 
+### 3.2e M6: Updates, Widget, Kachel, Fernsteuerung
+
+- **Updates**: `POST /api/v1/android/release` (nur Commander; Datei, `version_code`, `version_name`, Notizen).
+  Der Server prüft ZIP-Signatur, Größe (≤ 150 MiB) und dass `version_code` steigt (sonst 409), speichert
+  `ncc-android.apk` + `release.json` in `NCC_SERVER_ANDROID_RELEASE_DIR` und schickt `app.update` an alle Apps.
+  Die App fragt außerdem alle 6 h `GET /api/v1/nodes/app-release` und lädt `…/app-release/apk` mit ihrem Token.
+- **Fernsteuerung**: `PUT /api/v1/fleet/nodes/{id}/app-config` mit `interval_seconds` (30/60/120/300) und/oder
+  `upload_rule` (`wifi_charging`/`immediate`) – nur für verbundene Android-Nodes (sonst 409), per `config.update`.
+  Die App bestätigt den neuen Stand mit dem nächsten Lebenszeichen (`metadata.upload_rule`, `heartbeat_interval_seconds`).
+- **Widget** (RemoteViews): Flotte online/gesamt, aktive Warnungen, eigener Akku, Verbindungslampe; der Dienst
+  zeichnet es nach jeder Messung neu und lädt die Flotte nur, wenn ein Widget platziert ist.
+- **Schnelleinstellungs-Kachel**: Überwachung an/aus, Untertitel mit Warnungen bzw. „Flotte x/y“.
+
 ### 3.3 WebSocket-Nachrichten
 
 ```json
@@ -220,8 +234,9 @@ der Dashboard-Gruppe „Mobil“ (`default-mobile`). GPX-Upload folgt mit der He
 { "type": "alert.new", "alert": { … } }
 { "type": "alert.resolved", "alert": { … } }
 { "type": "ping" }
-// später
-{ "type": "config.update", "heatmap_enabled": true, "interval_s": 60, "upload_rule": "wifi_charging" }
+{ "type": "chat.new", "message": { … } }
+{ "type": "config.update", "location_tracking": true, "interval_seconds": 60, "upload_rule": "wifi_charging" }  // nur geänderte Felder
+{ "type": "app.update", "release": { "version_code": 7, "version_name": "0.7.0", "size": 123, "sha256": "…", "notes": "…" } }
 ```
 
 Keepalive alle 25 s; Reconnect mit exponentiellem Backoff (1 s → max. 60 s).
@@ -280,7 +295,7 @@ Hilt (DI).
 3. **M3 Live + Warnungen** – WebSocket am Server, Live-Stufen, Alert-Kanal „App“.
 4. **M4 Chat + Kamera** – Chat-Scope am Token, Chat-UI, CameraX-Upload.
 5. **M5 GPS-Heatmap** – Opt-in, Erfassung, Dashboard-Layer.
-6. **M6 Feinschliff** – Updater über NCC-Releases, Widgets/Quick-Settings-Kachel, Barrierefreiheit.
+6. **M6 Feinschliff** ✅ – Updater über den NCC-Server, Homescreen-Widget, Quick-Settings-Kachel, Fernsteuerung im Dashboard.
 
 ## 8. Entscheidungen
 

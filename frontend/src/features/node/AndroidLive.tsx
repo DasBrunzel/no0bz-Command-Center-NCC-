@@ -1,7 +1,9 @@
-import { useQuery } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState, type ReactNode } from "react";
 import { POLL, api, qk } from "../../api/endpoints";
-import type { AndroidMetrics, FleetNode, Metrics } from "../../api/types";
+import type { AndroidAppConfig, AndroidMetrics, FleetNode, Metrics } from "../../api/types";
+import { useCan } from "../../app/auth";
+import { useToast } from "../../components/toast";
 import { Empty, Lamp, Meter, Reading, RelTime } from "../../components/ui";
 import { fmtGb, num } from "../../lib/format";
 import { memPercent } from "../../lib/node";
@@ -94,7 +96,66 @@ export function AndroidLive({ node }: { node: FleetNode }) {
           </dl>
         </section>
       </div>
+      <AppSettings node={node} connected={!!live.data?.connected} />
     </div>
+  );
+}
+
+const INTERVALS: Array<{ value: NonNullable<AndroidAppConfig["interval_seconds"]>; label: string }> = [
+  { value: 30, label: "30 Sekunden" }, { value: 60, label: "1 Minute" }, { value: 120, label: "2 Minuten" }, { value: 300, label: "5 Minuten" },
+];
+const RULES: Array<{ value: NonNullable<AndroidAppConfig["upload_rule"]>; label: string }> = [
+  { value: "wifi_charging", label: "WLAN + Laden" }, { value: "immediate", label: "Sofort" },
+];
+
+/** Measuring interval and upload rule of the phone, changed remotely over the live channel. */
+function AppSettings({ node, connected }: { node: FleetNode; connected: boolean }) {
+  const can = useCan();
+  const toast = useToast();
+  const client = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  if (!can.manage(node)) return null;
+  const interval = Number(node.metadata?.heartbeat_interval_seconds) || null;
+  const rule = typeof node.metadata?.upload_rule === "string" ? node.metadata.upload_rule : null;
+
+  const change = async (config: AndroidAppConfig, text: string) => {
+    setBusy(true);
+    try {
+      await api.fleet.setAppConfig(node.node_id, config);
+      toast.ok(`${text} Das Handy übernimmt es sofort; hier steht es nach dem nächsten Lebenszeichen.`);
+      window.setTimeout(() => void client.invalidateQueries({ queryKey: qk.node(node.node_id) }), 4000);
+    } catch (error) {
+      toast.fail(error);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="panel" aria-labelledby="android-settings-title">
+      <div className="panel-head">
+        <h2 id="android-settings-title">App-Einstellungen</h2>
+        <p>{connected ? "Änderungen gehen sofort ans Handy" : "Nur möglich, solange das Handy verbunden ist"}</p>
+      </div>
+      <div className="android-settings">
+        <label className="field">
+          <span>Messintervall</span>
+          <select className="select" value={interval ?? ""} disabled={!connected || busy}
+            onChange={(event) => void change({ interval_seconds: Number(event.target.value) as AndroidAppConfig["interval_seconds"] }, "Messintervall geändert.")}>
+            {interval === null && <option value="">unbekannt</option>}
+            {INTERVALS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+          </select>
+        </label>
+        <label className="field">
+          <span>Upload</span>
+          <select className="select" value={rule ?? ""} disabled={!connected || busy}
+            onChange={(event) => void change({ upload_rule: event.target.value as AndroidAppConfig["upload_rule"] }, "Upload-Regel geändert.")}>
+            {rule === null && <option value="">unbekannt</option>}
+            {RULES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+          </select>
+        </label>
+      </div>
+    </section>
   );
 }
 

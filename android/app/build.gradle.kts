@@ -12,14 +12,29 @@ android {
         applicationId = "de.no0bz.ncc"
         minSdk = 34
         targetSdk = 37
-        versionCode = 5
-        versionName = "0.5.0"
+        versionCode = 6
+        versionName = "0.6.0"
+    }
+
+    // Release-Signatur nur aus Umgebungsvariablen (siehe scripts/build-release.ps1) –
+    // Schlüssel und Passwort liegen nie im Repository.
+    val releaseKeystore = providers.environmentVariable("NCC_RELEASE_KEYSTORE").orNull
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = file(releaseKeystore)
+                storePassword = providers.environmentVariable("NCC_RELEASE_STORE_PASSWORD").orNull
+                keyAlias = providers.environmentVariable("NCC_RELEASE_KEY_ALIAS").orNull ?: "ncc"
+                keyPassword = providers.environmentVariable("NCC_RELEASE_KEY_PASSWORD").orNull ?: storePassword
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            signingConfig = signingConfigs.findByName("release")
         }
     }
 

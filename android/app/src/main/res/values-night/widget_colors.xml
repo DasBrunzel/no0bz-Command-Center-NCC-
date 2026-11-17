@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="widget_panel">#1D242A</color>
+    <color name="widget_line">#323940</color>
+    <color name="widget_ink">#E7EDE7</color>
+    <color name="widget_ink2">#BFC6BF</color>
+    <color name="widget_ink3">#99A19A</color>
+    <color name="widget_go">#5BC663</color>
+    <color name="widget_caution">#F8BD40</color>
+    <color name="widget_unlit">#43484E</color>
+</resources>

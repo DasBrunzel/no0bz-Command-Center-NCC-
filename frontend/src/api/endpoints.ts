@@ -3,6 +3,7 @@ import type {
   AccessRole, AccountInvite, ArtworkCandidate, AccountInviteCreated, AdminCode, AdminCodeCreated, AgentInvitation,
   AgentInvitationCreated, AgentPairing, AgentRelease, AlertPolicy, ChatMessage, ChatParticipant,
   DashboardAccess, DashboardRole, DashboardUser, FleetAlert, FleetGroup, FleetLayoutPlacement, FleetNetwork, FleetNode,
+  AndroidAppConfig, AndroidRelease,
   FleetSummary, FleetTelemetryPoint, Game, GameTracking, HardwareStats, LocationHeatmap, NetworkHistorySample, NodeLive,
   NetworkUsageSummary, PhysicalDevice, PlaytimeStats, ReleaseFeedStatus, SensorRole, ServerVersion,
   TelegramAccount, TelegramLinkCode, TelegramSettings, TelegramSettingsUpdate, UpdateChannel,
@@ -78,6 +79,9 @@ export const api = {
     setLocationTracking: (nodeId: string, enabled: boolean) =>
       request<{ enabled: boolean }>(`/fleet/nodes/${id(nodeId)}/location-tracking`, { method: "PUT", json: { enabled } }),
     deleteLocations: (nodeId: string) => request<{ deleted: number }>(`/fleet/nodes/${id(nodeId)}/locations`, { method: "DELETE" }),
+    /** Reaches the phone over the live channel; 409 while it is not connected. */
+    setAppConfig: (nodeId: string, config: AndroidAppConfig) =>
+      request<void>(`/fleet/nodes/${id(nodeId)}/app-config`, { method: "PUT", json: config }),
     networkHistory: (nodeId: string, limit = 48) => request<NetworkHistorySample[]>(`/fleet/nodes/${id(nodeId)}/network/history${query({ limit })}`),
     networkMonth: (nodeId: string) => request<NetworkUsageSummary>(`/fleet/nodes/${id(nodeId)}/network/month`),
     resetNetwork: () => request<void>("/fleet/network/reset", { method: "POST" }),
@@ -138,6 +142,17 @@ export const api = {
     revoke: (codeId: string) => request<AdminCode>(`/admin-codes/${id(codeId)}/revoke`, { method: "POST" }),
   },
 
+  android: {
+    release: () => request<AndroidRelease | null>("/android/release"),
+    upload: (file: File, versionCode: number, versionName: string, notes: string) => {
+      const form = new FormData();
+      form.set("file", file);
+      form.set("version_code", String(versionCode));
+      form.set("version_name", versionName);
+      form.set("notes", notes);
+      return request<AndroidRelease>("/android/release", { method: "POST", body: form });
+    },
+  },
   releases: {
     list: () => request<AgentRelease[]>("/releases"),
     feed: () => request<ReleaseFeedStatus>("/releases/feed"),
@@ -191,6 +206,7 @@ export const qk = {
   adminCodes: ["admin-codes"] as const,
   releases: ["releases"] as const,
   releaseFeed: ["releases", "feed"] as const,
+  androidRelease: ["android", "release"] as const,
   users: ["users"] as const,
   invites: ["users", "invites"] as const,
   myTelegram: ["users", "me", "telegram"] as const,

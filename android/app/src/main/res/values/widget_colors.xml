@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Widget-Farben aus dem NCC-Dashboard (hell); dunkel in values-night. -->
+<resources>
+    <color name="widget_panel">#F2F6F2</color>
+    <color name="widget_line">#BBC4BC</color>
+    <color name="widget_ink">#182230</color>
+    <color name="widget_ink2">#394350</color>
+    <color name="widget_ink3">#535C66</color>
+    <color name="widget_go">#258F33</color>
+    <color name="widget_caution">#F2AB19</color>
+    <color name="widget_unlit">#B0B6B1</color>
+</resources>

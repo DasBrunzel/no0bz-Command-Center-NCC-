@@ -20,9 +20,13 @@ private val Context.nccStore: DataStore<Preferences> by preferencesDataStore(nam
 
 enum class PairingState { UNPAIRED, WAITING, PAIRED }
 
-enum class UploadRule(val label: String) {
-    WIFI_CHARGING("WLAN + Laden"),
-    IMMEDIATE("Sofort"),
+enum class UploadRule(val label: String, val wire: String) {
+    WIFI_CHARGING("WLAN + Laden", "wifi_charging"),
+    IMMEDIATE("Sofort", "immediate");
+
+    companion object {
+        fun fromWire(value: String?): UploadRule? = entries.firstOrNull { it.wire == value }
+    }
 }
 
 /** Erlaubte Messintervalle in Sekunden (30 s bis 5 min). */

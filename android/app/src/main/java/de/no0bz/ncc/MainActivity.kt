@@ -27,7 +27,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -46,17 +45,22 @@ import de.no0bz.ncc.ui.theme.LocalNccColors
 import de.no0bz.ncc.ui.theme.NccTheme
 
 class MainActivity : ComponentActivity() {
-    /** Zählt hoch, wenn eine Chat-Benachrichtigung angetippt wurde. */
-    private val openChatRequests = mutableIntStateOf(0)
+    /** Tab, den eine angetippte Benachrichtigung öffnen möchte (mit Zähler, damit Wiederholungen greifen). */
+    private val openRequest = mutableStateOf(0 to (null as String?))
+
+    private fun handle(intent: Intent?) {
+        val action = intent?.action
+        if (action == OPEN_CHAT || action == OPEN_CONNECTION) openRequest.value = (openRequest.value.first + 1) to action
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        if (savedInstanceState == null && intent?.action == OPEN_CHAT) openChatRequests.intValue++
+        if (savedInstanceState == null) handle(intent)
         setContent {
             NccTheme {
                 Box(Modifier.fillMaxSize().background(LocalNccColors.current.panel)) {
-                    NccApp(openChatRequests.intValue)
+                    NccApp(openRequest.value)
                 }
             }
         }
@@ -64,22 +68,28 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        if (intent.action == OPEN_CHAT) openChatRequests.intValue++
+        handle(intent)
     }
 
     companion object {
         const val OPEN_CHAT = "de.no0bz.ncc.OPEN_CHAT"
+        const val OPEN_CONNECTION = "de.no0bz.ncc.OPEN_CONNECTION"
     }
 }
 
 private enum class Tab(val label: String) { DASHBOARD("Gerät"), FLEET("Flotte"), CHAT("Chat"), CONNECTION("Verbindung") }
 
 @Composable
-private fun NccApp(openChatRequests: Int) {
+private fun NccApp(openRequest: Pair<Int, String?>) {
     val ncc = LocalNccColors.current
     val context = LocalContext.current
     var tab by rememberSaveable { mutableStateOf(Tab.DASHBOARD) }
-    LaunchedEffect(openChatRequests) { if (openChatRequests > 0) tab = Tab.CHAT }
+    LaunchedEffect(openRequest) {
+        when (openRequest.second) {
+            MainActivity.OPEN_CHAT -> tab = Tab.CHAT
+            MainActivity.OPEN_CONNECTION -> tab = Tab.CONNECTION
+        }
+    }
 
     // Ohne Benachrichtigungs-Berechtigung läuft der Dienst zwar, ist aber unsichtbar.
     var pendingEnable by remember { mutableStateOf<(() -> Unit)?>(null) }

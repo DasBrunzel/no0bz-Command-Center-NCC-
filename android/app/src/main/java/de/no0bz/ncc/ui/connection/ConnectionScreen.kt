@@ -52,8 +52,12 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import de.no0bz.ncc.data.INTERVAL_CHOICES
 import de.no0bz.ncc.data.PairingState
 import de.no0bz.ncc.data.Settings
+import de.no0bz.ncc.BuildConfig
 import de.no0bz.ncc.data.UploadRule
 import de.no0bz.ncc.net.ServerUrl
+import de.no0bz.ncc.ui.components.Meter
+import de.no0bz.ncc.update.UpdateState
+import de.no0bz.ncc.widget.NccWidget
 import de.no0bz.ncc.ui.Format
 import de.no0bz.ncc.ui.components.Lamp
 import de.no0bz.ncc.ui.components.Panel
@@ -122,6 +126,7 @@ fun ConnectionRoute(
             }
             if (s.pairingState == PairingState.PAIRED) {
                 item(key = "location") { LocationPanel(s, busy, viewModel) }
+                item(key = "update") { UpdatePanel(viewModel) }
             }
             item(key = "collection") {
                 CollectionPanel(
@@ -405,6 +410,63 @@ private fun LocationPanel(s: Settings, busy: Boolean, viewModel: ConnectionViewM
             },
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Abbrechen") } },
         )
+    }
+}
+
+@Composable
+private fun UpdatePanel(viewModel: ConnectionViewModel) {
+    val ncc = LocalNccColors.current
+    val context = LocalContext.current
+    val state by viewModel.updates.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { if (state is UpdateState.Unknown) viewModel.checkUpdate() }
+
+    Panel("App-Update") {
+        StatRow("Installiert", "${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})")
+        when (val s = state) {
+            UpdateState.Unknown, UpdateState.Checking -> StatRow("Server", "prüfe …")
+            UpdateState.UpToDate -> LampRow("Server", "aktuell", ncc.go, true)
+            is UpdateState.Available -> {
+                LampRow("Server", "${s.release.versionName} verfügbar", ncc.caution, true)
+                if (s.release.notes.isNotBlank()) Text(s.release.notes, style = MaterialTheme.typography.bodyMedium, color = ncc.ink2)
+                Button(
+                    onClick = { viewModel.downloadUpdate(s.release) },
+                    colors = ButtonDefaults.buttonColors(containerColor = ncc.shunt),
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Laden (${Format.bytes(s.release.size, binary = true)})") }
+            }
+            is UpdateState.Downloading -> {
+                LampRow("Server", "${s.release.versionName} wird geladen", ncc.shunt, true)
+                Meter(s.progress, color = ncc.shunt, label = "Download ${(s.progress * 100).toInt()} Prozent")
+            }
+            is UpdateState.Ready -> {
+                LampRow("Server", "${s.release.versionName} geladen und geprüft", ncc.go, true)
+                if (!viewModel.installAllowed()) {
+                    Text(
+                        "Android fragt einmal, ob NCC Apps installieren darf. Danach hierher zurück und erneut tippen.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = ncc.ink3,
+                    )
+                }
+                Button(
+                    onClick = { context.startActivity(viewModel.installIntent(s.apk)) },
+                    colors = ButtonDefaults.buttonColors(containerColor = ncc.go),
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Installieren") }
+            }
+            is UpdateState.Failed -> {
+                LampRow("Server", "Fehler", ncc.stop, true)
+                Text(s.message, style = MaterialTheme.typography.bodyMedium, color = ncc.stopInk)
+            }
+        }
+        if (state !is UpdateState.Downloading) {
+            OutlinedButton(onClick = viewModel::checkUpdate, modifier = Modifier.fillMaxWidth()) { Text("Nach Updates suchen") }
+        }
+        OutlinedButton(
+            onClick = {
+                if (NccWidget.requestPin(context)) viewModel.refreshWidgetSoon() else viewModel.showMessage("Dein Startbildschirm unterstützt das nicht – Widget bitte über die Widget-Liste hinzufügen.")
+            },
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text("Widget auf den Startbildschirm") }
     }
 }
 

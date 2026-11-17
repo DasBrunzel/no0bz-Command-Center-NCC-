@@ -5,3 +5,13 @@
   .select-s { min-block-size: 2rem; padding-block: 0; font-size: var(--fs-s); inline-size: auto; min-inline-size: 9rem; }
   .textarea.code { font-family: var(--font-code); font-size: var(--fs-xs); max-block-size: 22rem; }
 }
+
+@layer features {
+  .android-release-facts {
+    display: grid; grid-template-columns: max-content 1fr; gap: var(--s-2) var(--s-4); font-size: var(--fs-s);
+    & > div { display: contents; }
+    & dt { color: var(--c-ink-3); }
+  }
+  .android-release-form { display: grid; gap: var(--s-3); max-inline-size: 36rem; }
+  .android-release-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-3); }
+}

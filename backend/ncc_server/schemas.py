@@ -98,6 +98,24 @@ class LocationTrackingRequest(BaseModel):
     enabled: bool
 
 
+class AndroidReleaseResponse(BaseModel):
+    """The APK the NCC server currently offers to its Android apps."""
+
+    version_code: int
+    version_name: str
+    size: int
+    sha256: str
+    notes: str = ""
+    uploaded_at: datetime
+
+
+class AndroidAppConfigRequest(BaseModel):
+    """Settings the dashboard may change on a connected phone."""
+
+    interval_seconds: Literal[30, 60, 120, 300] | None = None
+    upload_rule: Literal["wifi_charging", "immediate"] | None = None
+
+
 class NodeLiveResponse(BaseModel):
     """Newest in-memory live sample of an app node (not stored in the database)."""
 

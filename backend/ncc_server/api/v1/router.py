@@ -5,6 +5,9 @@ from fastapi import APIRouter, HTTPException, Request, status
 from ncc_server import __version__
 from ncc_server.api.v1.admin_codes import router as admin_codes_router
 from ncc_server.api.v1.agent_pairings import router as agent_pairings_router
+from ncc_server.api.v1.android_app import dashboard_router as android_dashboard_router
+from ncc_server.api.v1.android_app import fleet_router as android_fleet_router
+from ncc_server.api.v1.android_app import node_router as android_node_router
 from ncc_server.api.v1.chat import router as chat_router
 from ncc_server.api.v1.fleet import router as fleet_router
 from ncc_server.api.v1.games import router as games_router
@@ -25,6 +28,9 @@ router.include_router(node_fleet_router)
 router.include_router(location_node_router)
 router.include_router(location_dashboard_router)
 router.include_router(map_router)
+router.include_router(android_dashboard_router)
+router.include_router(android_node_router)
+router.include_router(android_fleet_router)
 router.include_router(fleet_router)
 router.include_router(games_router)
 router.include_router(chat_router)

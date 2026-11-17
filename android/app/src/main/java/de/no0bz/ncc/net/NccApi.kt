@@ -129,6 +129,43 @@ class NccApi(
         }
     }
 
+    /** Angebotene App-Version oder null, wenn der Server keine verteilt. */
+    suspend fun appRelease(token: String): AppRelease? = withContext(Dispatchers.IO) {
+        val request = Request.Builder().url("$baseUrl/api/v1/nodes/app-release").get().header("Authorization", "Bearer $token").build()
+        client.newCall(request).execute().use { response ->
+            val text = response.body.string()
+            if (!response.isSuccessful) throw ApiException(response.code, "HTTP ${response.code}: ${text.take(200)}")
+            if (text.isBlank() || text == "null") null else json.decodeFromString(AppRelease.serializer(), text)
+        }
+    }
+
+    /** Lädt die APK in [target]; meldet den Fortschritt (0..1) über [onProgress]. */
+    suspend fun downloadApk(token: String, target: File, onProgress: (Float) -> Unit = {}): Unit = withContext(Dispatchers.IO) {
+        val request = Request.Builder().url("$baseUrl/api/v1/nodes/app-release/apk").get().header("Authorization", "Bearer $token").build()
+        uploadClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw ApiException(response.code, "HTTP ${response.code}")
+            val total = response.body.contentLength().takeIf { it > 0 }
+            val partial = File(target.parentFile, target.name + ".part")
+            try {
+                partial.outputStream().use { out ->
+                    val input = response.body.byteStream()
+                    val buffer = ByteArray(64 * 1024)
+                    var done = 0L
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        out.write(buffer, 0, read)
+                        done += read
+                        if (total != null) onProgress(done.toFloat() / total)
+                    }
+                }
+                if (!partial.renameTo(target)) throw IOException("Update konnte nicht gespeichert werden")
+            } finally {
+                partial.delete()
+            }
+        }
+    }
+
     suspend fun fleet(token: String): List<FleetNode> =
         get("/api/v1/nodes/fleet", ListSerializer(FleetNode.serializer()), token)
 
