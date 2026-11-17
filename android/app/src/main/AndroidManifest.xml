@@ -14,6 +14,8 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Privat verteilte App: darf direkt fragen, ob Android sie vom Akku-Sparen ausnimmt (Warnungen pünktlich). -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- Updates über den eigenen NCC-Server; Android fragt vor jeder Installation nach. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- Die App startet die Kamera-App des Systems; sie braucht selbst keine Kamera-Berechtigung. -->
     <queries>
@@ -59,6 +61,29 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <receiver
+            android:name=".widget.NccWidget"
+            android:exported="false"
+            android:label="NCC Flotte">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_info" />
+        </receiver>
+
+        <service
+            android:name=".widget.NccTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_stat_ncc"
+            android:label="NCC"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
 
         <receiver
             android:name=".service.BootReceiver"

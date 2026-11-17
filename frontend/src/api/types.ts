@@ -230,6 +230,21 @@ export interface AndroidMetrics {
   network?: { type?: string; vpn?: boolean; unmetered?: boolean };
 }
 
+/** The APK the NCC server offers to its Android apps. */
+export interface AndroidRelease {
+  version_code: number;
+  version_name: string;
+  size: number;
+  sha256: string;
+  notes: string;
+  uploaded_at: ISODate;
+}
+
+export interface AndroidAppConfig {
+  interval_seconds?: 30 | 60 | 120 | 300;
+  upload_rule?: "wifi_charging" | "immediate";
+}
+
 /** GPS history condensed to ~11 m cells: [latitude, longitude, count]. */
 export interface LocationHeatmap {
   days: number;

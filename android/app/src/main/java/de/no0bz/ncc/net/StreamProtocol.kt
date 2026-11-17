@@ -9,6 +9,8 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 
@@ -35,7 +37,12 @@ sealed interface StreamEvent {
     data class AlertResolved(val alert: AppAlert) : StreamEvent
     data class ChatNew(val message: ChatMessage) : StreamEvent
     /** Einstellung wurde im Dashboard geändert (null = nicht enthalten). */
-    data class ConfigUpdate(val locationTracking: Boolean?) : StreamEvent
+    data class ConfigUpdate(
+        val locationTracking: Boolean? = null,
+        val intervalSeconds: Int? = null,
+        val uploadRule: String? = null,
+    ) : StreamEvent
+    data class AppUpdate(val release: AppRelease) : StreamEvent
     data object Ping : StreamEvent
 }
 
@@ -57,7 +64,12 @@ object StreamProtocol {
             "alert.new" -> StreamEvent.AlertNew(NccApi.json.decodeFromJsonElement(message["alert"]!!))
             "alert.resolved" -> StreamEvent.AlertResolved(NccApi.json.decodeFromJsonElement(message["alert"]!!))
             "chat.new" -> StreamEvent.ChatNew(NccApi.json.decodeFromJsonElement(message["message"]!!))
-            "config.update" -> StreamEvent.ConfigUpdate(message["location_tracking"]?.jsonPrimitive?.booleanOrNull)
+            "config.update" -> StreamEvent.ConfigUpdate(
+                locationTracking = message["location_tracking"]?.jsonPrimitive?.booleanOrNull,
+                intervalSeconds = message["interval_seconds"]?.jsonPrimitive?.intOrNull,
+                uploadRule = message["upload_rule"]?.jsonPrimitive?.contentOrNull,
+            )
+            "app.update" -> StreamEvent.AppUpdate(NccApi.json.decodeFromJsonElement(message["release"]!!))
             "ping" -> StreamEvent.Ping
             else -> null
         }

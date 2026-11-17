@@ -10,6 +10,7 @@ import { CopyButton, Dialog, Empty, ErrorState, Lamp, Loading, PageHead, RelTime
 import { fmtBytes } from "../../lib/format";
 import { platformLabel, sortByLayout } from "../../lib/node";
 import type { Route } from "../../lib/router";
+import { AndroidReleasePanel } from "./AndroidRelease";
 import "./releases.css";
 
 export default function Releases(_: { route: Route }) {
@@ -44,6 +45,8 @@ export default function Releases(_: { route: Route }) {
           </div>
         )}
       </section>
+
+      <AndroidReleasePanel />
 
       <section className="panel section" aria-labelledby="list-title">
         <div className="panel-head"><h2 id="list-title">Registrierte Releases</h2></div>

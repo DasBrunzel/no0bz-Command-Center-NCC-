@@ -115,7 +115,9 @@ object MetricsMapper {
     }
 
     /** Metadaten für Kopplung, Anmeldung und Lebenszeichen (nur einfache Werte erlaubt). */
-    fun metadata(s: DeviceSnapshot, heartbeatIntervalSeconds: Int, appVersion: String): Map<String, JsonPrimitive> = mapOf(
+    fun metadata(s: DeviceSnapshot, heartbeatIntervalSeconds: Int, appVersion: String, uploadRule: String? = null): Map<String, JsonPrimitive> = listOfNotNull(
+        uploadRule?.let { "upload_rule" to JsonPrimitive(it) },
+    ).toMap() + mapOf(
         "architecture" to JsonPrimitive(s.soc.abis.firstOrNull() ?: "unknown"),
         "os_release" to JsonPrimitive("Android ${s.device.androidRelease}"),
         "model" to JsonPrimitive("${s.device.manufacturer} ${s.device.model}"),

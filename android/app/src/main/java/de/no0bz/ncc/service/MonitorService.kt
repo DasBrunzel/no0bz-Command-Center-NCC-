@@ -18,6 +18,14 @@ import de.no0bz.ncc.collect.LocationReader
 import de.no0bz.ncc.collect.MetricsMapper
 import de.no0bz.ncc.data.AppSettings
 import de.no0bz.ncc.data.ChatStore
+import de.no0bz.ncc.data.INTERVAL_CHOICES
+import de.no0bz.ncc.data.UploadRule
+import de.no0bz.ncc.update.AppUpdater
+import de.no0bz.ncc.update.UpdateState
+import de.no0bz.ncc.widget.NccTileService
+import de.no0bz.ncc.widget.NccWidget
+import de.no0bz.ncc.widget.WidgetData
+import de.no0bz.ncc.widget.WidgetStore
 import de.no0bz.ncc.data.PairingState
 import de.no0bz.ncc.data.TelemetryLog
 import de.no0bz.ncc.net.ApiException
@@ -60,6 +68,8 @@ class MonitorService : Service() {
     private lateinit var log: TelemetryLog
     private lateinit var alerts: AlertNotifier
     private lateinit var locations: LocationReader
+    private lateinit var updater: AppUpdater
+    private var lastUpdateCheck = 0L
 
     private val socket = LiveSocket()
     private var streamJob: Job? = null
@@ -73,6 +83,7 @@ class MonitorService : Service() {
         log = logFor(this)
         alerts = AlertNotifier(this, settings)
         locations = LocationReader(this)
+        updater = AppUpdater(this, settings)
         createChannel()
     }
 
@@ -115,6 +126,8 @@ class MonitorService : Service() {
     override fun onDestroy() {
         scope.cancel()
         LiveState.setConnected(false)
+        NccWidget.refresh(this, WidgetStore.load(this).copy(monitoring = false, connected = false))
+        NccTileService.requestUpdate(this)
         super.onDestroy()
     }
 
@@ -148,10 +161,17 @@ class MonitorService : Service() {
         if (token != null && network != null) {
             val api = NccApi(s.serverUrl)
             try {
-                val beat = api.heartbeat(token, HeartbeatRequest(BuildConfig.VERSION_NAME, MetricsMapper.metadata(snapshot, s.intervalSeconds, BuildConfig.VERSION_NAME)))
+                val beat = api.heartbeat(token, HeartbeatRequest(BuildConfig.VERSION_NAME, MetricsMapper.metadata(snapshot, s.intervalSeconds, BuildConfig.VERSION_NAME, s.uploadRule.wire)))
                 // Der Server ist maßgeblich: Schalter im Dashboard kommt spätestens hier an.
                 if (beat.locationTracking != s.locationTracking) settings.setLocationTracking(beat.locationTracking)
                 settings.markHeartbeat(System.currentTimeMillis())
+                if (System.currentTimeMillis() - lastUpdateCheck > UPDATE_CHECK_MS) {
+                    lastUpdateCheck = System.currentTimeMillis()
+                    val before = AppUpdater.updates.value
+                    val checked = updater.check()
+                    if (checked is UpdateState.Available && before !is UpdateState.Available) alerts.appUpdate(checked.release)
+                }
+                refreshWidget(api, token, snapshot.battery.levelPercent, snapshot.battery.charging || snapshot.battery.full)
                 if (forceUpload || conditions.uploadAllowed(s.uploadRule)) {
                     val sent = upload(api, token)
                     if (sent > 0) status += " · $sent hochgeladen"
@@ -194,7 +214,10 @@ class MonitorService : Service() {
                 socket.run(
                     s.serverUrl,
                     token,
-                    onOpen = { LiveState.setConnected(true) },
+                    onOpen = {
+                        LiveState.setConnected(true)
+                        markWidgetConnected(true)
+                    },
                 ) { event ->
                     backoffMs = 1_000L
                     handle(event)
@@ -206,6 +229,7 @@ class MonitorService : Service() {
                 Log.i(TAG, "Live-Kanal getrennt: ${e.message}")
             }
             LiveState.setConnected(false)
+            markWidgetConnected(false)
             stopLive()
             delay(backoffMs)
             backoffMs = (backoffMs * 2).coerceAtMost(60_000L)
@@ -219,9 +243,16 @@ class MonitorService : Service() {
             is StreamEvent.AlertSnapshot -> alerts.snapshot(event.alerts)
             is StreamEvent.AlertNew -> alerts.opened(event.alert)
             is StreamEvent.AlertResolved -> alerts.resolved(event.alert)
-            is StreamEvent.ConfigUpdate -> event.locationTracking?.let { enabled ->
-                settings.setLocationTracking(enabled)
+            is StreamEvent.ConfigUpdate -> {
+                // Vom Dashboard geändert: übernehmen und sofort mit den neuen Werten weitermessen.
+                event.locationTracking?.let { settings.setLocationTracking(it) }
+                event.intervalSeconds?.takeIf { it in INTERVAL_CHOICES }?.let { settings.setInterval(it) }
+                UploadRule.fromWire(event.uploadRule)?.let { settings.setUploadRule(it) }
                 wake.trySend(false)
+            }
+            is StreamEvent.AppUpdate -> {
+                val result = updater.offer(event.release)
+                if (result is UpdateState.Available) alerts.appUpdate(event.release)
             }
             is StreamEvent.ChatNew -> {
                 ChatStore.append(listOf(event.message))
@@ -258,6 +289,36 @@ class MonitorService : Service() {
         liveJob?.cancel()
         liveJob = null
         LiveState.setWatched(false)
+    }
+
+    /** Verbindungsstatus sofort ins Widget und in die Kachel übernehmen, nicht erst bei der nächsten Messung. */
+    private fun markWidgetConnected(connected: Boolean) {
+        val stored = WidgetStore.load(this)
+        if (stored.connected != connected || !stored.monitoring) {
+            NccWidget.refresh(this, stored.copy(connected = connected, monitoring = true))
+            NccTileService.requestUpdate(this)
+        }
+    }
+
+    /** Widget und Schnelleinstellungs-Kachel mit Flotte, Warnungen und Akku versorgen. */
+    private suspend fun refreshWidget(api: NccApi, token: String, battery: Int?, charging: Boolean) {
+        val previous = WidgetStore.load(this)
+        // Die Geräteliste nur laden, wenn auch ein Widget auf dem Startbildschirm liegt.
+        val fleet = if (NccWidget.placed(this)) runCatching { api.fleet(token) }.getOrNull() else null
+        NccWidget.refresh(
+            this,
+            WidgetData(
+                fleetOnline = fleet?.count { it.online } ?: previous.fleetOnline,
+                fleetTotal = fleet?.size ?: previous.fleetTotal,
+                alerts = LiveState.activeAlerts.value,
+                batteryPercent = battery,
+                charging = charging,
+                monitoring = true,
+                connected = LiveState.connected.value,
+                updatedAtMillis = System.currentTimeMillis(),
+            ),
+        )
+        NccTileService.requestUpdate(this)
     }
 
     /** Lädt den Puffer in Paketen zu 100 Messpunkten hoch, bis er leer ist. */
@@ -304,6 +365,7 @@ class MonitorService : Service() {
         private const val CHANNEL_ID = "monitor"
         private const val NOTIFICATION_ID = 1
         private const val MAX_BATCHES_PER_TICK = 50
+        private const val UPDATE_CHECK_MS = 6 * 60 * 60 * 1000L
         private val TIME = DateTimeFormatter.ofPattern("HH:mm:ss")
 
         const val ACTION_UPLOAD_NOW = "de.no0bz.ncc.UPLOAD_NOW"

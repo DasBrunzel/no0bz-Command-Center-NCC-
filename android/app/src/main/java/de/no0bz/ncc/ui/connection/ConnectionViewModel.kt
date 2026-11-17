@@ -9,6 +9,9 @@ import androidx.core.content.FileProvider
 import de.no0bz.ncc.collect.LocationAccess
 import de.no0bz.ncc.collect.LocationReader
 import de.no0bz.ncc.data.GpxExport
+import de.no0bz.ncc.net.AppRelease
+import de.no0bz.ncc.update.AppUpdater
+import de.no0bz.ncc.update.UpdateState
 import de.no0bz.ncc.service.LiveState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -169,6 +172,31 @@ class ConnectionViewModel(application: Application) : AndroidViewModel(applicati
 
     fun setLiveWifiOnly(enabled: Boolean) {
         viewModelScope.launch { appSettings.setLiveWifiOnly(enabled) }
+    }
+
+    private val updater = AppUpdater(application, appSettings)
+    val updates: StateFlow<UpdateState> = AppUpdater.updates
+
+    fun checkUpdate() {
+        viewModelScope.launch { updater.check() }
+    }
+
+    fun downloadUpdate(release: AppRelease) {
+        viewModelScope.launch { updater.download(release) }
+    }
+
+    /** Öffnet den Android-Installer – oder zuerst die Erlaubnis „Apps aus dieser Quelle installieren“. */
+    fun installIntent(apk: File): Intent =
+        if (updater.canInstall()) updater.installIntent(apk) else updater.allowInstallIntent().addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+    fun installAllowed(): Boolean = updater.canInstall()
+
+    /** Nach dem Anlegen des Widgets gleich messen, damit es nicht bis zum nächsten Intervall leer bleibt. */
+    fun refreshWidgetSoon() {
+        viewModelScope.launch {
+            delay(4_000)
+            if (appSettings.current().serviceEnabled) MonitorService.start(app, MonitorService.ACTION_RESCHEDULE)
+        }
     }
 
     private val locationReader = LocationReader(application)

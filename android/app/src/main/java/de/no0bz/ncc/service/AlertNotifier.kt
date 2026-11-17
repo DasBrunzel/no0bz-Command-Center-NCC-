@@ -10,6 +10,7 @@ import de.no0bz.ncc.MainActivity
 import de.no0bz.ncc.R
 import de.no0bz.ncc.data.AppSettings
 import de.no0bz.ncc.net.AppAlert
+import de.no0bz.ncc.net.AppRelease
 import de.no0bz.ncc.net.ChatMessage
 
 /**
@@ -30,6 +31,11 @@ class AlertNotifier(context: Context, private val settings: AppSettings) {
         manager.createNotificationChannel(
             NotificationChannel(CHANNEL_RESOLVED, "NCC-Warnungen behoben", NotificationManager.IMPORTANCE_LOW).apply {
                 description = "Meldet leise, wenn eine Warnung vorbei ist."
+            },
+        )
+        manager.createNotificationChannel(
+            NotificationChannel(CHANNEL_UPDATES, "App-Updates", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "Neue NCC-App-Versionen von deinem NCC-Server."
             },
         )
         manager.createNotificationChannel(
@@ -93,6 +99,18 @@ class AlertNotifier(context: Context, private val settings: AppSettings) {
 
     fun clearChat() = manager.cancel(CHAT_NOTIFICATION_ID)
 
+    /** Neue App-Version auf dem NCC-Server. */
+    fun appUpdate(release: AppRelease) {
+        manager.notify(
+            UPDATE_NOTIFICATION_ID,
+            builder(CHANNEL_UPDATES, MainActivity.OPEN_CONNECTION)
+                .setGroup(null)
+                .setContentTitle("NCC ${release.versionName} ist verfügbar")
+                .setContentText(release.notes.ifBlank { "Antippen zum Installieren." })
+                .build(),
+        )
+    }
+
     private fun post(alert: AppAlert) {
         val title = if (alert.critical) "🔴 Kritisch · ${alert.nodeName}" else "⚠️ Warnung · ${alert.nodeName}"
         manager.notify(
@@ -109,7 +127,7 @@ class AlertNotifier(context: Context, private val settings: AppSettings) {
     private fun builder(channel: String, action: String? = null): Notification.Builder {
         val open = PendingIntent.getActivity(
             app,
-            if (action == null) 1 else 2,
+            when (action) { null -> 1; MainActivity.OPEN_CHAT -> 2; else -> 5 },
             Intent(app, MainActivity::class.java).setAction(action).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
@@ -125,6 +143,8 @@ class AlertNotifier(context: Context, private val settings: AppSettings) {
         private const val CHANNEL_RESOLVED = "alerts_resolved"
         private const val CHANNEL_CHAT = "chat"
         private const val CHAT_NOTIFICATION_ID = 2
+        private const val CHANNEL_UPDATES = "updates"
+        private const val UPDATE_NOTIFICATION_ID = 3
         private const val GROUP = "ncc_alerts"
         private const val RESOLVED_VISIBLE_MS = 60 * 60 * 1000L
 

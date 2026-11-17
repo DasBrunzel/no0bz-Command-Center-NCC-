@@ -103,6 +103,7 @@
     display: grid; grid-template-columns: 3.5rem 1fr 5.5rem; align-items: center; gap: var(--s-3); font-size: var(--fs-s);
     & .num { text-align: end; font-variant-numeric: tabular-nums; }
   }
+  .android-settings { display: grid; gap: var(--s-3); grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); }
   .location-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-3); }
   .location-map {
     height: min(70vh, 36rem); border-radius: var(--r-3); border: 1px solid var(--c-line); overflow: hidden;

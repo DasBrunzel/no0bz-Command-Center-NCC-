@@ -65,6 +65,17 @@ data class HeartbeatResponse(
 @Serializable
 data class LocationTrackingRequest(val enabled: Boolean)
 
+/** Die App-Version, die der NCC-Server zum Installieren anbietet. */
+@Serializable
+data class AppRelease(
+    @SerialName("version_code") val versionCode: Int,
+    @SerialName("version_name") val versionName: String,
+    val size: Long,
+    val sha256: String,
+    val notes: String = "",
+    @SerialName("uploaded_at") val uploadedAt: String = "",
+)
+
 @Serializable
 data class DeletedResponse(val deleted: Int)
 
