@@ -15,6 +15,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    false,
     true,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, deferred, mapped_column, relationship
@@ -71,6 +72,8 @@ class Node(Base):
     # runs, "titles" keeps the title for the now-playing card and statistics.
     game_tracking: Mapped[str] = mapped_column(String(16), default="titles", nullable=False)
     auto_gaming_mode: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Opt-in GPS history for the heatmap (Android app); off until the owner switches it on.
+    location_tracking: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false(), nullable=False)
     # Extended by telemetry while a game runs; a manual gaming_mode_until wins.
     auto_gaming_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # User-chosen names and roles for unlabeled sensors, keyed like "fan:Fan #2".
@@ -220,6 +223,24 @@ class TelemetryPoint(Base):
     recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     payload: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
     node: Mapped[Node] = relationship(back_populates="telemetry")
+
+
+class LocationPoint(Base):
+    """One GPS fix of an app node, kept separately from telemetry for the opt-in heatmap.
+
+    Locations never stay inside telemetry payloads, so deleting the history
+    really deletes it. They are kept until the owner deletes them.
+    """
+
+    __tablename__ = "location_points"
+    __table_args__ = (Index("ux_location_node_recorded", "node_id", "recorded_at", unique=True),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    node_id: Mapped[str] = mapped_column(ForeignKey("nodes.id", ondelete="CASCADE"), nullable=False)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    latitude: Mapped[float] = mapped_column(Float, nullable=False)
+    longitude: Mapped[float] = mapped_column(Float, nullable=False)
+    accuracy_m: Mapped[float | None] = mapped_column(Float)
 
 
 class User(Base):

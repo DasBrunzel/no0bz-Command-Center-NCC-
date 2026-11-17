@@ -683,6 +683,7 @@ def _node_response(
         auto_gaming_until=node.auto_gaming_until,
         game_tracking=node.game_tracking,  # type: ignore[arg-type]
         auto_gaming_mode=node.auto_gaming_mode,
+        location_tracking=node.location_tracking,
         now_playing=_now_playing_response(session, node),
         sensor_labels=_sensor_labels(node),
         owner_user_id=node.owner_user_id,
