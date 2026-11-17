@@ -50,6 +50,8 @@ class ServerSettings(BaseSettings):
     # cached, because the dashboard's CSP only loads images from its own origin.
     map_tile_url: str = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
     map_tile_cache_dir: Path = Field(default_factory=lambda: ROOT / "ncc_map_tiles")
+    # The newest NCC Android app (APK) uploaded by the commander for private distribution.
+    android_release_dir: Path = Field(default_factory=lambda: ROOT / "ncc_android_release")
 
 
 @lru_cache
