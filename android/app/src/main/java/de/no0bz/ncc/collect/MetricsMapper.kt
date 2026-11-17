@@ -24,7 +24,15 @@ data class NetworkState(val type: String, val vpn: Boolean, val unmetered: Boole
 object MetricsMapper {
     private const val GIB = 1024.0 * 1024 * 1024
 
-    fun map(s: DeviceSnapshot, network: NetworkState?): JsonObject = buildJsonObject {
+    fun map(s: DeviceSnapshot, network: NetworkState?, location: LocationFix? = null): JsonObject = buildJsonObject {
+        // Nur bei eingeschaltetem Standortverlauf; der Server nimmt ihn aus den Messwerten heraus.
+        location?.let { fix ->
+            putJsonObject("location") {
+                put("lat", fix.latitude)
+                put("lon", fix.longitude)
+                fix.accuracyMeters?.let { put("accuracy_m", round1(it.toDouble())) }
+            }
+        }
         val onlineFreqs = s.cpu.cores.mapNotNull { it.curKhz }
         putJsonObject("cpu") {
             put("model", s.soc.displayName)

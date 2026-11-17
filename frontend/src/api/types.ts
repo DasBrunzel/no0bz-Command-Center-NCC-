@@ -130,6 +130,8 @@ export interface FleetNode {
   auto_gaming_until: ISODate | null;
   game_tracking: GameTracking;
   auto_gaming_mode: boolean;
+  /** Opt-in GPS history for the heatmap (Android app nodes). */
+  location_tracking?: boolean;
   now_playing: NowPlaying | null;
   sensor_labels: Record<string, SensorLabel>;
   owner_user_id: string | null;
@@ -226,6 +228,16 @@ export interface AndroidMetrics {
   battery?: { temperature_c?: number; charging?: boolean; full?: boolean; source?: string; health?: string; voltage_mv?: number; cycles?: number };
   thermal?: string;
   network?: { type?: string; vpn?: boolean; unmetered?: boolean };
+}
+
+/** GPS history condensed to ~11 m cells: [latitude, longitude, count]. */
+export interface LocationHeatmap {
+  days: number;
+  points: number;
+  stored_points: number;
+  first_at: ISODate | null;
+  last_at: ISODate | null;
+  cells: Array<[number, number, number]>;
 }
 
 /** Newest in-memory live sample of an app node; asking also tells the phone someone is watching. */

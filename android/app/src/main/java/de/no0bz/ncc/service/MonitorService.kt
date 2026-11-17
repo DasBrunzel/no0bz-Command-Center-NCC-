@@ -14,6 +14,7 @@ import de.no0bz.ncc.BuildConfig
 import de.no0bz.ncc.MainActivity
 import de.no0bz.ncc.R
 import de.no0bz.ncc.collect.DeviceReader
+import de.no0bz.ncc.collect.LocationReader
 import de.no0bz.ncc.collect.MetricsMapper
 import de.no0bz.ncc.data.AppSettings
 import de.no0bz.ncc.data.ChatStore
@@ -58,6 +59,7 @@ class MonitorService : Service() {
     private lateinit var conditions: Conditions
     private lateinit var log: TelemetryLog
     private lateinit var alerts: AlertNotifier
+    private lateinit var locations: LocationReader
 
     private val socket = LiveSocket()
     private var streamJob: Job? = null
@@ -70,11 +72,12 @@ class MonitorService : Service() {
         conditions = Conditions(this)
         log = logFor(this)
         alerts = AlertNotifier(this, settings)
+        locations = LocationReader(this)
         createChannel()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startForeground(NOTIFICATION_ID, notification("Startet …"), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        startForegroundWithTypes()
         when (intent?.action) {
             ACTION_STOP -> {
                 stopSelf()
@@ -85,6 +88,26 @@ class MonitorService : Service() {
         }
         if (loop?.isActive != true) loop = scope.launch { run() }
         return START_STICKY
+    }
+
+    /**
+     * Mit Standort-Berechtigung läuft der Dienst zusätzlich als „location“-Dienst, damit Android
+     * ihm im Hintergrund Standorte liefert. Ohne Berechtigung (oder wenn Android es ablehnt) nur „specialUse“.
+     */
+    private fun startForegroundWithTypes() {
+        val withLocation = ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE or ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+        val notification = notification("Startet …")
+        if (locations.access().any) {
+            try {
+                startForeground(NOTIFICATION_ID, notification, withLocation)
+                return
+            } catch (e: SecurityException) {
+                Log.i(TAG, "Standort-Dienst nicht erlaubt, starte ohne: ${e.message}")
+            } catch (e: IllegalStateException) {
+                Log.i(TAG, "Standort-Dienst nicht erlaubt, starte ohne: ${e.message}")
+            }
+        }
+        startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -115,7 +138,9 @@ class MonitorService : Service() {
         val snapshot = reader.read()
         val network = conditions.network()
         val now = Instant.ofEpochMilli(snapshot.recordedAtMillis)
-        log.append(TelemetryPoint(UUID.randomUUID().toString(), now.toString(), MetricsMapper.map(snapshot, network)))
+        // Standort nur bei eingeschaltetem Verlauf – sonst wird er gar nicht erst abgefragt.
+        val fix = if (s.locationTracking) locations.current() else null
+        log.append(TelemetryPoint(UUID.randomUUID().toString(), now.toString(), MetricsMapper.map(snapshot, network, fix)))
         settings.markSample(snapshot.recordedAtMillis)
 
         var status = "Gemessen ${TIME.format(LocalTime.now())}"
@@ -123,7 +148,9 @@ class MonitorService : Service() {
         if (token != null && network != null) {
             val api = NccApi(s.serverUrl)
             try {
-                api.heartbeat(token, HeartbeatRequest(BuildConfig.VERSION_NAME, MetricsMapper.metadata(snapshot, s.intervalSeconds, BuildConfig.VERSION_NAME)))
+                val beat = api.heartbeat(token, HeartbeatRequest(BuildConfig.VERSION_NAME, MetricsMapper.metadata(snapshot, s.intervalSeconds, BuildConfig.VERSION_NAME)))
+                // Der Server ist maßgeblich: Schalter im Dashboard kommt spätestens hier an.
+                if (beat.locationTracking != s.locationTracking) settings.setLocationTracking(beat.locationTracking)
                 settings.markHeartbeat(System.currentTimeMillis())
                 if (forceUpload || conditions.uploadAllowed(s.uploadRule)) {
                     val sent = upload(api, token)
@@ -192,6 +219,10 @@ class MonitorService : Service() {
             is StreamEvent.AlertSnapshot -> alerts.snapshot(event.alerts)
             is StreamEvent.AlertNew -> alerts.opened(event.alert)
             is StreamEvent.AlertResolved -> alerts.resolved(event.alert)
+            is StreamEvent.ConfigUpdate -> event.locationTracking?.let { enabled ->
+                settings.setLocationTracking(enabled)
+                wake.trySend(false)
+            }
             is StreamEvent.ChatNew -> {
                 ChatStore.append(listOf(event.message))
                 val own = event.message.senderNodeId == settings.current().nodeId

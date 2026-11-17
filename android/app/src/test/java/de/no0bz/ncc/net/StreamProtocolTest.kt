@@ -46,7 +46,10 @@ class StreamProtocolTest {
 
     @Test
     fun ignoresUnknownOrBrokenMessages() {
-        assertNull(StreamProtocol.parse("""{"type":"config.update","interval_s":60}"""))
+        assertNull(StreamProtocol.parse("""{"type":"unbekannt"}"""))
+        // Einstellungen, die die App (noch) nicht kennt, ändern nichts.
+        assertEquals(StreamEvent.ConfigUpdate(null), StreamProtocol.parse("""{"type":"config.update","interval_s":60}"""))
+        assertEquals(StreamEvent.ConfigUpdate(true), StreamProtocol.parse("""{"type":"config.update","location_tracking":true}"""))
         assertNull(StreamProtocol.parse("kein json"))
         assertNull(StreamProtocol.parse("""{"type":"alert.new"}"""))
     }

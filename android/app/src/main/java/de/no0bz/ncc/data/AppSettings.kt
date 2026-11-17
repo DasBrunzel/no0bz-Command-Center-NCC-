@@ -51,6 +51,8 @@ data class Settings(
     val liveWifiOnly: Boolean,
     /** Neue Chat-Nachrichten als Benachrichtigung zeigen. */
     val chatNotifications: Boolean,
+    /** Standortverlauf für die Heatmap (Spiegel des Server-Schalters). */
+    val locationTracking: Boolean,
 )
 
 /** Einstellungen und Zustand der App, gespeichert in DataStore. Das Token liegt verschlüsselt. */
@@ -78,6 +80,7 @@ class AppSettings(context: Context) {
             alertsEnabled = p[ALERTS_ENABLED] ?: true,
             liveWifiOnly = p[LIVE_WIFI_ONLY] ?: false,
             chatNotifications = p[CHAT_NOTIFICATIONS] ?: true,
+            locationTracking = p[LOCATION_TRACKING] ?: false,
         )
     }
 
@@ -86,6 +89,7 @@ class AppSettings(context: Context) {
     suspend fun setAlertsEnabled(enabled: Boolean) = store.edit { it[ALERTS_ENABLED] = enabled }
     suspend fun setLiveWifiOnly(enabled: Boolean) = store.edit { it[LIVE_WIFI_ONLY] = enabled }
     suspend fun setChatNotifications(enabled: Boolean) = store.edit { it[CHAT_NOTIFICATIONS] = enabled }
+    suspend fun setLocationTracking(enabled: Boolean) = store.edit { it[LOCATION_TRACKING] = enabled }
 
     suspend fun current(): Settings = settings.first()
 
@@ -131,6 +135,7 @@ class AppSettings(context: Context) {
         it.remove(PAIRING_EXPIRES)
         it[PAIRING_STATE] = PairingState.UNPAIRED.name
         it.remove(SEEN_ALERTS)
+        it.remove(LOCATION_TRACKING)
         if (reason != null) it[LAST_ERROR] = reason else it.remove(LAST_ERROR)
     }
 
@@ -162,6 +167,7 @@ class AppSettings(context: Context) {
         private val ALERTS_ENABLED = booleanPreferencesKey("alerts_enabled")
         private val LIVE_WIFI_ONLY = booleanPreferencesKey("live_wifi_only")
         private val CHAT_NOTIFICATIONS = booleanPreferencesKey("chat_notifications")
+        private val LOCATION_TRACKING = booleanPreferencesKey("location_tracking")
         private val SEEN_ALERTS = stringSetPreferencesKey("seen_alerts")
 
         private val random = SecureRandom()

@@ -18,6 +18,7 @@ const NetworkTab = lazy(() => import("./NetworkTab"));
 const GamesTab = lazy(() => import("./GamesTab"));
 const UpdatesTab = lazy(() => import("./UpdatesTab"));
 const ManageTab = lazy(() => import("./ManageTab"));
+const LocationTab = lazy(() => import("./LocationTab"));
 
 const TABS = [
   { key: "", label: "Übersicht" },
@@ -27,6 +28,8 @@ const TABS = [
   { key: "updates", label: "Updates" },
   { key: "verwaltung", label: "Verwaltung" },
 ] as const;
+/** Android app nodes get a location tab; PCs have no GPS. */
+const ANDROID_TABS = [...TABS.slice(0, 1), { key: "standort", label: "Standort" }, ...TABS.slice(1)] as const;
 
 export default function NodeDetail({ route }: { route: Route }) {
   const nodeId = route.path[1]!;
@@ -107,7 +110,7 @@ export default function NodeDetail({ route }: { route: Route }) {
       )}
 
       <nav className="tabs" aria-label="Bereiche des Geräts">
-        {TABS.map((item) => (
+        {(isAndroid(data) ? ANDROID_TABS : TABS).map((item) => (
           <a
             key={item.key}
             href={href(tabHref(item.key))}
@@ -122,6 +125,7 @@ export default function NodeDetail({ route }: { route: Route }) {
 
       <Suspense fallback={<Loading />}>
         {tab === "" && (isAndroid(data) ? <AndroidLive node={data} /> : <OverviewTab node={data} />)}
+        {tab === "standort" && isAndroid(data) && <LocationTab node={data} />}
         {tab === "sensoren" && <SensorsTab node={data} />}
         {tab === "netzwerk" && <NetworkTab node={data} />}
         {tab === "spiele" && <GamesTab node={data} />}

@@ -59,7 +59,14 @@ data class HeartbeatRequest(
 data class HeartbeatResponse(
     val accepted: Boolean,
     @SerialName("node_id") val nodeId: String,
+    @SerialName("location_tracking") val locationTracking: Boolean = false,
 )
+
+@Serializable
+data class LocationTrackingRequest(val enabled: Boolean)
+
+@Serializable
+data class DeletedResponse(val deleted: Int)
 
 @Serializable
 data class TelemetryPoint(

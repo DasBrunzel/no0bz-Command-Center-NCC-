@@ -116,6 +116,19 @@ class NccApi(
         }
     }
 
+    suspend fun setLocationTracking(token: String, enabled: Boolean): Boolean =
+        send("PUT", "/api/v1/nodes/location-tracking", LocationTrackingRequest(enabled), LocationTrackingRequest.serializer(), LocationTrackingRequest.serializer(), token).enabled
+
+    /** Löscht den Standortverlauf dieses Geräts auf dem Server; liefert die Anzahl gelöschter Punkte. */
+    suspend fun deleteLocations(token: String): Int = withContext(Dispatchers.IO) {
+        val request = Request.Builder().url("$baseUrl/api/v1/nodes/locations").delete().header("Authorization", "Bearer $token").build()
+        client.newCall(request).execute().use { response ->
+            val text = response.body.string()
+            if (!response.isSuccessful) throw ApiException(response.code, "HTTP ${response.code}: ${text.take(200)}")
+            json.decodeFromString(DeletedResponse.serializer(), text).deleted
+        }
+    }
+
     suspend fun fleet(token: String): List<FleetNode> =
         get("/api/v1/nodes/fleet", ListSerializer(FleetNode.serializer()), token)
 
@@ -135,10 +148,19 @@ class NccApi(
         requestSerializer: KSerializer<Req>,
         responseSerializer: KSerializer<Res>,
         token: String? = null,
+    ): Res = send("POST", path, body, requestSerializer, responseSerializer, token)
+
+    private suspend fun <Req, Res> send(
+        method: String,
+        path: String,
+        body: Req,
+        requestSerializer: KSerializer<Req>,
+        responseSerializer: KSerializer<Res>,
+        token: String? = null,
     ): Res = withContext(Dispatchers.IO) {
         val request = Request.Builder()
             .url(baseUrl + path)
-            .post(json.encodeToString(requestSerializer, body).toRequestBody(JSON))
+            .method(method, json.encodeToString(requestSerializer, body).toRequestBody(JSON))
             .apply { if (token != null) header("Authorization", "Bearer $token") }
             .build()
         client.newCall(request).execute().use { response ->
