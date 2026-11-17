@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Erzeugt einmalig den Release-Schlüssel der NCC-Android-App.
 

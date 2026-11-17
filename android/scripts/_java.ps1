@@ -1,4 +1,4 @@
-# Findet ein JDK 17+ für Gradle und keytool: NCC_JAVA_HOME, JAVA_HOME (wenn neu genug) oder das
+﻿# Findet ein JDK 17+ für Gradle und keytool: NCC_JAVA_HOME, JAVA_HOME (wenn neu genug) oder das
 # JDK aus Android Studio (über dessen Deinstallationseintrag in der Registry).
 function Find-NccJavaHome {
     $candidates = @()

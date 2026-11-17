@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Baut eine signierte Release-APK der NCC-Android-App.
 
@@ -32,7 +32,7 @@ try {
     $env:JAVA_HOME = Find-NccJavaHome
     Push-Location $project
     # Ohne Konfigurations-Cache, damit das Passwort nicht im Gradle-Cache landet.
-    & .\gradlew.bat --no-configuration-cache testReleaseUnitTest assembleRelease
+    & .\gradlew.bat --no-configuration-cache testDebugUnitTest assembleRelease
     if ($LASTEXITCODE -ne 0) { throw 'Der Release-Build ist fehlgeschlagen.' }
 } finally {
     Pop-Location -ErrorAction SilentlyContinue
