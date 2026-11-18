@@ -29,3 +29,23 @@ class ConditionsTest {
         assertNull(Conditions.pickUnderlying(emptyList()))
     }
 }
+
+class PoweredTest {
+    private val discharging = android.os.BatteryManager.BATTERY_STATUS_DISCHARGING
+
+    @Test
+    fun pluggedIntoPcCountsEvenIfLevelDoesNotRise() {
+        // Pixel am PC-USB: angesteckt, aber isCharging=false und Status „entlädt“.
+        org.junit.Assert.assertTrue(Conditions.powered(plugged = android.os.BatteryManager.BATTERY_PLUGGED_USB, status = discharging, isCharging = false))
+    }
+
+    @Test
+    fun adaptiveChargingPauseStillCounts() {
+        org.junit.Assert.assertTrue(Conditions.powered(plugged = android.os.BatteryManager.BATTERY_PLUGGED_AC, status = android.os.BatteryManager.BATTERY_STATUS_NOT_CHARGING, isCharging = false))
+    }
+
+    @Test
+    fun unpluggedDoesNotCount() {
+        org.junit.Assert.assertFalse(Conditions.powered(plugged = 0, status = discharging, isCharging = false))
+    }
+}

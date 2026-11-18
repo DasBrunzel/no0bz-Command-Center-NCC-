@@ -12,8 +12,8 @@ android {
         applicationId = "de.no0bz.ncc"
         minSdk = 34
         targetSdk = 37
-        versionCode = 7
-        versionName = "0.6.1"
+        versionCode = 8
+        versionName = "0.6.2"
     }
 
     // Release-Signatur nur aus Umgebungsvariablen (siehe scripts/build-release.ps1) –

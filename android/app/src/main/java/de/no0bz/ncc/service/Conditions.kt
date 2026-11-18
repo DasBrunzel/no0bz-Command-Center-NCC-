@@ -1,6 +1,8 @@
 package de.no0bz.ncc.service
 
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.BatteryManager
@@ -9,7 +11,8 @@ import de.no0bz.ncc.data.UploadRule
 
 /** Liest Netz- und Ladezustand für die Upload-Regel und die Tailscale-Prüfung. */
 class Conditions(context: Context) {
-    private val connectivity = context.applicationContext.getSystemService(ConnectivityManager::class.java)
+    private val appContext = context.applicationContext
+    private val connectivity = appContext.getSystemService(ConnectivityManager::class.java)
     private val battery = context.applicationContext.getSystemService(BatteryManager::class.java)
 
     fun network(): NetworkState? {
@@ -44,6 +47,10 @@ class Conditions(context: Context) {
     data class Link(val type: String, val unmetered: Boolean, val validated: Boolean)
 
     companion object {
+        fun powered(plugged: Int, status: Int, isCharging: Boolean): Boolean =
+            plugged != 0 || isCharging ||
+                status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
+
         private val PREFERENCE = listOf("ethernet", "wifi", "cellular", "other")
 
         /** Das Netz, über das Android den Verkehr tatsächlich leitet: geprüfte Netze zuerst, dann LAN vor WLAN vor Mobilfunk. */
@@ -53,7 +60,18 @@ class Conditions(context: Context) {
 
     fun vpnActive(): Boolean = network()?.vpn == true
 
-    fun charging(): Boolean = battery.isCharging
+    /**
+     * „Am Laden“ heißt: am Netzteil oder USB angesteckt. `isCharging` allein reicht nicht – Android meldet es nur,
+     * solange der Akkustand steigt (nicht am schwachen PC-USB und nicht, wenn das adaptive Laden bei 80 % pausiert).
+     */
+    fun charging(): Boolean {
+        val sticky = appContext.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        return powered(
+            plugged = sticky?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) ?: 0,
+            status = sticky?.getIntExtra(BatteryManager.EXTRA_STATUS, BatteryManager.BATTERY_STATUS_UNKNOWN) ?: BatteryManager.BATTERY_STATUS_UNKNOWN,
+            isCharging = battery.isCharging,
+        )
+    }
 
     fun uploadAllowed(rule: UploadRule): Boolean = when (rule) {
         UploadRule.IMMEDIATE -> network() != null
