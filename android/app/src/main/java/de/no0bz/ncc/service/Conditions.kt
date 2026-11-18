@@ -1,6 +1,8 @@
 package de.no0bz.ncc.service
 
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.BatteryManager
@@ -9,32 +11,67 @@ import de.no0bz.ncc.data.UploadRule
 
 /** Liest Netz- und Ladezustand für die Upload-Regel und die Tailscale-Prüfung. */
 class Conditions(context: Context) {
-    private val connectivity = context.applicationContext.getSystemService(ConnectivityManager::class.java)
+    private val appContext = context.applicationContext
+    private val connectivity = appContext.getSystemService(ConnectivityManager::class.java)
     private val battery = context.applicationContext.getSystemService(BatteryManager::class.java)
 
     fun network(): NetworkState? {
         val caps = connectivity.getNetworkCapabilities(connectivity.activeNetwork) ?: return null
         val vpn = caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
-        // Mit aktivem VPN steckt das echte Netz dahinter; der Typ kommt dann aus allen Netzen.
+        // Mit aktivem VPN (Tailscale) steckt das echte Netz dahinter. Oft sind WLAN und Mobilfunk
+        // gleichzeitig verbunden – Android leitet dann über das WLAN, also zählt das WLAN.
         val underlying = if (vpn) {
-            connectivity.allNetworksCapabilities().firstOrNull { !it.hasTransport(NetworkCapabilities.TRANSPORT_VPN) && it.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) }
+            pickUnderlying(
+                connectivity.allNetworksCapabilities()
+                    .filter { !it.hasTransport(NetworkCapabilities.TRANSPORT_VPN) && it.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) }
+                    .map { it.toLink() },
+            )
         } else {
-            caps
+            caps.toLink()
         }
-        val type = when {
-            underlying == null -> "unknown"
-            underlying.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "wifi"
-            underlying.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "ethernet"
-            underlying.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "cellular"
+        return NetworkState(type = underlying?.type ?: "unknown", vpn = vpn, unmetered = underlying?.unmetered == true)
+    }
+
+    private fun NetworkCapabilities.toLink() = Link(
+        type = when {
+            hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "wifi"
+            hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "ethernet"
+            hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "cellular"
             else -> "other"
-        }
-        val unmetered = underlying?.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED) == true
-        return NetworkState(type = type, vpn = vpn, unmetered = unmetered)
+        },
+        unmetered = hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED),
+        validated = hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED),
+    )
+
+    /** Ein Netz unter dem VPN, auf das Nötigste reduziert (testbar ohne Android). */
+    data class Link(val type: String, val unmetered: Boolean, val validated: Boolean)
+
+    companion object {
+        fun powered(plugged: Int, status: Int, isCharging: Boolean): Boolean =
+            plugged != 0 || isCharging ||
+                status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
+
+        private val PREFERENCE = listOf("ethernet", "wifi", "cellular", "other")
+
+        /** Das Netz, über das Android den Verkehr tatsächlich leitet: geprüfte Netze zuerst, dann LAN vor WLAN vor Mobilfunk. */
+        fun pickUnderlying(links: List<Link>): Link? =
+            links.minWithOrNull(compareBy<Link>({ !it.validated }, { PREFERENCE.indexOf(it.type) }))
     }
 
     fun vpnActive(): Boolean = network()?.vpn == true
 
-    fun charging(): Boolean = battery.isCharging
+    /**
+     * „Am Laden“ heißt: am Netzteil oder USB angesteckt. `isCharging` allein reicht nicht – Android meldet es nur,
+     * solange der Akkustand steigt (nicht am schwachen PC-USB und nicht, wenn das adaptive Laden bei 80 % pausiert).
+     */
+    fun charging(): Boolean {
+        val sticky = appContext.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        return powered(
+            plugged = sticky?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) ?: 0,
+            status = sticky?.getIntExtra(BatteryManager.EXTRA_STATUS, BatteryManager.BATTERY_STATUS_UNKNOWN) ?: BatteryManager.BATTERY_STATUS_UNKNOWN,
+            isCharging = battery.isCharging,
+        )
+    }
 
     fun uploadAllowed(rule: UploadRule): Boolean = when (rule) {
         UploadRule.IMMEDIATE -> network() != null
